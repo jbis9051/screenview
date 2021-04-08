@@ -18,7 +18,7 @@
     "settings": {
         "import/resolver": {
             "node": {
-                "extensions": [".js", ".ts"]
+                "extensions": [".js", ".jsx", ".ts", ".tsx"]
             }
         }
     },
@@ -44,7 +44,13 @@
         "@typescript-eslint/no-non-null-assertion": 0,
         "@typescript-eslint/explicit-module-boundary-types": 0,
         "@typescript-eslint/no-shadow": ["error"],
-        "@typescript-eslint/no-explicit-any": "off"
+        "@typescript-eslint/no-explicit-any": "off",
+        "no-use-before-define": "off", // https://stackoverflow.com/a/64024916/7886229
+        "@typescript-eslint/no-use-before-define": ["error"],
+        "import/no-extraneous-dependencies": [
+            "error",
+            { "devDependencies": true }
+        ]
     },
     "ignorePatterns": ["**/build/*"]
 }
