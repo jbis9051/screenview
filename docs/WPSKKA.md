@@ -132,13 +132,13 @@ The Client generates:
 - _PK<sub>C</sub>/pk<sub>C</sub>_ - Client ephemeral elliptic curve
   Public/Private key using the `secp521r1` (P-521) curve
 - _a_ - SRP random private value
-- _A_ - SRP random public value
+- _A_ - SRP public value
 - _u_ - SRP u value
 - _k_ - SRP k value
 - _x_ - SRP x value (hashed P value communicated externally to the client)
 - _L_ - SRP session key
 
-The Client sends the Host B, PK<sub>C</sub> and HMAC(PK<sub>C</sub>, L).
+The Client sends the Host A, PK<sub>C</sub> and HMAC(PK<sub>C</sub>, L).
 
 The Host derives:
 
