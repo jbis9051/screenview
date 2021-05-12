@@ -153,6 +153,9 @@ The Host sends the client PK<sub>H</sub> and HMAC(PK<sub>H</sub>, L).
 The Client authenticates PK<sub>H</sub> HMAC using L. If authentication is
 successful, the Client performs DHKE to derive, T the shared secret.
 
+Both the Client and the Host encrypt all communication using AES-GCM with shared
+secret T.
+
 ## Security Considerations
 
 All authentication security is provided by the secrecy of _P_ during the initial
