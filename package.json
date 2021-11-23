@@ -14,7 +14,7 @@
     ],
     "husky": {
         "hooks": {
-            "pre-commit": "yarn run test"
+            "pre-commit": "yarn run fix"
         }
     },
     "version": "0.0.0",
