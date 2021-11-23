@@ -1,9 +1,23 @@
 [package]
-name = "screenview_native"
-version = "0.1.0"
-authors = ["jbis9051 <josh9051@gmail.com>"]
+name = "native"
+version = "0.0.0"
+description = "Native bindings to screen, keyboard, and mouse APIs"
+authors = ["Cassy343"]
+license = "ISC"
 edition = "2018"
+exclude = ["index.node"]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+crate-type = ["cdylib"]
 
 [dependencies]
+cfg-if = "1.0.0"
+thiserror = "1.0.30"
+
+[dependencies.neon]
+version = "0.9"
+default-features = false
+features = ["napi-6"]
+
+[target.'cfg(unix)'.dependencies]
+x11 = "2.19.1"
