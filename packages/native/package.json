@@ -1,16 +1,16 @@
 {
-  "name": "native",
-  "private": true,
-  "version": "0.0.0",
-  "description": "Native bindings to screen, keyboard, and mouse APIs",
-  "scripts": {
-    "build": "cargo-cp-artifact -nc index.node -- cargo build --message-format=json-render-diagnostics",
-    "build-debug": "npm run build --",
-    "build-release": "npm run build -- --release",
-    "install": "npm run build-release",
-    "test": "cargo test"
-  },
-  "devDependencies": {
-    "cargo-cp-artifact": "^0.1"
-  }
+    "name": "@screenview/native",
+    "private": true,
+    "version": "0.0.0",
+    "description": "Native bindings to screen, keyboard, and mouse APIs",
+    "scripts": {
+        "build": "cargo-cp-artifact -nc index.node -- cargo build --message-format=json-render-diagnostics",
+        "build-debug": "npm run build --",
+        "build-release": "npm run build -- --release",
+        "install": "npm run build-release",
+        "test": "cargo test"
+    },
+    "devDependencies": {
+        "cargo-cp-artifact": "^0.1"
+    }
 }
