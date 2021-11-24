@@ -3,4 +3,4 @@
 **/build/
 **/target
 **/out/*
-!/docs/out/protocol.pdf
+!/docs/out/*.pdf
