@@ -2,3 +2,5 @@
 **/node_modules/
 **/build/
 **/target
+**/out/*
+!/docs/out/protocol.pdf
