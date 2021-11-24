@@ -1,0 +1,56 @@
+% Preamble
+\documentclass[11pt o]{article}
+
+% Packages
+\usepackage{amsmath}
+\usepackage{textcomp}
+
+\title{Screen View Protocol}
+\author{Josh Brown}
+
+\newcommand{\projectName}{Screen View}
+
+% Document
+\begin{document}
+    \maketitle
+    \newpage
+    \tableofcontents
+    \newpage
+
+
+    \section{Abstract}
+    \projectName{} is an end to end encrypted remote screen viewing and controlling software. This document describes
+    the protocols necessary to make it function.
+
+    \newpage
+
+
+    \section{Definitions}
+    The following definitions are used:
+
+    \begin{itemize}
+        \item Host - The user that wants to share their screen to the Client
+        \item Client - The user that wants to view and control the Host's screen
+        \item Server - The intermediary server used for routing and proxying data between
+        the Host and the Client
+    \end{itemize}
+
+
+    \section{Frame Protocol}
+    The \emph{Frame Protocol} is used to communicate screen data from the Host to the Client.
+
+    \subsection{Initialization}
+
+    \subsection{Frame Data Packet}
+    The frame data packet contains an update of a particular grid location.
+    \begin{center}
+        \begin{tabular}{|c|c|c|}
+            \hline
+            sequence Number (4 bytes) & size (2 bytes) & Grid Number (2 bytes) \\
+            \hline
+            \multicolumn{3}{|c|}{data (\emph{size} bytes)} \\
+            \hline
+        \end{tabular}
+    \end{center}
+
+\end{document}
