@@ -1,11 +1,13 @@
 % Preamble
-\documentclass[11pt o]{article}
+\documentclass{article}
 \setlength\parindent{0pt}
 
 % Packages
 \usepackage{amsmath}
 \usepackage{textcomp}
 \usepackage{multirow}
+\usepackage{hyperref}
+\usepackage{eurosym}
 
 \title{Screen View Protocol}
 \author{Josh Brown}
@@ -36,7 +38,6 @@
         \item Server - The intermediary server used for routing and proxying data between
         \item Display - A rectangular visual region which may or may not be controllable.
         \item Controllable - A \emph{Display} that accepts keyboard and mouse input.
-        the Host and the Client
     \end{itemize}
 
 
@@ -109,7 +110,7 @@
     \begin{center}
         \begin{tabular}{|c|}
             \hline
-            display id (1 byte)                                                          \\
+            display-id (1 byte)                                                          \\
             \hline
             width (2 bytes) - number of pixels of the width of this display              \\
             \hline
@@ -159,6 +160,19 @@
 
     The \emph{Flush} bit indicates whether this display has changed, specifically if this \emph{display-id} refers to a different \emph{Display} than the same \emph{display-id} did in the previous \emph{DisplayChange} message. In initialization, this should always be 1 (as there is no previous \emph{DisplayChange}). If the display hasn't changed (0) then the frame data may be maintained. If \emph{Flush} is 0, \emph{width}, \emph{height} must remain the same as the previous \emph{DisplayChange} specified for the \emph{display-id}.
 
+    \subsubsection{DisplayChangeReceived - TCP}
+
+    The \emph{DisplayChangeReceived} message is sent in reply after receiving a \emph{DisplayChange} message. It indicates to the Host they may start sending \emph{FrameData} referencing the new \emph{DisplayInformation} in the most recent \emph{DisplayChange}.
+
+    \begin{center}
+        Client \textrightarrow Host\\
+        \begin{tabular}{|c|}
+            \hline
+            type (1 byte) - 2 \\
+            \hline
+        \end{tabular}
+    \end{center}
+
     \subsubsection{MouseLocation - TCP/UDP}
 
     The \emph{MouseLocation} message send information about where the mouse is currently on the screen. The Host sends this information periodically throughout the session. The Host should send a \emph{MouseLocation} update when mouse input is received from the Host's system or in reply when it receives a \emph{MouseInput}.
@@ -167,7 +181,7 @@
         Host \textrightarrow Client\\
         \begin{tabular}{|c|}
             \hline
-            type (1 byte) - 2                                \\
+            type (1 byte) - 3                                \\
             \hline
             display-id (1 byte) - 0-255                      \\
             \hline
@@ -188,7 +202,7 @@
         Client \textrightarrow Host\\
         \begin{tabular}{|c|}
             \hline
-            type (1 byte) - 3                                \\
+            type (1 byte) - 4                                \\
             \hline
             display-id (1 byte) - 0-255                      \\
             \hline
@@ -206,13 +220,129 @@
 
     On a conventional mouse, buttons 1, 2 and 3 correspond to the left, middle and right buttons on the mouse. On a wheel mouse, each step of the wheel is represented by a press and release of a certain button. Button 4 means up, button 5 means down, button 6 means left and button 7 means right.
 
+    \subsubsection{KeyInput}
+
+    The \emph{KeyInput} event sends key presses or releases.
+
+    \begin{center}
+        Client \textrightarrow Host\\
+        \begin{tabular}{|c|}
+            \hline
+            type (1 byte) - 5                                                                  \\
+            \hline
+            down-flag (1 byte) - 0 or 1 to indicate whether the key is now pressed or released \\
+            \hline
+            key (4 bytes) - "keysym"                                                           \\
+            \hline
+        \end{tabular}
+    \end{center}
+
+    Details can be found at the \href{https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#keyevent}{RFB Spec}
+
+    \subsection{Clipboard - TCP} % // TODO this needs to be worked on
+
+    \subsubsection{ClipboardTypeRequest}
+
+    Used to request clipboard types the Host supports.
+
+    \begin{center}
+        Client \textrightarrow Host\\
+        \begin{tabular}{|c|}
+            \hline
+            type (1 byte) - 6 \\
+            \hline
+        \end{tabular}
+    \end{center}
+
+    \subsubsection{ClipboardTypeResponse}
+
+    Response to the \emph{ClipboardTypeRequest}
+
+    \begin{center}
+        Host \textrightarrow Client\\
+        \begin{tabular}{|c|}
+            \hline
+            type (1 byte) - 7 \\
+            \hline
+            number-of-clipboard-types (1 byte) - 0-255 \\
+            \hline
+            data (variable bytes) - described below \\
+            \hline
+        \end{tabular}
+    \end{center}
+
+    \emph{number-of-clipboard-types} is always 0 if \emph{clipboard-readable} is 0.\\
+
+    \emph{data} contains \emph{number-of-clipboard-types} \emph{ClipboardType}s. \emph{ClipboardType} is defined below.
+
+    \begin{center}
+        \begin{tabular}{|c|}
+            \hline
+            type-length (1 byte) - 1-255\\
+            \hline
+            type-name(\emph{type-length} bytes) - type name in ASCII \\
+            \hline
+        \end{tabular}
+    \end{center}
+
+    \subsubsection{CopyRequest}
+
+    This is a request for a keyboard contents. It can be made by either the Client or the Host.
+
+    \begin{center}
+        Client \leftrightarrow Host\\
+        \begin{tabular}{|c|}
+            \hline
+            type (1 byte) - 8 \\
+            \hline
+            type-length (1 byte) - 0-255 \\
+            \hline
+            type-name(\emph{type-length} bytes) - type name in ASCII \\
+            \hline
+        \end{tabular}
+    \end{center}
+
+    \subsubsection{CopyResponse}
+
+    \emph{CopyResponse} message is a response to a \emph{CopyRequest}.
+
+    \begin{center}
+        Client \leftrightarrow Host\\
+        \begin{tabular}{|c|}
+            \hline
+            type (1 byte) - 9 \\
+            \hline
+            accepted (1 byte) - 0 or 1 \\
+            \hline
+            type-length (1 byte) - 0-255 \\
+            \hline
+            type-name(\emph{type-length} bytes) - type name in ASCII \\
+            \hline
+            content-length (4 bytes) - the length of the content (maximum $2^{24}$ bytes or ~16MB ) \\
+            \hline
+            data (content-length bytes) \\
+            \hline
+        \end{tabular}
+    \end{center}
+
+    \emph{accepted} indicates whether the \emph{CopyRequest} was accepted. If 0, the rest of the message is empty.
+    If \emph{clipboard-readable} is 0, \emph{accepted} is always 0. A Client or Host many send this message without a request.
+    If a \emph{CopyResponse} is unsolicited, then \emph{accepted} must be 1.\\
+
+    \emph{data} is zlib compressed.
+
+    \subsubsection{A note on Pasting}
+
+    There is a no paste message. To paste data an unsolicited \emph{CopyResponse} may be sent and then the keyboard
+    shortcut (ctrl+v or cmd+v) should be sent via the \emph{KeyboardMessage}
+
     \subsection{FrameData - UDP}
     The \emph{FrameData} message contains an update of a particular cell on a particular \emph{Display}.
 
     \begin{center}
         \begin{tabular}{|c|}
             \hline
-            type (1 byte) - 4         \\
+            type (1 byte) - 6         \\
             \hline
             sequence-number (4 bytes) \\
             \hline
@@ -225,4 +355,7 @@
         \end{tabular}
     \end{center}
 
+    \emph{sequence-number} is an incrementing 32-bit counter for each \emph{FrameData} sent
+
+    \emph{data} contains jpeg pixel data of the updated cell.
 \end{document}
