@@ -262,11 +262,11 @@
         Host \textrightarrow Client\\
         \begin{tabular}{|c|}
             \hline
-            type (1 byte) - 7 \\
+            type (1 byte) - 7                          \\
             \hline
             number-of-clipboard-types (1 byte) - 0-255 \\
             \hline
-            data (variable bytes) - described below \\
+            data (variable bytes) - described below    \\
             \hline
         \end{tabular}
     \end{center}
@@ -278,7 +278,7 @@
     \begin{center}
         \begin{tabular}{|c|}
             \hline
-            type-length (1 byte) - 1-255\\
+            type-length (1 byte) - 1-255                             \\
             \hline
             type-name(\emph{type-length} bytes) - type name in ASCII \\
             \hline
@@ -293,9 +293,9 @@
         Client \leftrightarrow Host\\
         \begin{tabular}{|c|}
             \hline
-            type (1 byte) - 8 \\
+            type (1 byte) - 8                                        \\
             \hline
-            type-length (1 byte) - 0-255 \\
+            type-length (1 byte) - 0-255                             \\
             \hline
             type-name(\emph{type-length} bytes) - type name in ASCII \\
             \hline
@@ -310,17 +310,17 @@
         Client \leftrightarrow Host\\
         \begin{tabular}{|c|}
             \hline
-            type (1 byte) - 9 \\
+            type (1 byte) - 9                                                                       \\
             \hline
-            accepted (1 byte) - 0 or 1 \\
+            accepted (1 byte) - 0 or 1                                                              \\
             \hline
-            type-length (1 byte) - 0-255 \\
+            type-length (1 byte) - 0-255                                                            \\
             \hline
-            type-name(\emph{type-length} bytes) - type name in ASCII \\
+            type-name(\emph{type-length} bytes) - type name in ASCII                                \\
             \hline
             content-length (4 bytes) - the length of the content (maximum $2^{24}$ bytes or ~16MB ) \\
             \hline
-            data (content-length bytes) \\
+            data (content-length bytes)                                                             \\
             \hline
         \end{tabular}
     \end{center}
@@ -342,7 +342,7 @@
     \begin{center}
         \begin{tabular}{|c|}
             \hline
-            type (1 byte) - 6         \\
+            type (1 byte) - 10        \\
             \hline
             sequence-number (4 bytes) \\
             \hline
