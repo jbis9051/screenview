@@ -1,9 +1,11 @@
 % Preamble
 \documentclass[11pt o]{article}
+\setlength\parindent{0pt}
 
 % Packages
 \usepackage{amsmath}
 \usepackage{textcomp}
+\usepackage{multirow}
 
 \title{Screen View Protocol}
 \author{Josh Brown}
@@ -32,23 +34,193 @@
         \item Host - The user that wants to share their screen to the Client
         \item Client - The user that wants to view and control the Host's screen
         \item Server - The intermediary server used for routing and proxying data between
+        \item Display - A rectangular visual region which may or may not be controllable.
+        \item Controllable - A \emph{Display} that accepts keyboard and mouse input.
         the Host and the Client
     \end{itemize}
 
 
-    \section{Frame Protocol}
-    The \emph{Frame Protocol} is used to communicate screen data from the Host to the Client.
+    \section{Remote Visual Display (RVD) Protocol}
 
-    \subsection{Initialization}
+    The RVD protocol is used to communicate mouse input, keyboard input, frame data, and clipboard data from the Host to the Client.\\
 
-    \subsection{Frame Data Packet}
-    The frame data packet contains an update of a particular grid location.
+    All messages can occur over either TCP or UDP but it is strongly recommended that the noted transport protocol is used.\\
+
+    With the exception of the \emph{Handshake} messages. All RVD messages first byte contain a number to indicate the message type.
+
+    \subsection{Handshake - TCP}
+
+    \subsubsection{ProtocolVersion}
+    Handshaking begins by the Host sending the client a \emph{ProtocolVersion} message. This lets the Client know the verison supported by the Host.\\
+
+    The \emph{ProtocolVersion} message consists of 12 bytes interpreted as a string of ASCII characters in the format "RVD xxx.yyy" where xxx and yyy are the major and minor version numbers, padded with zeros.
+
     \begin{center}
-        \begin{tabular}{|c|c|c|}
+        Host \textrightarrow Client\\
+        \begin{tabular}{|c|}
             \hline
-            sequence Number (4 bytes) & size (2 bytes) & Grid Number (2 bytes) \\
+            version (11 bytes) -
+            "\texttt{RVD 001.000}" \\
             \hline
-            \multicolumn{3}{|c|}{data (\emph{size} bytes)} \\
+        \end{tabular}
+    \end{center}
+
+    The client replies back either \texttt{0} to indicate the version is not acceptable and that the handshake has failed or \texttt{1} if the version is acceptable to the client and the handshake as succeeded. If 0 is sent, all communication should cease and and error should be displayed to user.
+
+    \begin{center}
+        Client \textrightarrow Host\\
+        \begin{tabular}{|c|}
+            \hline
+            ok (1 byte) -
+            \texttt{00000000} or \texttt{00000001} \\
+            \hline
+        \end{tabular}
+    \end{center}
+
+    \subsubsection{Initialization}
+
+    Once the handshake has succeeded the Host responds with a \emph{DisplayChange} message.
+
+    \subsection{Control messages - TCP}
+    Control messages are messages that instruct client about changes regarding the Host.
+
+    \subsubsection{DisplayChange}
+    A \emph{DisplayChange} message informs the client about the available \emph{Display}s. RVD supports up to 255 displays.
+
+    \begin{center}
+        Host \textrightarrow Client\\
+        \begin{tabular}{|c|}
+            \hline
+            type (1 byte) - 1                                  \\
+            \hline
+            clipboard-readable (1 byte) - 0 or 1               \\
+            \hline
+            number-of-displays (1 byte) - 1-255                \\
+            \hline
+            displays-information (variable bytes)              \\
+            \hline
+            DisplayInformation \emph{number-of-displays} times \\
+            \hline
+        \end{tabular}
+    \end{center}
+
+    Each \emph{Display} has an associated \emph{DisplayInformation}. \emph{displays-information} contains \emph{number-of-displays} \emph{DisplayInformation}'s. A \emph{DisplayInformation} is defined below:
+
+    \begin{center}
+        \begin{tabular}{|c|}
+            \hline
+            display id (1 byte)                                                          \\
+            \hline
+            width (2 bytes) - number of pixels of the width of this display              \\
+            \hline
+            height (2 bytes) - number of pixels of the width of this display             \\
+            \hline
+            cell-width (2 bytes) - number of pixels of the width of a cell in the grid   \\
+            \hline
+            cell-height (2 bytes) - number of pixels of the height of a cell in the grid \\
+            \hline
+            access (1 byte) - defined below                                              \\
+            \hline
+            name-length (1 byte) -  length of the name                                     \\
+            \hline
+            name (\emph{name-length} bytes) - display name (UTF-8)                       \\
+            \hline
+        \end{tabular}
+    \end{center}
+
+    \textbf{Restrictions:}
+
+    \begin{itemize}
+        \item \emph{cell-width} must be less than \emph{width}. \emph{cell-height} must be less than \emph{height}.\\ % // TODO define more restrictions %
+        \item The \emph{access} byte defines what type of access is available for the display. The bits of the \emph{access} byte are described below in Big Endian.
+    \end{itemize}
+
+
+    \begin{center}
+        \begin{tabular}{|c|c|}
+            \hline
+            \textbf{Bit} & \textbf{Description}                        \\
+            \hline
+            0            & Flush                                       \\
+            \hline
+            1            & \emph{Controllable}                         \\
+            \hline
+            2            & \multirow{6}{10em}{Reserved for future use} \\
+            3            &                                             \\
+            4            &                                             \\
+            5            &                                             \\
+            6            &                                             \\
+            7            &                                             \\
+            \hline
+        \end{tabular}
+    \end{center}
+
+    If the \emph{Controllable} bit is 1 and the \emph{clipboard-readable} byte is set to 1, then the clipboard is writable. The \emph{Controllable} bit should be consistent throughout all displays.\\
+
+    The \emph{Flush} bit indicates whether this display has changed, specifically if this \emph{display-id} refers to a different \emph{Display} than the same \emph{display-id} did in the previous \emph{DisplayChange} message. In initialization, this should always be 1 (as there is no previous \emph{DisplayChange}). If the display hasn't changed (0) then the frame data may be maintained. If \emph{Flush} is 0, \emph{width}, \emph{height} must remain the same as the previous \emph{DisplayChange} specified for the \emph{display-id}.
+
+    \subsubsection{MouseLocation - TCP/UDP}
+
+    The \emph{MouseLocation} message send information about where the mouse is currently on the screen. The Host sends this information periodically throughout the session. The Host should send a \emph{MouseLocation} update when mouse input is received from the Host's system or in reply when it receives a \emph{MouseInput}.
+
+    \begin{center}
+        Host \textrightarrow Client\\
+        \begin{tabular}{|c|}
+            \hline
+            type (1 byte) - 2                                \\
+            \hline
+            display-id (1 byte) - 0-255                      \\
+            \hline
+            x-location (2 bytes) - x coordinate of the mouse \\
+            \hline
+            y-location (2 bytes) - y coordinate of the mouse \\
+            \hline
+        \end{tabular}
+    \end{center}
+
+    \subsection{Input - TCP/UDP}
+
+    Input messages (including \emph{MouseLocation}) can be sent over TCP or UDP. TCP is preferred in most situations. However, in situations where speed is prioritized over the guarantees TCP provides (such as gaming), UDP can be used.
+
+    \subsubsection{MouseInput}
+
+    \begin{center}
+        Client \textrightarrow Host\\
+        \begin{tabular}{|c|}
+            \hline
+            type (1 byte) - 3                                \\
+            \hline
+            display-id (1 byte) - 0-255                      \\
+            \hline
+            x-position (2 bytes) - x coordinate of the mouse \\
+            \hline
+            y-position (2 bytes) - y coordinate of the mouse \\
+            \hline
+            button-mask (1 byte) - described below           \\
+            \hline
+        \end{tabular}
+    \end{center}
+
+    %  https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#pointerevent %
+    Indicates either pointer movement or a pointer button press or release. The pointer is now at (x-position, y-position), and the current state of buttons 1 to 8 are represented by bits 0 to 7 of button-mask respectively, 0 meaning up, 1 meaning down (pressed).\\
+
+    On a conventional mouse, buttons 1, 2 and 3 correspond to the left, middle and right buttons on the mouse. On a wheel mouse, each step of the wheel is represented by a press and release of a certain button. Button 4 means up, button 5 means down, button 6 means left and button 7 means right.
+
+    \subsection{FrameData - UDP}
+    The \emph{FrameData} message contains an update of a particular cell on a particular \emph{Display}.
+
+    \begin{center}
+        \begin{tabular}{|c|}
+            \hline
+            type (1 byte) - 4         \\
+            \hline
+            sequence-number (4 bytes) \\
+            \hline
+            cell-number (2 bytes)     \\
+            \hline
+            size (2 bytes)            \\
+            \hline
+            data (\emph{size} bytes)  \\
             \hline
         \end{tabular}
     \end{center}
