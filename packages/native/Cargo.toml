@@ -10,7 +10,14 @@ crate-type = ["cdylib"]
 
 [dependencies]
 cfg-if = "1.0.0"
+errno = "0.2.8"
+libc = "0.2.108"
 thiserror = "1.0.30"
+
+[dependencies.image]
+version = "0.23.14"
+default-features = false
+features = ["png"]
 
 [dependencies.neon]
 version = "0.9"
@@ -18,4 +25,4 @@ default-features = false
 features = ["napi-6"]
 
 [target.'cfg(unix)'.dependencies]
-x11 = "2.19.1"
+xcb = { version="1.0.0-beta.0", features=["shm"] }

@@ -3,4 +3,4 @@
 **/build/
 **/target/
 **/.DS_Store
-**/index.node/
+**/index.node
