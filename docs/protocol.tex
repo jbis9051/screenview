@@ -51,6 +51,8 @@
     document are to be interpreted as described in \href{https://datatracker.ietf.org/doc/html/rfc2119}{RFC 2119}.
 
     \newpage
+
+
     \section{Remote Visual Display (RVD) Protocol}
 
     The RVD protocol is used to communicate mouse input, keyboard input, frame data, and clipboard data between the Host and the Client.\\
@@ -75,22 +77,24 @@
 
     \begin{center}
         Host \textrightarrow Client\\
-        \begin{tabular}{|c|}
+        \begin{tabular}{|c|c|c|}
             \hline
-            version (11 bytes) -
-            "\texttt{RVD 001.000}" \\
+            \textbf{Bytes} & \textbf{Name} & \textbf{Value}           \\
+            \hline
+            11             & version       & ``\texttt{RVD 001.000}'' \\
             \hline
         \end{tabular}
     \end{center}
 
-    The client replies back either \texttt{0} to indicate the version is not acceptable and that the handshake has failed or \texttt{1} if the version is acceptable to the client and the handshake as succeeded. If 0 is sent, all communication MUST cease and and error SHOULD be displayed to user.
+    The client replies back either \texttt{0} to indicate the version is not acceptable and that the handshake has failed or \texttt{1} if the version is acceptable to the client and the handshake as succeeded. If 0 is sent, all communication MUST cease and an error SHOULD be displayed to user.
 
     \begin{center}
         Client \textrightarrow Host\\
-        \begin{tabular}{|c|}
+        \begin{tabular}{|c|c|c|}
             \hline
-            ok (1 byte) -
-            \texttt{00000000} or \texttt{00000001} \\
+            \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
+            \hline
+            1              & ok            & 0 or 1         \\
             \hline
         \end{tabular}
     \end{center}
@@ -107,17 +111,17 @@
 
     \begin{center}
         Host \textrightarrow Client\\
-        \begin{tabular}{|c|}
+        \begin{tabular}{|c|c|c|}
             \hline
-            type (1 byte) - 1                                  \\
+            \textbf{Bytes} & \textbf{Name}        & \textbf{Value}            \\
             \hline
-            clipboard-readable (1 byte) - 0 or 1               \\
+            1              & type                 & 1                         \\
             \hline
-            number-of-displays (1 byte) - 1-255                \\
+            1              & clipboard-readable   & 0 or 1                    \\
             \hline
-            displays-information (variable bytes)              \\
+            1              & number-of-displays   & 1 - 255                   \\
             \hline
-            DisplayInformation \emph{number-of-displays} times \\
+            variable       & displays-information & \emph{DisplayInformation} \\
             \hline
         \end{tabular}
     \end{center}
@@ -125,23 +129,25 @@
     Each \emph{Display} has an associated \emph{DisplayInformation}. \emph{displays-information} contains \emph{number-of-displays} \emph{DisplayInformation}'s. A \emph{DisplayInformation} is defined below:
 
     \begin{center}
-        \begin{tabular}{|c|}
+        \begin{tabular}{|c|c|c|}
             \hline
-            display-id (1 byte)                                                          \\
+            \textbf{Bytes}     & \textbf{Name} & \textbf{Description}                                 \\
             \hline
-            width (2 bytes) - number of pixels of the width of this display              \\
+            1                  & display-id    &                                                      \\
             \hline
-            height (2 bytes) - number of pixels of the width of this display             \\
+            2                  & width         & number of pixels of the width of this display        \\
             \hline
-            cell-width (2 bytes) - number of pixels of the width of a cell in the grid   \\
+            2                  & height        & number of pixels of the width of this display        \\
             \hline
-            cell-height (2 bytes) - number of pixels of the height of a cell in the grid \\
+            2                  & cell-width    & number of pixels of the height of a cell in the grid \\
             \hline
-            access (1 byte) - defined below                                              \\
+            2                  & cell-height   & number of pixels of the height of a cell in the grid \\
             \hline
-            name-length (1 byte) -  length of the name                                     \\
+            1                  & access        & defined below                                        \\
             \hline
-            name (\emph{name-length} bytes) - display name (UTF-8)                       \\
+            1                  & name-length   & length of the \emph{display-name} in bytes           \\
+            \hline
+            \emph{name-length} & display-name  & the display name (UTF-8)                             \\
             \hline
         \end{tabular}
     \end{center}
@@ -157,7 +163,7 @@
     \begin{center}
         \begin{tabular}{|c|c|}
             \hline
-            \textbf{Bit} & \textbf{Description}                        \\
+            \textbf{Bit} & \textbf{Name}                               \\
             \hline
             0            & Flush                                       \\
             \hline
@@ -183,9 +189,11 @@
 
     \begin{center}
         Client \textrightarrow Host\\
-        \begin{tabular}{|c|}
+        \begin{tabular}{|c|c|c|}
             \hline
-            type (1 byte) - 2 \\
+            \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
+            \hline
+            1              & type          & 2              \\
             \hline
         \end{tabular}
     \end{center}
@@ -198,15 +206,17 @@
 
     \begin{center}
         Host \textrightarrow Client\\
-        \begin{tabular}{|c|}
+        \begin{tabular}{|c|c|c|c|}
             \hline
-            type (1 byte) - 3                                \\
+            \textbf{Bytes} & \textbf{Name} & \textbf{Value} & \textbf{Description}      \\
             \hline
-            display-id (1 byte) - 0-255                      \\
+            3              & type          & 3              &                           \\
             \hline
-            x-location (2 bytes) - x coordinate of the mouse \\
+            1              & display-id    & 0-255          &                           \\
             \hline
-            y-location (2 bytes) - y coordinate of the mouse \\
+            2              & x-location    &                & x coordinate of the mouse \\
+            \hline
+            2              & y-location    &                & y coordinate of the mouse \\
             \hline
         \end{tabular}
     \end{center}
@@ -219,17 +229,19 @@
 
     \begin{center}
         Client \textrightarrow Host\\
-        \begin{tabular}{|c|}
+        \begin{tabular}{|c|c|c|c|}
             \hline
-            type (1 byte) - 4                                \\
+            \textbf{Bytes} & \textbf{Name} & \textbf{Value} & \textbf{Description}      \\
             \hline
-            display-id (1 byte) - 0-255                      \\
+            1              & type          & 4              &                           \\
             \hline
-            x-position (2 bytes) - x coordinate of the mouse \\
+            1              & display-id    & 0-255          &                           \\
             \hline
-            y-position (2 bytes) - y coordinate of the mouse \\
+            2              & x-position    &                & x coordinate of the mouse \\
             \hline
-            button-mask (1 byte) - described below           \\
+            2              & y-position    &                & y coordinate of the mouse \\
+            \hline
+            1              & button-mask   &                & described below           \\
             \hline
         \end{tabular}
     \end{center}
@@ -245,13 +257,15 @@
 
     \begin{center}
         Client \textrightarrow Host\\
-        \begin{tabular}{|c|}
+        \begin{tabular}{|c|c|c|c|}
             \hline
-            type (1 byte) - 5                                                                  \\
+            \textbf{Bytes} & \textbf{Name} & \textbf{Value} & \textbf{Description}                                 \\
             \hline
-            down-flag (1 byte) - 0 or 1 to indicate whether the key is now pressed or released \\
+            1              & type          & 5              &                                                      \\
             \hline
-            key (4 bytes) - "keysym"                                                           \\
+            1              & down-flag     & 0 or 1         & indicates whether the key is now pressed or released \\
+            \hline
+            4              & key           &                & "keysym"                                             \\
             \hline
         \end{tabular}
     \end{center}
@@ -266,9 +280,11 @@
 
     \begin{center}
         Client \textrightarrow Host\\
-        \begin{tabular}{|c|}
+        \begin{tabular}{|c|c|c|}
             \hline
-            type (1 byte) - 6 \\
+            \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
+            \hline
+            1              & type          & 6              \\
             \hline
         \end{tabular}
     \end{center}
@@ -279,13 +295,15 @@
 
     \begin{center}
         Host \textrightarrow Client\\
-        \begin{tabular}{|c|}
+        \begin{tabular}{|c|c|c|c|}
             \hline
-            type (1 byte) - 7                          \\
+            \textbf{Bytes} & \textbf{Name}             & \textbf{Value} & \textbf{Description} \\
             \hline
-            number-of-clipboard-types (1 byte) - 0-255 \\
+            1              & type                      & 7              &                      \\
             \hline
-            data (variable bytes) - described below    \\
+            1              & number-of-clipboard-types & 0-255          &                      \\
+            \hline
+            variable       & data (variable bytes)     &                & described below      \\
             \hline
         \end{tabular}
     \end{center}
@@ -295,11 +313,13 @@
     \emph{data} contains \emph{number-of-clipboard-types} \emph{ClipboardType}s. \emph{ClipboardType} is defined below.
 
     \begin{center}
-        \begin{tabular}{|c|}
+        \begin{tabular}{|c|c|c|c|}
             \hline
-            type-length (1 byte) - 1-255                             \\
+            \textbf{Bytes}     & \textbf{Name} & \textbf{Value} & \textbf{Description} \\
             \hline
-            type-name(\emph{type-length} bytes) - type name in ASCII \\
+            1                  & type-length   & 1-255          &                      \\
+            \hline
+            \emph{type-length} & type-name     &                & type name in ASCII   \\
             \hline
         \end{tabular}
     \end{center}
@@ -310,13 +330,15 @@
 
     \begin{center}
         Client $\leftrightarrow$ Host\\
-        \begin{tabular}{|c|}
+        \begin{tabular}{|c|c|c|c|}
             \hline
-            type (1 byte) - 8                                        \\
+            \textbf{Bytes}     & \textbf{Name} & \textbf{Value} & \textbf{Description} \\
             \hline
-            type-length (1 byte) - 0-255                             \\
+            1                  & type          & 8              &                      \\
             \hline
-            type-name(\emph{type-length} bytes) - type name in ASCII \\
+            1                  & type-length   & 1-255          &                      \\
+            \hline
+            \emph{type-length} & type-name     &                & type name in ASCII   \\
             \hline
         \end{tabular}
     \end{center}
@@ -327,24 +349,28 @@
 
     \begin{center}
         Client $\leftrightarrow$ Host\\
-        \begin{tabular}{|c|}
+        \begin{tabular}{|c|c|c|c|}
             \hline
-            type (1 byte) - 9                                                                       \\
+            \textbf{Bytes}        & \textbf{Name}  & \textbf{Value} & \textbf{Description}                                         \\
             \hline
-            accepted (1 byte) - 0 or 1                                                              \\
+            1                     & type           & 9              &                                                              \\
             \hline
-            \textbf{Below only if \emph{accepted} is 1}                                             \\
+            1                     & accepted       & 0 or 1         &                                                              \\
             \hline
-            type-length (1 byte) - 0-255                                                            \\
+            \multicolumn{4}{|c|}{\textbf{Below only if \emph{accepted} is 1} } \\
             \hline
-            type-name(\emph{type-length} bytes) - type name in ASCII                                \\
+            1                     & type-length    & 1-255          &                                                              \\
             \hline
-            content-length (4 bytes) - the length of the content (maximum $2^{24}$ bytes or ~16MB ) \\
+            \emph{type-length}    & type-name      &                & type name in ASCII                                           \\
             \hline
-            data (content-length bytes)                                                             \\
+            4                     & content-length &                & the length of the content (maximum $2^{24}$ bytes or ~16MB ) \\
+            \hline
+            \emph{content-length} & data           &                & zlib'ed raw data                                             \\
             \hline
         \end{tabular}
     \end{center}
+
+
 
     \emph{accepted} indicates whether the \emph{CopyRequest} was accepted. If 0, the rest of the message MUST not exist.
     If \emph{clipboard-readable} is 0, \emph{accepted} is always 0. A Client or Host may send this message without a request.
@@ -361,17 +387,21 @@
     The \emph{FrameData} message contains an update of a particular cell on a particular \emph{Display}.
 
     \begin{center}
-        \begin{tabular}{|c|}
+        \begin{tabular}{|c|c|c|}
             \hline
-            type (1 byte) - 10        \\
+            \textbf{Bytes} & \textbf{Name}   & \textbf{Value} \\
             \hline
-            sequence-number (4 bytes) \\
+            1              & type            & 10             \\
             \hline
-            cell-number (2 bytes)     \\
+            4              & sequence-number &                \\
             \hline
-            size (2 bytes)            \\
+            1              & display-id      & 0-255          \\
             \hline
-            data (\emph{size} bytes)  \\
+            2              & cell-number     &                \\
+            \hline
+            2              & size            &                \\
+            \hline
+            \emph{size}    & data            &                \\
             \hline
         \end{tabular}
     \end{center}
@@ -381,6 +411,8 @@
     \emph{data} contains jpeg pixel data of the updated cell.
 
     \newpage
+
+
     \section{Weak Pre Shared Key, Key Authentication (WPSKKA) Protocol}
 
     \subsection{Introduction}
@@ -501,7 +533,7 @@
         \item $B$ - SRP public value
         \item $k$ - SRP K value
     \end{itemize}
-    
+
     The Host sends S, I, and B to the Client.\\
 
     The Client generates:\\
@@ -520,7 +552,7 @@
     The Client sends the Host $A$, $PK_C$ and HMAC($PK_C$, $L$).\\
 
     The Host derives:\\
-    
+
     \begin{itemize}
         \item $u$ - SRP U value
         \item $L$ - SRP session key
