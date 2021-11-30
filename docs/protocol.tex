@@ -42,6 +42,7 @@
     \begin{itemize}
         \item Host - The user that wants to share their screen to the Client
         \item Client - The user that wants to view and control the Host's screen
+        \item client - denotes a client in classical server/client environment. May eventually turn into either a Host a \underline{C}lient later in the protocol.
         \item Server - The intermediary server used for routing and proxying data between
     \end{itemize}
 
@@ -49,6 +50,84 @@
     The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
     "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
     document are to be interpreted as described in \href{https://datatracker.ietf.org/doc/html/rfc2119}{RFC 2119}.
+
+    \newpage
+
+
+    \section{Introduction}
+
+    This section describes the high level protocol for \projectName incorporating all the protocols defined below.\\
+
+    \subsection{Application Layers}
+
+    The table belows is an abstract diagram of the different layers of \projectName. Each layer encapsulates all the below layers.
+
+    \begin{center}
+        \begin{tabular}{|l|}
+            \hline
+            Transport Layer                                           \\
+            | Server Encryption Layer                                 \\
+            || Server Communication Layer                             \\
+            ||| E2EE (Host $\leftrightarrow$ Client) Encryption Layer \\
+            |||| Host $\leftrightarrow$ Client Communication Layer    \\
+            \hline
+        \end{tabular}
+    \end{center}
+
+    The Transport Layer is the OSI Transport Layer level protocol for networking (UDP or TCP). \\
+
+    The Server Encryption layer provides security between the Server and other parties (Client and Host). The Server Encryption Layer is discussed in % TODO insert secition number
+    .
+
+    \subsection{Initialization}
+
+    To begin and client connections to the server over TCP and commences the Server Encryption Layer protocol for TCP defined in % TODO insert section number
+    . Next the Server Communication Layer defined in section \hyperlink{section.4}{4} commences.
+
+    \newpage
+
+
+    \section{Screen View Server Communication (SVSC) Protocol }
+
+    The SVSC protocol is used to interact with the relay server, Server. This includes things like leasing an ID as well as initializing a connection to Host.
+
+    With the exception of the \emph{Handshake} messages. All SVSC messages' first byte contain a number to indicate the message type.
+
+    \subsection{Handshake}
+
+    \subsubsection{ProtocolVersion}
+
+    Handshaking begins by the Server sending the client a \emph{ProtocolVersion} message. This lets the server know the verison supported by the Host.\\
+
+    The \emph{ProtocolVersion} message consists of 12 bytes interpreted as a string of ASCII characters in the format "SVSC xxx.yyy" where xxx and yyy are the major and minor version numbers, padded with zeros.
+
+    \begin{center}
+        Server \textrightarrow client\\
+        \begin{tabular}{|c|c|c|}
+            \hline
+            \textbf{Bytes} & \textbf{Name} & \textbf{Value}            \\
+            \hline
+            11             & version       & ``\texttt{SVSC 001.000}'' \\
+            \hline
+        \end{tabular}
+    \end{center}
+
+    The client replies back either \texttt{0} to indicate the version is not acceptable and that the handshake has failed or \texttt{1} if the version is acceptable to the client and the handshake as succeeded. If 0 is sent, all communication MUST cease and the TCP connection MUST end.
+
+    \begin{center}
+        client \textrightarrow Server\\
+        \begin{tabular}{|c|c|c|}
+            \hline
+            \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
+            \hline
+            1              & ok            & 0 or 1         \\
+            \hline
+        \end{tabular}
+    \end{center}
+
+    \subsection{Leasing}
+
+    A lease is a temporary assignment of an ID
 
     \newpage
 
@@ -73,7 +152,7 @@
     \subsubsection{ProtocolVersion - TCP}
     Handshaking begins by the Host sending the client a \emph{ProtocolVersion} message. This lets the Client know the verison supported by the Host.\\
 
-    The \emph{ProtocolVersion} message consists of 12 bytes interpreted as a string of ASCII characters in the format "RVD xxx.yyy" where xxx and yyy are the major and minor version numbers, padded with zeros.
+    The \emph{ProtocolVersion} message consists of 11 bytes interpreted as a string of ASCII characters in the format "RVD xxx.yyy" where xxx and yyy are the major and minor version numbers, padded with zeros.
 
     \begin{center}
         Host \textrightarrow Client\\
