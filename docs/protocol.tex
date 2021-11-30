@@ -42,7 +42,8 @@
     \begin{itemize}
         \item Host - The user that wants to share their screen to the Client
         \item Client - The user that wants to view and control the Host's screen
-        \item client - denotes a client in classical server/client environment. May eventually turn into either a Host a \underline{C}lient later in the protocol.
+        \item client - denotes a client in classical server/client environment. May eventually turn into either a
+        \item Host a \underline{C}lient later in the protocol.
         \item Server - The intermediary server used for routing and proxying data between
     \end{itemize}
 
@@ -60,7 +61,8 @@
 
     \subsection{Application Layers}
 
-    The table belows is an abstract diagram of the different layers of \projectName. Each layer encapsulates all the below layers.
+    The table belows is an abstract diagram of the different layers of \projectName. Each layer encapsulates all the
+    below layers.
 
     \begin{center}
         \begin{tabular}{|l|}
@@ -76,12 +78,14 @@
 
     The Transport Layer is the OSI Transport Layer level protocol for networking (UDP or TCP). \\
 
-    The Server Encryption layer provides security between the Server and other parties (Client and Host). The Server Encryption Layer is discussed in % TODO insert secition number
+    The Server Encryption layer provides security between the Server and other parties (Client and Host). The Server
+    Encryption Layer is discussed in % TODO insert secition number
     .
 
     \subsection{Initialization}
 
-    To begin and client connections to the server over TCP and commences the Server Encryption Layer protocol for TCP defined in % TODO insert section number
+    To begin and client connections to the server over TCP and commences the Server Encryption Layer protocol for TCP
+    defined in % TODO insert section number
     . Next the Server Communication Layer defined in section \hyperlink{section.4}{4} commences.
 
     \newpage
@@ -89,17 +93,21 @@
 
     \section{Screen View Server Communication (SVSC) Protocol }
 
-    The SVSC protocol is used to interact with the relay server, Server. This includes things like leasing an ID as well as initializing a connection to Host.
+    The SVSC protocol is used to interact with the relay server, Server. This includes things like leasing an ID as
+    well as initializing a connection to Host.
 
-    With the exception of the \emph{Handshake} messages. All SVSC messages' first byte contain a number to indicate the message type.
+    With the exception of the \emph{Handshake} messages. All SVSC messages' first byte contain a number to indicate
+    the message type.
 
     \subsection{Handshake}
 
     \subsubsection{ProtocolVersion}
 
-    Handshaking begins by the Server sending the client a \emph{ProtocolVersion} message. This lets the server know the verison supported by the Host.\\
+    Handshaking begins by the Server sending the client a \emph{ProtocolVersion} message. This lets the server know
+    the verison supported by the Host.\\
 
-    The \emph{ProtocolVersion} message consists of 12 bytes interpreted as a string of ASCII characters in the format "SVSC xxx.yyy" where xxx and yyy are the major and minor version numbers, padded with zeros.
+    The \emph{ProtocolVersion} message consists of 12 bytes interpreted as a string of ASCII characters in the format
+    "SVSC xxx.yyy" where xxx and yyy are the major and minor version numbers, padded with zeros.
 
     \begin{center}
         Server \textrightarrow client\\
@@ -112,7 +120,9 @@
         \end{tabular}
     \end{center}
 
-    The client replies back either \texttt{0} to indicate the version is not acceptable and that the handshake has failed or \texttt{1} if the version is acceptable to the client and the handshake as succeeded. If 0 is sent, all communication MUST cease and the TCP connection MUST end.
+    The client replies back either \texttt{0} to indicate the version is not acceptable and that the handshake has
+    failed or \texttt{1} if the version is acceptable to the client and the handshake as succeeded. If 0 is sent, all
+    communication MUST cease and the TCP connection MUST end.
 
     \begin{center}
         client \textrightarrow Server\\
@@ -134,25 +144,31 @@
 
     \section{Remote Visual Display (RVD) Protocol}
 
-    The RVD protocol is used to communicate mouse input, keyboard input, frame data, and clipboard data between the Host and the Client.\\
+    The RVD protocol is used to communicate mouse input, keyboard input, frame data, and clipboard data between the
+    Host and the Client.\\
 
-    All messages can occur over either TCP or UDP but it is strongly RECOMMENDED that the noted transport protocol is used.\\
+    All messages can occur over either TCP or UDP but it is strongly RECOMMENDED that the noted transport protocol is
+    used.\\
 
-    With the exception of the \emph{Handshake} messages. All RVD messages' first byte contain a number to indicate the message type.
+    With the exception of the \emph{Handshake} messages. All RVD messages' first byte contain a number to indicate
+    the message type.
 
     \subsection{Definitions}
 
     \begin{itemize}
-        \item Display - A rectangular visual region that is shared by a Host to a Client. May or may not be \emph{Controllable}.
+        \item Display - A rectangular visual region that is shared by a Host to a Client. May or may not be
+        \item \emph{Controllable}.
         \item Controllable - A \emph{Display} that accepts keyboard and mouse input.
     \end{itemize}
 
     \subsection{Handshake}
 
     \subsubsection{ProtocolVersion - TCP}
-    Handshaking begins by the Host sending the client a \emph{ProtocolVersion} message. This lets the Client know the verison supported by the Host.\\
+    Handshaking begins by the Host sending the client a \emph{ProtocolVersion} message. This lets the Client know the
+    verison supported by the Host.\\
 
-    The \emph{ProtocolVersion} message consists of 11 bytes interpreted as a string of ASCII characters in the format "RVD xxx.yyy" where xxx and yyy are the major and minor version numbers, padded with zeros.
+    The \emph{ProtocolVersion} message consists of 11 bytes interpreted as a string of ASCII characters in the format
+    "RVD xxx.yyy" where xxx and yyy are the major and minor version numbers, padded with zeros.
 
     \begin{center}
         Host \textrightarrow Client\\
@@ -165,7 +181,9 @@
         \end{tabular}
     \end{center}
 
-    The client replies back either \texttt{0} to indicate the version is not acceptable and that the handshake has failed or \texttt{1} if the version is acceptable to the client and the handshake as succeeded. If 0 is sent, all communication MUST cease and an error SHOULD be displayed to user.
+    The client replies back either \texttt{0} to indicate the version is not acceptable and that the handshake has
+    failed or \texttt{1} if the version is acceptable to the client and the handshake as succeeded. If 0 is sent, all
+    communication MUST cease and an error SHOULD be displayed to user.
 
     \begin{center}
         Client \textrightarrow Host\\
@@ -186,7 +204,8 @@
     Control messages are messages that instruct client about changes regarding the Host.
 
     \subsubsection{DisplayChange - TCP}
-    A \emph{DisplayChange} message informs the client about the available \emph{Display}s. RVD supports up to 255 displays.
+    A \emph{DisplayChange} message informs the client about the available \emph{Display}s. RVD supports up to 255
+    displays.
 
     \begin{center}
         Host \textrightarrow Client\\
@@ -205,7 +224,8 @@
         \end{tabular}
     \end{center}
 
-    Each \emph{Display} has an associated \emph{DisplayInformation}. \emph{displays-information} contains \emph{number-of-displays} \emph{DisplayInformation}'s. A \emph{DisplayInformation} is defined below:
+    Each \emph{Display} has an associated \emph{DisplayInformation}. \emph{displays-information} contains
+    \emph{number-of-displays} \emph{DisplayInformation}'s. A \emph{DisplayInformation} is defined below:
 
     \begin{center}
         \begin{tabular}{|c|c|c|}
@@ -234,8 +254,10 @@
     \textbf{Restrictions:}
 
     \begin{itemize}
-        \item \emph{cell-width} MUST be less than \emph{width}. \emph{cell-height} must be less than \emph{height}.\\ % // TODO define more restrictions %
-        \item The \emph{access} byte defines what type of access is available for the display. The bits of the \emph{access} byte are described below in Big Endian.
+        \item \emph{cell-width} MUST be less than \emph{width}. \emph{cell-height} must be less than \emph{height}.\\
+        \item % // TODO define more restrictions %
+        \item The \emph{access} byte defines what type of access is available for the display. The bits of the
+        \item \emph{access} byte are described below in Big Endian.
     \end{itemize}
 
 
@@ -258,13 +280,20 @@
         \end{tabular}
     \end{center}
 
-    If the \emph{Controllable} bit is 1 and the \emph{clipboard-readable} byte is set to 1, then the clipboard is writable. The \emph{Controllable} bit SHOULD be consistent throughout all displays.\\
+    If the \emph{Controllable} bit is 1 and the \emph{clipboard-readable} byte is set to 1, then the clipboard is
+    writable. The \emph{Controllable} bit SHOULD be consistent throughout all displays.\\
 
-    The \emph{Flush} bit indicates whether this display has changed, specifically if this \emph{display-id} refers to a different \emph{Display} than the same \emph{display-id} did in the previous \emph{DisplayChange} message. In initialization, this MUST always be 1 (as there is no previous \emph{DisplayChange}). If the display hasn't changed (0) then the frame data may be maintained. If \emph{Flush} is 0, \emph{width}, \emph{height} MUST remain the same as the previous \emph{DisplayChange} specified for the \emph{display-id}.
+    The \emph{Flush} bit indicates whether this display has changed, specifically if this \emph{display-id} refers to
+    a different \emph{Display} than the same \emph{display-id} did in the previous \emph{DisplayChange} message. In
+    initialization, this MUST always be 1 (as there is no previous \emph{DisplayChange}). If the display hasn't
+    changed (0) then the frame data may be maintained. If \emph{Flush} is 0, \emph{width}, \emph{height} MUST remain
+    the same as the previous \emph{DisplayChange} specified for the \emph{display-id}.
 
     \subsubsection{DisplayChangeReceived - TCP}
 
-    The \emph{DisplayChangeReceived} message is sent in reply after receiving a \emph{DisplayChange} message. It indicates to the Host they may start sending \emph{FrameData} referencing the new \emph{DisplayInformation} in the most recent \emph{DisplayChange}.
+    The \emph{DisplayChangeReceived} message is sent in reply after receiving a \emph{DisplayChange} message. It
+    indicates to the Host they may start sending \emph{FrameData} referencing the new \emph{DisplayInformation} in
+    the most recent \emph{DisplayChange}.
 
     \begin{center}
         Client \textrightarrow Host\\
@@ -281,7 +310,8 @@
 
     The \emph{MouseLocation} message send information about where the mouse is currently on the screen.
     The Host sends this information periodically throughout the session.
-    The Host SHOULD send a \emph{MouseLocation} update when mouse input is received from the Host's system or in reply when it receives a \emph{MouseInput}.
+    The Host SHOULD send a \emph{MouseLocation} update when mouse input is received from the Host's system or in
+    reply when it receives a \emph{MouseInput}.
 
     \begin{center}
         Host \textrightarrow Client\\
@@ -302,7 +332,9 @@
 
     \subsection{Input}
 
-    Input messages (including \emph{MouseLocation}) may be sent over TCP or UDP. TCP is preferred in most situations. However, in situations where speed is prioritized over the guarantees TCP provides (such as gaming), UDP can be used.
+    Input messages (including \emph{MouseLocation}) may be sent over TCP or UDP. TCP is preferred in most situations.
+    However, in situations where speed is prioritized over the guarantees TCP provides (such as gaming), UDP can be
+    used.
 
     \subsubsection{MouseInput - TCP/UDP}
 
@@ -326,9 +358,13 @@
     \end{center}
 
     %  https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#pointerevent %
-    Indicates either pointer movement or a pointer button press or release. The pointer is now at (x-position, y-position), and the current state of buttons 1 to 8 are represented by bits 0 to 7 of button-mask respectively, 0 meaning up, 1 meaning down (pressed).\\
+    Indicates either pointer movement or a pointer button press or release. The pointer is now at (x-position,
+    y-position), and the current state of buttons 1 to 8 are represented by bits 0 to 7 of button-mask respectively,
+    0 meaning up, 1 meaning down (pressed).\\
 
-    On a conventional mouse, buttons 1, 2 and 3 correspond to the left, middle and right buttons on the mouse. On a wheel mouse, each step of the wheel is represented by a press and release of a certain button. Button 4 means up, button 5 means down, button 6 means left and button 7 means right.
+    On a conventional mouse, buttons 1, 2 and 3 correspond to the left, middle and right buttons on the mouse. On a
+    wheel mouse, each step of the wheel is represented by a press and release of a certain button. Button 4 means up,
+    button 5 means down, button 6 means left and button 7 means right.
 
     \subsubsection{KeyInput - TCP/UDP}
 
@@ -430,21 +466,22 @@
         Client $\leftrightarrow$ Host\\
         \begin{tabular}{|c|c|c|c|}
             \hline
-            \textbf{Bytes}        & \textbf{Name}  & \textbf{Value} & \textbf{Description}                                         \\
+            \textbf{Bytes}        & \textbf{Name} & \textbf{Value} & \textbf{Description} \\
             \hline
-            1                     & type           & 9              &                                                              \\
+            1                     & type          & 9              &                      \\
             \hline
-            1                     & accepted       & 0 or 1         &                                                              \\
+            1                     & accepted      & 0 or 1         &                      \\
             \hline
             \multicolumn{4}{|c|}{\textbf{Below only if \emph{accepted} is 1} } \\
             \hline
-            1                     & type-length    & 1-255          &                                                              \\
+            1                     & type-length   & 1-255          &                      \\
             \hline
-            \emph{type-length}    & type-name      &                & type name in ASCII                                           \\
+            \emph{type-length}    & type-name     &                & type name in ASCII   \\
             \hline
-            4                     & content-length &                & the length of the content (maximum $2^{24}$ bytes or ~16MB ) \\
+            4 & content-length & & the length of the content  (maximum $2^{24}$
+            bytes or ~16MB ) \\
             \hline
-            \emph{content-length} & data           &                & zlib'ed raw data                                             \\
+            \emph{content-length} & data          &                & zlib'ed raw data     \\
             \hline
         \end{tabular}
     \end{center}
@@ -452,7 +489,8 @@
 
 
     \emph{accepted} indicates whether the \emph{CopyRequest} was accepted. If 0, the rest of the message MUST not exist.
-    If \emph{clipboard-readable} is 0, \emph{accepted} is always 0. A Client or Host may send this message without a request.
+    If \emph{clipboard-readable} is 0, \emph{accepted} is always 0. A Client or Host may send this message without a
+    request.
     If a \emph{CopyResponse} is unsolicited, then \emph{accepted} MUST be 1.\\
 
     \emph{data} is zlib compressed.
@@ -528,7 +566,8 @@
 
     \subsection{Existing Practice}
 
-    Based on \href{https://static.teamviewer.com/resources/2017/07/TeamViewer-Security-Statement-en.pdf}{TeamViewer's security statement},
+    Based on \href{https://static.teamviewer.com/resources/2017/07/TeamViewer-Security-Statement-en.pdf}{TeamViewer's
+    security statement},
     TeamViewer is end-to-end encrypted. However, a rogue or malicious TeamViewer
     intermediary server could easily provide a different set of keys to each party
     and intercept all communication. The parties must trust this third party in
@@ -537,7 +576,8 @@
 
     Other applications such as Zoom and Signal (and the Signal protocol itself) do
     give users the ability to verify some sort of fingerprint of the public key
-    (\href{https://support.zoom.us/hc/en-us/articles/360048660871-End-to-end-E2EE-encryption-for-meetings#h_01ENGDKFFBKTF796CE03FTCH6J}{Zoom}
+    (\href{https://support.zoom.us/hc/en-us/articles/360048660871-End-to-end-E2EE-encryption-for-meetings
+#h_01ENGDKFFBKTF796CE03FTCH6J}{Zoom}
     and \href{https://signal.org/blog/safety-number-updates/}{Signal}). However, most
     users don't bother confirming the numbers. Again trusting the third party
     server.\\
