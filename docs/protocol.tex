@@ -6,6 +6,8 @@
 \usepackage{amsmath}
 \usepackage{textcomp}
 \usepackage{multirow}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
 \usepackage[linktocpage]{hyperref}
 
 \hypersetup{
@@ -84,7 +86,7 @@
 
     \subsection{Initialization}
 
-    To begin and client connections to the server over TCP and commences the Server Encryption Layer protocol for TCP
+    To begin a client connects to the server over TCP and commences the Server Encryption Layer protocol for TCP
     defined in % TODO insert section number
     . Next the Server Communication Layer defined in section \hyperlink{section.4}{4} commences.
 
@@ -93,8 +95,8 @@
 
     \section{Screen View Server Communication (SVSC) Protocol }
 
-    The SVSC protocol is used to interact with the relay server, Server. This includes things like leasing an ID as
-    well as initializing a connection to Host.
+    The SVSC protocol is the Server Communication Layer protocol used to interact with the relay server, Server. This
+    includes things like leasing an ID as well as initializing a connection to a Host.
 
     With the exception of the \emph{Handshake} messages. All SVSC messages' first byte contain a number to indicate
     the message type.
@@ -104,7 +106,7 @@
     \subsubsection{ProtocolVersion}
 
     Handshaking begins by the Server sending the client a \emph{ProtocolVersion} message. This lets the server know
-    the verison supported by the Host.\\
+    the version supported by the Host.\\
 
     The \emph{ProtocolVersion} message consists of 12 bytes interpreted as a string of ASCII characters in the format
     "SVSC xxx.yyy" where xxx and yyy are the major and minor version numbers, padded with zeros.
@@ -137,7 +139,108 @@
 
     \subsection{Leasing}
 
-    A lease is a temporary assignment of an ID
+    A lease is a temporary assignment of an ID to a client. The ID format and generation is discussed in
+    \hyperlink{section.4.3}{4.3}. ID generation MUST be rate limited to prevent ID exhaustion. Rate limiting rules
+    are out of scope for this protocol, however some suggestions are listed \hyperlink{section.4.4}{4.4}.
+
+    \subsubsection{LeaseRequest}
+
+    A \emph{LeaseRequest} message requests a lease of an ID.
+
+    \begin{center}
+        client \textrightarrow Server\\
+        \begin{tabular}{|c|c|c|}
+            \hline
+            \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
+            \hline
+            1              & type          & 1              \\
+            \hline
+            1              & has-cookie    & 0 or 1         \\
+            \multicolumn{3}{|c|}{\textbf{Below only if \emph{has-cookie} is 1} } \\
+            \hline
+            24             & cookie        &                \\
+            \hline
+        \end{tabular}
+    \end{center}
+
+    If a client would like to request an ID it had previously been issued after expiration, it may include the cookie
+    value it received in the \emph{LeaseResponse}.
+
+    \subsubsection{LeaseResponse}
+
+    A \emph{LeaseResponse} message is a response to a \emph{LeaseRequest}.
+
+    If \emph{has-cookie} is 1, a Server MAY consider the \emph{cookie} value in \emph{LeaseRequest} or completly
+    ignore it.
+
+    \begin{center}
+        Server $\leftrightarrow$ client\\
+        \begin{tabular}{|c|c|c|}
+            \hline
+            \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
+            \hline
+            1              & type          & 2              \\
+            \hline
+            1              & accepted      & 0 or 1         \\
+            \hline
+            \multicolumn{3}{|c|}{\textbf{Below only if \emph{accepted} is 1} } \\
+            \hline
+            4              & id            &                \\
+            \hline
+            24             & cookie        &                \\
+            \hline
+            8              & expiration    &                \\
+            \hline
+        \end{tabular}
+    \end{center}
+
+    \emph{expiration} is a 64 bit Unix timestamp representing the expiry of lease. Disconnection of a client (e.g, the TCP connection is dropped) does not end a lease\\
+
+    \emph{cookie} a 128 bit value. The generation of this value is discussed in \hyperlink{section.4.5}{4.5}.\\
+
+    Consideration of the \emph{cookie} value MUST have no effect on the the value of \emph{accepted}. That is, if the
+    request is for a specific ID (implied by the presence of a cookie value and a \emph{has-cookie} value equal to 1
+    in the \emph{LeaseRequest}) and the ID requested is not available, the Server SHOULD respond with a different
+    available ID and an \emph{accepted} value of 1.\\
+
+    \emph{accepted} SHOULD only be 0 if no IDs are left or for rate limiting reasons.
+
+    \subsection{ID Generation}
+
+    An ID is a 26 to 33 bit decimal number. This comes out to about up to 8 to 10 decimal digits, respectively. The
+    Server may scale the keyspace depending on current usage. For optimal user experience while maintaining
+    efficiency, the Server MUST only use keyspaces between 26 bits and 33 bits for ID generation. ID generation must
+    also be uniformly random. All active IDs must be stored on the server. ID generation MAY occur using the below
+    algorithm:\\
+
+    Let $S$ represents a set of all active IDs, $B$ be a number of bits between 26 and 33, and $generate(x)$ be a
+    functions that returns a $x$ uniformly random bits.
+
+    \begin{algorithm}
+        \caption{ID generation}
+        \begin{algorithmic}
+            \State $id$
+            \Repeat
+                \State $id\gets generate(B)$
+            \Until{$id\notin S$}
+            \State $S\gets S\cup \{id\}$
+            \State \textbf{return} $id$
+        \end{algorithmic}
+    \end{algorithm}
+
+    \subsection{Rate Limits}
+
+    To prevent ID exhaustion, rate limits SHOULD be in place. TCP is used for \emph{LeaseRequests} so IP addresses
+    can not be spoofed. However, using proxy services such as Tor, simple IP based rate limits are likely not
+    entirely sufficient. Servers MAY want to block all known proxy IP addresses. Additionally, a Server MAY only want
+    to allow one active ID per client.
+
+    \subsection{Cookie Value}
+
+    A \emph{cookie} value is a 128 bit value used for authentication in \emph{LeaseExtensionRequest} and
+    \emph{LeaseRequest} messages. Specific generation of a \emph{cookie} is out of scope, however care must be taken
+    to ensure it is not predictable or exploitable. This value MAY be simply a random 24 byte key, HMAC-SHA1($id$,
+    $key$) $||$ $id$, or something else entirely.
 
     \newpage
 
