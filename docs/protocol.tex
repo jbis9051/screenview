@@ -112,7 +112,7 @@
     "SVSC xxx.yyy" where xxx and yyy are the major and minor version numbers, padded with zeros.
 
     \begin{center}
-        Server \textrightarrow client\\
+        Server \textrightarrow\ client\\
         \begin{tabular}{|c|c|c|}
             \hline
             \textbf{Bytes} & \textbf{Name} & \textbf{Value}            \\
@@ -127,7 +127,7 @@
     communication MUST cease and the TCP connection MUST end.
 
     \begin{center}
-        client \textrightarrow Server\\
+        client \textrightarrow\ Server\\
         \begin{tabular}{|c|c|c|}
             \hline
             \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
@@ -140,15 +140,16 @@
     \subsection{Leasing}
 
     A lease is a temporary assignment of an ID to a client. The ID format and generation is discussed in
-    \hyperlink{section.4.3}{4.3}. ID generation MUST be rate limited to prevent ID exhaustion. Rate limiting rules
-    are out of scope for this protocol, however some suggestions are listed \hyperlink{section.4.4}{4.4}.
+    \hyperlink{subsubsection.4.2.5}{4.2.5}. ID generation MUST be rate limited to prevent ID exhaustion. Rate
+    limiting rules
+    are out of scope for this protocol, however some suggestions are listed in \hyperlink{subsubsection.4.2.6}{4.2.6}.
 
     \subsubsection{LeaseRequest}
 
     A \emph{LeaseRequest} message requests a lease of an ID.
 
     \begin{center}
-        client \textrightarrow Server\\
+        client \textrightarrow\ Server\\
         \begin{tabular}{|c|c|c|}
             \hline
             \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
@@ -170,11 +171,11 @@
 
     A \emph{LeaseResponse} message is a response to a \emph{LeaseRequest}.
 
-    If \emph{has-cookie} is 1, a Server MAY consider the \emph{cookie} value in \emph{LeaseRequest} or completly
+    If \emph{has-cookie} is 1, a Server MAY consider the \emph{cookie} value in \emph{LeaseRequest} or completely
     ignore it.
 
     \begin{center}
-        Server $\leftrightarrow$ client\\
+        Server \textrightarrow\ client\\
         \begin{tabular}{|c|c|c|}
             \hline
             \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
@@ -194,7 +195,8 @@
         \end{tabular}
     \end{center}
 
-    \emph{expiration} is a 64 bit Unix timestamp representing the expiry of lease. Disconnection of a client (e.g, the TCP connection is dropped) does not end a lease\\
+    \emph{expiration} is a 64 bit Unix timestamp representing the expiry of lease. Disconnection of a client (e.g,
+    the TCP connection is dropped) does not end a lease.\\
 
     \emph{cookie} a 128 bit value. The generation of this value is discussed in \hyperlink{section.4.5}{4.5}.\\
 
@@ -205,7 +207,48 @@
 
     \emph{accepted} SHOULD only be 0 if no IDs are left or for rate limiting reasons.
 
-    \subsection{ID Generation}
+    \subsubsection{LeaseExtensionRequest}
+
+    A \emph{LeaseExtensionRequest} message is used to extend a lease. Before a lease has expired, the client can
+    request a lease extension. The server can accept or deny this request.
+
+    \begin{center}
+        client \textrightarrow\ Server\\
+        \begin{tabular}{|c|c|c|}
+            \hline
+            \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
+            \hline
+            1              & type          & 3              \\
+            \hline
+            24             & cookie        &                \\
+            \hline
+        \end{tabular}
+    \end{center}
+
+    \subsubsection{LeaseExtensionResponse}
+
+    A \emph{LeaseExtensionResponse} message is a response to a \emph{LeaseExtensionRequest}.
+
+    \begin{center}
+        Server \textrightarrow\ client\\
+        \begin{tabular}{|c|c|c|}
+            \hline
+            \textbf{Bytes} & \textbf{Name}  & \textbf{Value} \\
+            \hline
+            1              & type           & 4              \\
+            \hline
+            1              & extended       & 0 or 1         \\
+            \hline
+            \multicolumn{3}{|c|}{\textbf{Below only if \emph{extended} is 1} } \\
+            \hline
+            8              & new-expiration &                \\
+            \hline
+        \end{tabular}
+    \end{center}
+
+    \emph{new-expiration} is a 64 bit Unix timestamp representing the expiry of lease.
+
+    \subsubsection{ID Generation}
 
     An ID is a 26 to 33 bit decimal number. This comes out to about up to 8 to 10 decimal digits, respectively. The
     Server may scale the keyspace depending on current usage. For optimal user experience while maintaining
@@ -228,14 +271,14 @@
         \end{algorithmic}
     \end{algorithm}
 
-    \subsection{Rate Limits}
+    \subsubsection{Rate Limits}
 
     To prevent ID exhaustion, rate limits SHOULD be in place. TCP is used for \emph{LeaseRequests} so IP addresses
     can not be spoofed. However, using proxy services such as Tor, simple IP based rate limits are likely not
     entirely sufficient. Servers MAY want to block all known proxy IP addresses. Additionally, a Server MAY only want
     to allow one active ID per client.
 
-    \subsection{Cookie Value}
+    \subsubsection{Cookie Value}
 
     A \emph{cookie} value is a 128 bit value used for authentication in \emph{LeaseExtensionRequest} and
     \emph{LeaseRequest} messages. Specific generation of a \emph{cookie} is out of scope, however care must be taken
@@ -274,7 +317,7 @@
     "RVD xxx.yyy" where xxx and yyy are the major and minor version numbers, padded with zeros.
 
     \begin{center}
-        Host \textrightarrow Client\\
+        Host \textrightarrow\ Client\\
         \begin{tabular}{|c|c|c|}
             \hline
             \textbf{Bytes} & \textbf{Name} & \textbf{Value}           \\
@@ -289,7 +332,7 @@
     communication MUST cease and an error SHOULD be displayed to user.
 
     \begin{center}
-        Client \textrightarrow Host\\
+        Client \textrightarrow\ Host\\
         \begin{tabular}{|c|c|c|}
             \hline
             \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
@@ -311,7 +354,7 @@
     displays.
 
     \begin{center}
-        Host \textrightarrow Client\\
+        Host \textrightarrow\ Client\\
         \begin{tabular}{|c|c|c|}
             \hline
             \textbf{Bytes} & \textbf{Name}        & \textbf{Value}            \\
@@ -399,7 +442,7 @@
     the most recent \emph{DisplayChange}.
 
     \begin{center}
-        Client \textrightarrow Host\\
+        Client \textrightarrow\ Host\\
         \begin{tabular}{|c|c|c|}
             \hline
             \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
@@ -417,7 +460,7 @@
     reply when it receives a \emph{MouseInput}.
 
     \begin{center}
-        Host \textrightarrow Client\\
+        Host \textrightarrow\ Client\\
         \begin{tabular}{|c|c|c|c|}
             \hline
             \textbf{Bytes} & \textbf{Name} & \textbf{Value} & \textbf{Description}      \\
@@ -442,7 +485,7 @@
     \subsubsection{MouseInput - TCP/UDP}
 
     \begin{center}
-        Client \textrightarrow Host\\
+        Client \textrightarrow\ Host\\
         \begin{tabular}{|c|c|c|c|}
             \hline
             \textbf{Bytes} & \textbf{Name} & \textbf{Value} & \textbf{Description}      \\
@@ -474,7 +517,7 @@
     The \emph{KeyInput} event sends key presses or releases.
 
     \begin{center}
-        Client \textrightarrow Host\\
+        Client \textrightarrow\ Host\\
         \begin{tabular}{|c|c|c|c|}
             \hline
             \textbf{Bytes} & \textbf{Name} & \textbf{Value} & \textbf{Description}                                 \\
@@ -497,7 +540,7 @@
     Used to request clipboard types the Host supports.
 
     \begin{center}
-        Client \textrightarrow Host\\
+        Client \textrightarrow\ Host\\
         \begin{tabular}{|c|c|c|}
             \hline
             \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
@@ -512,7 +555,7 @@
     Response to the \emph{ClipboardTypeRequest}
 
     \begin{center}
-        Host \textrightarrow Client\\
+        Host \textrightarrow\ Client\\
         \begin{tabular}{|c|c|c|c|}
             \hline
             \textbf{Bytes} & \textbf{Name}             & \textbf{Value} & \textbf{Description} \\
