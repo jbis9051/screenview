@@ -42,10 +42,10 @@
     The following definitions are used globally throughout the document:
 
     \begin{itemize}
-        \item Host - The user that wants to share their screen to the Client
-        \item Client - The user that wants to view and control the Host's screen
-        \item client - denotes a client in classical server/client environment. May eventually turn into either a
-        \item Host a \underline{C}lient later in the protocol.
+        \item Peer - denotes a client in classical server/client environment. May eventually turn into either a Host
+        or a Client eventually.
+        \item Host - A peer with an ID that wants to share their screen to the Client
+        \item Client - A peer that wants to view and maybe control the Host's screen
         \item Server - The intermediary server used for routing and proxying data between
     \end{itemize}
 
@@ -86,7 +86,7 @@
 
     \subsection{Initialization}
 
-    To begin a client connects to the server over TCP and commences the Server Encryption Layer protocol for TCP
+    To begin a Peer connects to the server over TCP and commences the Server Encryption Layer protocol for TCP
     defined in % TODO insert section number
     . Next the Server Communication Layer defined in section \hyperlink{section.4}{4} commences.
 
@@ -105,14 +105,14 @@
 
     \subsubsection{ProtocolVersion}
 
-    Handshaking begins by the Server sending the client a \emph{ProtocolVersion} message. This lets the server know
+    Handshaking begins by the Server sending the Peer a \emph{ProtocolVersion} message. This lets the server know
     the version supported by the Host.\\
 
     The \emph{ProtocolVersion} message consists of 12 bytes interpreted as a string of ASCII characters in the format
     "SVSC xxx.yyy" where xxx and yyy are the major and minor version numbers, padded with zeros.
 
     \begin{center}
-        Server \textrightarrow\ client\\
+        Server \textrightarrow\ Peer\\
         \begin{tabular}{|c|c|c|}
             \hline
             \textbf{Bytes} & \textbf{Name} & \textbf{Value}            \\
@@ -122,12 +122,12 @@
         \end{tabular}
     \end{center}
 
-    The client replies back either \texttt{0} to indicate the version is not acceptable and that the handshake has
-    failed or \texttt{1} if the version is acceptable to the client and the handshake as succeeded. If 0 is sent, all
+    The Peer replies back either \texttt{0} to indicate the version is not acceptable and that the handshake has
+    failed or \texttt{1} if the version is acceptable to the Peer and the handshake as succeeded. If 0 is sent, all
     communication MUST cease and the TCP connection MUST end.
 
     \begin{center}
-        client \textrightarrow\ Server\\
+        Peer \textrightarrow\ Server\\
         \begin{tabular}{|c|c|c|}
             \hline
             \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
@@ -139,8 +139,9 @@
 
     \subsection{Leasing}
 
-    A lease is a temporary assignment of an ID to a client. The ID format and generation is discussed in
-    \hyperlink{subsubsection.4.2.5}{4.2.5}. ID generation MUST be rate limited to prevent ID exhaustion. Rate
+    A lease is a temporary assignment of an ID to a Peer. The ID format and generation is discussed in
+    \hyperlink{subsubsection.4.2.5}{4.2.5}. A maximum of 1 ID can be leased per Peer. ID generation MUST be rate
+    limited to prevent ID exhaustion. Rate
     limiting rules
     are out of scope for this protocol, however some suggestions are listed in \hyperlink{subsubsection.4.2.6}{4.2.6}.
 
@@ -149,7 +150,7 @@
     A \emph{LeaseRequest} message requests a lease of an ID.
 
     \begin{center}
-        client \textrightarrow\ Server\\
+        Peer \textrightarrow\ Server\\
         \begin{tabular}{|c|c|c|}
             \hline
             \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
@@ -164,7 +165,7 @@
         \end{tabular}
     \end{center}
 
-    If a client would like to request an ID it had previously been issued after expiration, it may include the cookie
+    If a Peer would like to request an ID it had previously been issued after expiration, it may include the cookie
     value it received in the \emph{LeaseResponse}.
 
     \subsubsection{LeaseResponse}
@@ -175,7 +176,7 @@
     ignore it.
 
     \begin{center}
-        Server \textrightarrow\ client\\
+        Server \textrightarrow\ Peer\\
         \begin{tabular}{|c|c|c|}
             \hline
             \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
@@ -195,10 +196,11 @@
         \end{tabular}
     \end{center}
 
-    \emph{expiration} is a 64 bit Unix timestamp representing the expiry of lease. Disconnection of a client (e.g,
+    \emph{expiration} is a 64 bit Unix timestamp representing the expiry of lease. Disconnection of a Peer (e.g,
     the TCP connection is dropped) does not end a lease.\\
 
-    \emph{cookie} a 128 bit value. The generation of this value is discussed in \hyperlink{subsubsection.4.2.7}{4.2.7}.\\
+    \emph{cookie} a 128 bit value. The generation of this value is discussed in \hyperlink{subsubsection.4.2.7}{4.2
+    .7}.\\
 
     Consideration of the \emph{cookie} value MUST have no effect on the the value of \emph{accepted}. That is, if the
     request is for a specific ID (implied by the presence of a cookie value and a \emph{has-cookie} value equal to 1
@@ -209,11 +211,11 @@
 
     \subsubsection{LeaseExtensionRequest}
 
-    A \emph{LeaseExtensionRequest} message is used to extend a lease. Before a lease has expired, the client can
+    A \emph{LeaseExtensionRequest} message is used to extend a lease. Before a lease has expired, the Peer can
     request a lease extension. The server can accept or deny this request.
 
     \begin{center}
-        client \textrightarrow\ Server\\
+        Peer \textrightarrow\ Server\\
         \begin{tabular}{|c|c|c|}
             \hline
             \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
@@ -230,7 +232,7 @@
     A \emph{LeaseExtensionResponse} message is a response to a \emph{LeaseExtensionRequest}.
 
     \begin{center}
-        Server \textrightarrow\ client\\
+        Server \textrightarrow\ Peer\\
         \begin{tabular}{|c|c|c|}
             \hline
             \textbf{Bytes} & \textbf{Name}  & \textbf{Value} \\
@@ -276,7 +278,7 @@
     To prevent ID exhaustion, rate limits SHOULD be in place. TCP is used for \emph{LeaseRequests} so IP addresses
     can not be spoofed. However, using proxy services such as Tor, simple IP based rate limits are likely not
     entirely sufficient. Servers MAY want to block all known proxy IP addresses. Additionally, a Server MAY only want
-    to allow one active ID per client.
+    to allow one active ID per Peer.
 
     \subsubsection{Cookie Value}
 
@@ -284,6 +286,92 @@
     \emph{LeaseRequest} messages. Specific generation of a \emph{cookie} is out of scope, however care must be taken
     to ensure it is not predictable or exploitable. This value MAY be simply a random 24 byte key, HMAC-SHA1($id$,
     $key$) $||$ $id$, or something else entirely.
+
+    \subsection{Sessions}
+
+    A session is a connection between two Peers where one is a Host and one is a Client. Only a Peer with an
+    assigned ID can be a Host.
+
+    \subsubsection{EstablishSessionRequest}
+
+    An \emph{EstablishSessionRequest} message is a Peer request to establish a connection to a Host.
+
+    \begin{center}
+        Peer \textrightarrow\ Server\\
+        \begin{tabular}{|c|c|c|c|}
+            \hline
+            \textbf{Bytes} & \textbf{Name} & \textbf{Value} & \textbf{Description}                                 \\
+            \hline
+            1              & type          & 5              &                                                      \\
+            \hline
+            4              & host-id       &                & The ID of the Host to establish this connection with \\
+            \hline
+        \end{tabular}
+    \end{center}
+
+    \subsubsection{EstablishSessionResponse}
+
+    An \emph{EstablishSessionResponse} message is a response to \emph{EstablishSessionRequest}.
+
+    \begin{center}
+        Server \textrightarrow\ Peer\\
+        \begin{tabular}{|c|c|c|c|}
+            \hline
+            \textbf{Bytes} & \textbf{Name} & \textbf{Value} & \textbf{Description}                       \\
+            \hline
+            1              & type          & 6              &                                            \\
+            \hline
+            4              & host-id       &                & the ID of the Host attempted to connect to \\
+            \hline
+            1              & status        & 0-2            & described below                            \\
+            \hline
+            \multicolumn{4}{|c|}{\textbf{Below only if \emph{status} is 0} } \\
+            \hline
+            16             & session-id    &                & described below                            \\
+            \hline
+            16             & peer-key      &                & described below                            \\
+            \hline
+        \end{tabular}
+    \end{center}
+
+    \emph{status} can have the following values:
+
+    \begin{center}
+        \begin{tabular}{|c|c|}
+            \hline
+            \textbf{Value} & \textbf{Description}                 \\
+            \hline
+            0              & session establishment was successful \\
+            \hline
+            1              & ID not found                         \\
+            \hline
+            2              & Host is offline                      \\
+            \hline
+        \end{tabular}
+    \end{center}
+
+    \emph{session-id} is a 128 bit random value used for session identification\\
+
+    \emph{peer-id} is a 128 bit random value used to authentication a peer for a given session.\\
+
+    \subsubsection{EstablishSessionNotification}
+
+    A \emph{EstablishSessionNotification} notifies a Host that a session has been established with them.
+
+    \begin{center}
+        Server \textrightarrow\ Host\\
+        \begin{tabular}{|c|c|c|c|}
+            \hline
+            \textbf{Bytes} & \textbf{Name} & \textbf{Value} & \textbf{Description}                                \\
+            \hline
+            1              & type          & 7              &                                                     \\
+            \hline
+            16             & session-id    &                & described in \hyperlink{subsubsection.4.3.2}{4.3.2} \\
+            \hline
+            16             & peer-key      &                & described in \hyperlink{subsubsection.4.3.2}{4.3.2} \\
+            \hline
+        \end{tabular}
+    \end{center}
 
     \newpage
 
