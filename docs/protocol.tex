@@ -96,7 +96,8 @@
     \section{Screen View Server Communication (SVSC) Protocol }
 
     The SVSC protocol is the Server Communication Layer protocol used to interact with the relay server, Server. This
-    includes things like leasing an ID as well as initializing a connection to a Host.
+    includes things like leasing an ID as well as initializing a connection to a Host. Unless otherwise noted, all
+    messages MUST occur over TCP.\\
 
     With the exception of the \emph{Handshake} messages. All SVSC messages' first byte contain a number to indicate
     the message type.
@@ -140,7 +141,8 @@
     \subsection{Leasing}
 
     A lease is a temporary assignment of an ID to a Peer. The ID format and generation is discussed in
-    \hyperlink{subsubsection.4.2.5}{4.2.5}. A maximum of 1 ID can be leased per Peer. ID generation MUST be rate
+    \hyperlink{subsubsection.4.2.5}{4.2.5}. A maximum of 1 ID can be leased per TCP connection. ID generation MUST be
+    rate
     limited to prevent ID exhaustion. Rate
     limiting rules
     are out of scope for this protocol, however some suggestions are listed in \hyperlink{subsubsection.4.2.6}{4.2.6}.
@@ -158,6 +160,7 @@
             1              & type          & 1              \\
             \hline
             1              & has-cookie    & 0 or 1         \\
+            \hline
             \multicolumn{3}{|c|}{\textbf{Below only if \emph{has-cookie} is 1} } \\
             \hline
             24             & cookie        &                \\
@@ -290,7 +293,7 @@
     \subsection{Sessions}
 
     A session is a connection between two Peers where one is a Host and one is a Client. Only a Peer with an
-    assigned ID can be a Host.
+    assigned ID can be a Host. A maximum of one session can occur per TCP connection.
 
     \subsubsection{EstablishSessionRequest}
 
@@ -323,7 +326,7 @@
             \hline
             4              & host-id       &                & the ID of the Host attempted to connect to \\
             \hline
-            1              & status        & 0-2            & described below                            \\
+            1              & status        & 0-3            & described below                            \\
             \hline
             \multicolumn{4}{|c|}{\textbf{Below only if \emph{status} is 0} } \\
             \hline
@@ -346,6 +349,8 @@
             1              & ID not found                         \\
             \hline
             2              & Host is offline                      \\
+            \hline
+            3              & Other error                          \\
             \hline
         \end{tabular}
     \end{center}
@@ -372,6 +377,42 @@
             \hline
         \end{tabular}
     \end{center}
+
+    \subsubsection{SessionEnd}
+
+    A \emph{SessionEnd} message is used to terminate a session. Once a Server receives a \emph{SessionEnd} message,
+    % // TODO
+
+    \begin{center}
+        Peer \textrightarrow\ Server\\
+        \begin{tabular}{|c|c|c|c|}
+            \hline
+            \textbf{Bytes} & \textbf{Name} & \textbf{Value} & \textbf{Description} \\
+            \hline
+            1              & type          & 8              &                      \\
+            \hline
+        \end{tabular}
+    \end{center}
+
+    \subsubsection{SessionEndNotification}
+
+    A \emph{SessionEndNotification} notifies a Peer that a session has ended. If a Client sends a \emph{SessionEnd}
+    message, the Server MUST send a \emph{SessionEndNotification} message to a Host.
+
+    \begin{center}
+        Server \textrightarrow\ Peer\\
+        \begin{tabular}{|c|c|c|c|}
+            \hline
+            \textbf{Bytes} & \textbf{Name} & \textbf{Value} & \textbf{Description} \\
+            \hline
+            1              & type          & 9              &                      \\
+            \hline
+        \end{tabular}
+    \end{center}
+
+    \subsubsection{SessionData}
+
+    A \emph{SessionData} message
 
     \newpage
 
