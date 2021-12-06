@@ -410,9 +410,45 @@
         \end{tabular}
     \end{center}
 
-    \subsubsection{SessionData}
+    \subsubsection{SessionDataSend - TCP/UDP}
 
-    A \emph{SessionData} message
+    A \emph{SessionDataSend} is a message from a Peer intended to be forwarded to the Peer on the other side of the
+    session.
+
+    \begin{center}
+        Peer \textrightarrow\ Server\\
+        \begin{tabular}{|c|c|c|c|}
+            \hline
+            \textbf{Bytes} & \textbf{Name} & \textbf{Value} & \textbf{Description}           \\
+            \hline
+            1              & type          & 10             &                                \\
+            \hline
+            3              & data-length   &                & length of the content in bytes \\
+            \hline
+            data-length    & data          &                & data to be forwarded           \\
+            \hline
+        \end{tabular}
+    \end{center}
+
+    \subsubsection{SessionDataReceive - TCP/UDP}
+
+    A \emph{SessionDataReceive} is a message being forwarded to a Peer from the Peer on the other side of the
+    session. The Server SHOULD forward the message along the same transport as it was received.
+
+    \begin{center}
+        Server \textrightarrow\ Peer\\
+        \begin{tabular}{|c|c|c|c|}
+            \hline
+            \textbf{Bytes} & \textbf{Name} & \textbf{Value} & \textbf{Description}           \\
+            \hline
+            1              & type          & 11             &                                \\
+            \hline
+            3              & data-length   &                & length of the content in bytes \\
+            \hline
+            data-length    & data          &                & data to be forwarded           \\
+            \hline
+        \end{tabular}
+    \end{center}
 
     \newpage
 
@@ -753,7 +789,7 @@
             \hline
             \emph{type-length}    & type-name     &                & type name in ASCII   \\
             \hline
-            4 & content-length & & the length of the content  (maximum $2^{24}$
+            3 & content-length & & the length of the content  (maximum $2^{24}$
             bytes or ~16MB ) \\
             \hline
             \emph{content-length} & data          &                & zlib'ed raw data     \\
