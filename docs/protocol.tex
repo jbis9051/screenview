@@ -41,14 +41,6 @@
     \section{Definitions}
     The following definitions are used globally throughout the document:
 
-    \begin{itemize}
-        \item Peer - denotes a client in classical server/client environment. May eventually turn into either a Host
-        or a Client eventually.
-        \item Host - A peer with an ID that wants to share their screen to the Client
-        \item Client - A peer that wants to view and maybe control the Host's screen
-        \item Server - The intermediary server used for routing and proxying data between
-    \end{itemize}
-
 
     The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
     "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
@@ -59,7 +51,8 @@
 
     \section{Introduction}
 
-    This section describes the high level protocol for \projectName incorporating all the protocols defined below.\\
+    This section describes the high level protocol for \projectName incorporating all the protocols defined below.
+    Terms used in this section are defined in other sections.\\
 
     \subsection{Application Layers}
 
@@ -78,9 +71,9 @@
         \end{tabular}
     \end{center}
 
-    The Transport Layer is the OSI Transport Layer level protocol for networking (UDP or TCP). \\
+    The Transport Layer is the OSI Transport Layer level protocol for networking (TCP or UDP). \\
 
-    The Server Encryption layer provides security between the Server and other parties (Client and Host). The Server
+    The Server Encryption layer provides security between the Server and a Peer (Client and Host). The Server
     Encryption Layer is discussed in % TODO insert secition number
     .
 
@@ -93,14 +86,30 @@
     \newpage
 
 
+    \section{Server Encryption Layer}
+
+    The Server Encryption Layer provides security for communication between Peers and the Server. TCP and UDP have
+    separate schemes
+
+    \newpage
+
+
     \section{Screen View Server Communication (SVSC) Protocol }
 
-    The SVSC protocol is the Server Communication Layer protocol used to interact with the relay server, Server. This
-    includes things like leasing an ID as well as initializing a connection to a Host. Unless otherwise noted, all
-    messages MUST occur over TCP.\\
+    The SVSC protocol is the Server Communication Layer protocol used for Peers to interact with the relay server,
+    Server. Peers can lease an ID as well as begin a session with another Peer. Once a session is established, Peers can
+    forward messages to another Peer. Unless otherwise noted, all messages MUST occur over TCP.\\
 
     With the exception of the \emph{Handshake} messages. All SVSC messages' first byte contain a number to indicate
     the message type.
+
+    \subsection{Definitions}
+    The following definitions are used globally throughout the document:
+
+    \begin{itemize}
+        \item Peer - denotes a client in classical server/client environment
+        \item Server - The intermediary server used for routing and proxying data between
+    \end{itemize}
 
     \subsection{Handshake}
 
@@ -125,7 +134,7 @@
 
     The Peer replies back either \texttt{0} to indicate the version is not acceptable and that the handshake has
     failed or \texttt{1} if the version is acceptable to the Peer and the handshake as succeeded. If 0 is sent, all
-    communication MUST cease and the TCP connection MUST end.
+    communication MUST cease and the TCP connection MUST be terminated.
 
     \begin{center}
         Peer \textrightarrow\ Server\\
@@ -142,10 +151,8 @@
 
     A lease is a temporary assignment of an ID to a Peer. The ID format and generation is discussed in
     \hyperlink{subsubsection.4.2.5}{4.2.5}. A maximum of 1 ID can be leased per TCP connection. ID generation MUST be
-    rate
-    limited to prevent ID exhaustion. Rate
-    limiting rules
-    are out of scope for this protocol, however some suggestions are listed in \hyperlink{subsubsection.4.2.6}{4.2.6}.
+    rate limited to prevent ID exhaustion. Rate limiting rules are out of scope for this protocol, however some
+    suggestions are listed in \hyperlink{subsubsection.4.2.6}{4.2.6}.
 
     \subsubsection{LeaseRequest}
 
@@ -208,7 +215,7 @@
     Consideration of the \emph{cookie} value MUST have no effect on the the value of \emph{accepted}. That is, if the
     request is for a specific ID (implied by the presence of a cookie value and a \emph{has-cookie} value equal to 1
     in the \emph{LeaseRequest}) and the ID requested is not available, the Server SHOULD respond with a different
-    available ID and an \emph{accepted} value of 1.\\
+    available ID and an \emph{accepted} value of 1 (assuming an ID is available).\\
 
     \emph{accepted} SHOULD only be 0 if no IDs are left or for rate limiting reasons.
 
@@ -292,12 +299,15 @@
 
     \subsection{Sessions}
 
-    A session is a connection between two Peers where one is a Host and one is a Client. Only a Peer with an
-    assigned ID can be a Host. A maximum of one session can occur per TCP connection.
+    A session is a connection between two Peers. At least one Peer must have an ID. A Peer can have a maximum of one
+    session at any time. Immediately after receiving a \emph{EstablishSessionResponse} message with a \emph{status}
+    of 1 or a \emph{EstablishSessionNotification} message a Peer MUST begin the UDP Heartbeat procedure defined in %
+    TODO
+    and continue for the duration of the session. Failure to do so MAY result in dropped \emph{SessionData*} packets.
 
     \subsubsection{EstablishSessionRequest}
 
-    An \emph{EstablishSessionRequest} message is a Peer request to establish a connection to a Host.
+    An \emph{EstablishSessionRequest} message is a Peer request to establish a connection to a Peer.
 
     \begin{center}
         Peer \textrightarrow\ Server\\
@@ -307,7 +317,7 @@
             \hline
             1              & type          & 5              &                                                      \\
             \hline
-            4              & host-id       &                & The ID of the Host to establish this connection with \\
+            4              & peer-id       &                & The ID of the Host to establish this connection with \\
             \hline
         \end{tabular}
     \end{center}
@@ -324,7 +334,7 @@
             \hline
             1              & type          & 6              &                                            \\
             \hline
-            4              & host-id       &                & the ID of the Host attempted to connect to \\
+            4              & peer-id       &                & the ID of the Peer attempted to connect to \\
             \hline
             1              & status        & 0-3            & described below                            \\
             \hline
@@ -348,12 +358,16 @@
             \hline
             1              & ID not found                         \\
             \hline
-            2              & Host is offline                      \\
+            2              & Peer is offline                      \\
             \hline
             3              & Other error                          \\
             \hline
         \end{tabular}
     \end{center}
+
+    A Peer may be considered offline if, for example, an unexpired ID has been assigned to them and then the TCP
+    connection is dropped. Heartbeat messages and timeouts are discussed in % TODO
+    .\\
 
     \emph{session-id} is a 128 bit random value used for session identification\\
 
@@ -361,7 +375,7 @@
 
     \subsubsection{EstablishSessionNotification}
 
-    A \emph{EstablishSessionNotification} notifies a Host that a session has been established with them.
+    A \emph{EstablishSessionNotification} notifies a Peer that a session has been established with them.
 
     \begin{center}
         Server \textrightarrow\ Host\\
@@ -467,6 +481,8 @@
     \subsection{Definitions}
 
     \begin{itemize}
+        \item Host - A peer with an ID that wants to share their screen to the Client
+        \item Client - A peer that wants to view and maybe control the Host's screen
         \item Display - A rectangular visual region that is shared by a Host to a Client. May or may not be
         \item \emph{Controllable}.
         \item Controllable - A \emph{Display} that accepts keyboard and mouse input.
