@@ -62,11 +62,11 @@
     \begin{center}
         \begin{tabular}{|l|}
             \hline
-            Transport Layer                                           \\
-            | Server Encryption Layer                                 \\
-            || Server Communication Layer                             \\
-            ||| E2EE (Host $\leftrightarrow$ Client) Encryption Layer \\
-            |||| Host $\leftrightarrow$ Client Communication Layer    \\
+            Transport Layer                                         \\
+            | Server Encryption Layer                               \\
+            || Server Communication Layer                           \\
+            ||| E2EE (Peer $\leftrightarrow$ Peer) Encryption Layer \\
+            |||| Host $\leftrightarrow$ Client Communication Layer  \\
             \hline
         \end{tabular}
     \end{center}
@@ -74,14 +74,23 @@
     The Transport Layer is the OSI Transport Layer level protocol for networking (TCP or UDP). \\
 
     The Server Encryption layer provides security between the Server and a Peer (Client and Host). The Server
-    Encryption Layer is discussed in % TODO insert secition number
-    .
+    Encryption Layer is discussed in \hyperlink{section.4}{4}.
 
     \subsection{Initialization}
 
-    To begin a Peer connects to the server over TCP and commences the Server Encryption Layer protocol for TCP
-    defined in % TODO insert section number
-    . Next the Server Communication Layer defined in section \hyperlink{section.4}{4} commences.
+    To begin, a Peer connects to the server over TCP and commences the Server Encryption Layer protocol for TCP
+    defined in \hyperlink{section.4}{4}. Next the Server Communication Layer defined in section \hyperlink{section
+    .5}{5} commences. All Server Communication Layer messages are encrypted and encapsulated in messages defined in
+    the Server Encryption Layer. Once a session is established between two peers, the E2EE (Peer $\leftrightarrow$ Peer)
+    Encryption Layer commences as defined in \hyperlink{section.6}{6}. All E2EE (Peer $\leftrightarrow$ Peer)
+    Encryption messages are encapsulated in Server Communication Layer messages. Finally, the Host $\leftrightarrow$
+    Client Communication Layer commences as defined in \hyperlink{section.6}{6}. All Host $\leftrightarrow$ Client
+    Communication Layer messages are encrypted and encapsulated in E2EE (Peer $\leftrightarrow$ Peer) Encryption
+    Layer messages.
+
+    \subsection{Transport Messages Total Header Sizes}
+
+    % TODO
 
     \newpage
 
@@ -89,7 +98,39 @@
     \section{Server Encryption Layer}
 
     The Server Encryption Layer provides security for communication between Peers and the Server. TCP and UDP have
-    separate schemes
+    different security methods.
+
+    \subsection{TCP}
+
+    \subsection{UDP}
+
+    UDP encryption and authentication rely on the \emph{peer-id} and \emph{peer-key} values established in a session
+    (described in \hyperlink{subsection.5.4}{5.4}). The Server should NOT
+    process any messages that don't pass authentication.
+
+    AEAD(key, counter, plain text, auth text) is defined as ChaCha20Poly1305 AEAD, as specified in RFC7539 [17],
+    with its nonce being composed of 32 bits of zeros followed by the 64-bit little-endian value of counter. % TODO
+    % little endian?; Cite
+
+    \begin{center}
+        Peer \textrightarrow\ Server\\
+        \begin{tabular}{|c|c|}
+            \hline
+            \textbf{Bytes}       & \textbf{Name}  \\
+            \hline
+            16                   & \emph{peer-id} \\
+            \hline
+            8                    & counter        \\
+            \hline
+            UDP length - 8 bytes & data           \\
+            \hline
+        \end{tabular}
+    \end{center}
+
+    When a session is established, the \emph{counter} MUST be 0. The \emph{counter} MUST increment by 1 for every UDP
+    message sent by the Peer.
+
+    \emph{data} is AEAD(\emph{peer-key}, \emph{counter}, \emph{plaintext}, $\epsilon$).
 
     \newpage
 
@@ -317,7 +358,7 @@
             \hline
             1              & type          & 5              &                                                      \\
             \hline
-            4              & peer-id       &                & The ID of the Host to establish this connection with \\
+            4              & lease-id      &                & The ID of the Peer to establish this connection with \\
             \hline
         \end{tabular}
     \end{center}
@@ -334,13 +375,15 @@
             \hline
             1              & type          & 6              &                                            \\
             \hline
-            4              & peer-id       &                & the ID of the Peer attempted to connect to \\
+            4              & lease-id      &                & the ID of the Peer attempted to connect to \\
             \hline
             1              & status        & 0-3            & described below                            \\
             \hline
             \multicolumn{4}{|c|}{\textbf{Below only if \emph{status} is 0} } \\
             \hline
             16             & session-id    &                & described below                            \\
+            \hline
+            16             & peer-id       &                & described below                            \\
             \hline
             16             & peer-key      &                & described below                            \\
             \hline
@@ -359,6 +402,10 @@
             1              & ID not found                         \\
             \hline
             2              & Peer is offline                      \\
+            \hline
+            3              & Peer is busy                         \\
+            \hline
+            4              & You are busy                         \\
             \hline
             3              & Other error                          \\
             \hline
@@ -386,6 +433,8 @@
             1              & type          & 7              &                                                     \\
             \hline
             16             & session-id    &                & described in \hyperlink{subsubsection.4.3.2}{4.3.2} \\
+            \hline
+            16             & peer-id       &                & described in \hyperlink{subsubsection.4.3.2}{4.3.2} \\
             \hline
             16             & peer-key      &                & described in \hyperlink{subsubsection.4.3.2}{4.3.2} \\
             \hline
