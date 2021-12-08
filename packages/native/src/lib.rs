@@ -1,3 +1,6 @@
+mod api;
+
+use api::*;
 use cfg_if::cfg_if;
 use image::RgbImage;
 use neon::prelude::*;
@@ -23,19 +26,16 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
     impl<T> Finalize for JsCompat<T> {}
 
     cx.export_function("new_handle", |mut cx| {
-        match ScreenHandle::new() {
-            Ok(sh) => Ok(JsBox::new(&mut cx, sh).upcast::<JsValue>()),
-            Err(_) => Ok(cx.null().upcast::<JsValue>())
-        }
+        Ok(JsBox::new(&mut cx, Capture::new().unwrap()).upcast::<JsValue>())
     })?;
 
     cx.export_function("capture", |mut cx| {
-        use std::time::Instant;
         use image::ImageFormat;
+        use std::time::Instant;
 
-        let handle = cx.argument::<JsBox<ScreenHandle>>(0)?;
+        let handle = cx.argument::<JsBox<Capture>>(0)?;
         let start = Instant::now();
-        let img = handle.capture().unwrap();
+        let img = handle.capture_screen().unwrap();
         let elapsed = start.elapsed();
         println!("{}", elapsed.as_micros());
 
@@ -45,21 +45,30 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
     })?;
 
     cx.export_function("update", |mut cx| {
-        use std::time::Instant;
         use image::ImageFormat;
+        use std::time::Instant;
 
-        let handle = cx.argument::<JsBox<ScreenHandle>>(0)?;
+        let handle = cx.argument::<JsBox<Capture>>(0)?;
         let img_handle = cx.argument::<JsBox<JsCompat<RgbImage>>>(1)?;
         let mut img = img_handle.0.borrow_mut();
 
         let start = Instant::now();
-        handle.update(&mut *img).unwrap();
+        handle.update_screen_capture(&mut *img).unwrap();
         let elapsed = start.elapsed();
         println!("{}", elapsed.as_micros());
 
         img.save_with_format("./cap.png", ImageFormat::Png).unwrap();
 
-        Ok(cx.null())
+        Ok(cx.undefined())
+    })?;
+
+    cx.export_function("log_events", |mut cx| {
+        let handle = cx.argument::<JsBox<Capture>>(0)?;
+        match handle.wait_for_event() {
+            Ok(event) => println!("Event: {:?}", event.0),
+            Err(error) => println!("Error: {}", error),
+        }
+        Ok(cx.undefined())
     })?;
 
     Ok(())
