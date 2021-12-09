@@ -102,15 +102,71 @@
 
     \subsection{TCP}
 
+    The TCP Server Encryption Layer is heavily based on a simplification of TLS 1.3 as defined in. % TODO defined in
+
+    \subsection{Handshake}
+
+    The Peer begins by generating an ephemeral Eliiptic Curve x25519 keypair.
+
+    \begin{center}
+        Peer \textrightarrow\ Server\\
+        \begin{tabular}{|c|c|c|}
+            \hline
+            \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
+            \hline
+            1              & type          & 1              \\
+            \hline
+            16             & public-key    &                \\
+            \hline
+        \end{tabular}
+    \end{center}
+
+
+    The Server then generates their own ephemeral Eliiptic Curve x25519 keypair.
+
+    \begin{center}
+        Peer \textrightarrow\ Server\\
+        \begin{tabular}{|c|c|c|}
+            \hline
+            \textbf{Bytes}             & \textbf{Name}       & \textbf{Value} \\
+            \hline
+            1                          & type                & 1              \\
+            \hline
+            3                          & certificates-length &                \\
+            \hline
+            \emph{certificates-length} & certificates        &                \\
+            \hline
+        \end{tabular}
+    \end{center}
+
+    \emph{certificates} is defined as:
+
+    \begin{center}
+        \begin{tabular}{|c|c|}
+            \hline
+            \textbf{Bytes}            & \textbf{Name}      \\
+            \hline
+            3                         & certificate-length \\
+            \hline
+            \emph{certificate-length} & certificate       \\
+            \hline
+        \end{tabular}
+    \end{center}
+
+    \emph{certificate} is a certificate in ASN.1 DER binary encoding. This is the same format used in TLS.
+
+
+
+
     \subsection{UDP}
 
     UDP encryption and authentication rely on the \emph{peer-id} and \emph{peer-key} values established in a session
     (described in \hyperlink{subsection.5.4}{5.4}). The Server should NOT
-    process any messages that don't pass authentication.
+    process any messages that don't pass authentication.\\
 
     AEAD(key, counter, plain text, auth text) is defined as ChaCha20Poly1305 AEAD, as specified in RFC7539 [17],
-    with its nonce being composed of 32 bits of zeros followed by the 64-bit little-endian value of counter. % TODO
-    % little endian?; Cite
+    with its nonce being composed of 32 bits of zeros followed by the 64-bit little-endian value of counter.
+    % TODO little endian?; Cite
 
     \begin{center}
         Peer \textrightarrow\ Server\\
@@ -631,9 +687,9 @@
 
     \begin{itemize}
         \item \emph{cell-width} MUST be less than \emph{width}. \emph{cell-height} must be less than \emph{height}.\\
-        \item % // TODO define more restrictions %
+        % // TODO define more restrictions %
         \item The \emph{access} byte defines what type of access is available for the display. The bits of the
-        \item \emph{access} byte are described below in Big Endian.
+        \item \emph{access} byte are described below in little endian.
     \end{itemize}
 
 
