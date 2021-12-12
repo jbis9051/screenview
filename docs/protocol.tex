@@ -104,9 +104,7 @@
 
     The TCP Server Encryption Layer is heavily based on a simplification of TLS 1.3 as defined in. % TODO defined in
 
-    \subsubsection{Handshake}
-
-    The Peer begins by generating an ephemeral Eliiptic Curve x25519 keypair.
+    \subsubsection{PeerHello}
 
     \begin{center}
         Peer \textrightarrow\ Server\\
@@ -121,47 +119,95 @@
         \end{tabular}
     \end{center}
 
+    \begin{center}
+        \begin{tabular}{l}
+            $(E_{peer}^{pub},E_{peer}^{priv}) := $DH-Generate()\vspace{0.5em}
+            \\
+            public-key := $E_{peer}^{pub}$
+        \end{tabular}
+    \end{center}
 
-    The Server then generates their own ephemeral Eliiptic Curve x25519 keypair.
+    \subsubsection{ServerHello}
 
     \begin{center}
-        Peer \textrightarrow\ Server\\
+        Server \textrightarrow\ Peer\\
         \begin{tabular}{|c|c|c|}
             \hline
             \textbf{Bytes}             & \textbf{Name}       & \textbf{Value} \\
             \hline
-            1                          & type                & 1              \\
+            1                          & type                & 2              \\
             \hline
             3                          & certificates-length &                \\
             \hline
-            \emph{certificates-length} & certificates        &                \\
+            \emph{certificates-length} & certificate\_list   &                \\
+            \hline
+            16                         & public-key          &                \\
+            \hline
+            variable                   & certificate-verify  &                \\
             \hline
         \end{tabular}
     \end{center}
 
-    \emph{certificates} is defined as:
+    certificate\_list is defined in \href{https://datatracker.ietf.org/doc/html/rfc8446#section-4.4.2}{RFC8446
+    Section-4.4.2}.
 
     \begin{center}
-        \begin{tabular}{|c|c|}
+        \begin{tabular}{l}
+            $(E_{serv}^{pub},E_{serv}^{priv}) := \text{DH-Generate()}$\vspace{0.5em}
+            \\
+            public-key := $E_{serv}^{pub}$
+        \end{tabular}
+    \end{center}
+
+    certificate-verify is defined in \href{https://datatracker.ietf.org/doc/html/rfc8446#section-4.4
+.3}{RFC8445 Section-4.4.3} with the following modification. The content that is signed is:\\
+
+    \begin{center}
+        \begin{tabular}{l}
+            content := ``SreenViewServerVerify'' $||$ 0 $||$ $E_{serv}^{pub}$
+        \end{tabular}
+    \end{center}
+
+    The Client MUST validate all signatures in accordance with the TLS spec.
+
+    \subsubsection{Transport Data Key Derivation}
+
+    \begin{center}
+        \begin{tabular}{l}
+            $C_{peer} = DH(E_{serv}^{pub}, E_{peer}^{priv})$\vspace{0.5em}
+            \\
+            $C_{serv} = DH(E_{peer}^{pub}, E_{serv}^{priv})$\vspace{0.5em}
+            \\
+            $(T_{peer}^{send} = T_{serv}^{recv}, T_{peer}^{recv} = T_{serv}^{send}) := \text{KDF}(C_{peer} =
+            C_{serv}, \epsilon)$\vspace{0.5em}\\
+            $N_{peer}^{send} = N_{serv}^{recv} = N_{peer}^{recv} = N_{serv}^{send} := 0$
+        \end{tabular}
+    \end{center}
+
+    \subsubsection{Subsequent Messages: Transport Data Messages}
+
+    \begin{center}
+        Peer $\leftrightarrow$ Server\\
+        \begin{tabular}{|c|c|c|}
             \hline
-            \textbf{Bytes}            & \textbf{Name}      \\
+            \textbf{Bytes}     & \textbf{Name} & \textbf{Value} \\
             \hline
-            3                         & certificate-length \\
+            1                  & type          & 3              \\
             \hline
-            \emph{certificate-length} & certificate        \\
+            2                  & data-length   &                \\
             \hline
-            2                         & signature-type     \\
-            \hline
-            2                         & signature-length   \\
-            \hline
-            \emph{signature-length}   & signature          \\
+            \emph{data-length} & data          &                \\
             \hline
         \end{tabular}
     \end{center}
 
-    \emph{certificate} is a certificate in ASN.1 DER binary encoding. This is the same format used in TLS.
+    \begin{center}
+        \begin{tabular}{l}
+            data := AEAD($T_{m}^{send}$, $T_{m}^{send}$, $P$, $\epsilon$)
+        \end{tabular}
+    \end{center}
 
-    % TODO explain all this stuff
+    Where $P$ is the payload to be transported
 
     \subsection{UDP}
 
