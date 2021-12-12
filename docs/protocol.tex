@@ -120,13 +120,10 @@
         \end{tabular}
     \end{center}
 
-    \begin{center}
-        \begin{tabular}{l}
-            $(E_{peer}^{pub},E_{peer}^{priv}) := $DH-Generate()\vspace{0.5em}
-            \\
-            public-key := $E_{peer}^{pub}$
-        \end{tabular}
-    \end{center}
+    \begin{align*}
+        &(E_{peer}^{pub},\,E_{peer}^{priv}) := \text{DH-Generate()}\\
+        &\text{public-key} := E_{peer}^{pub}
+    \end{align*}
 
     \subsubsection{ServerHello}
 
@@ -152,38 +149,29 @@
     certificate\_list is defined in \href{https://datatracker.ietf.org/doc/html/rfc8446#section-4.4.2}{RFC8446
     Section-4.4.2}.
 
-    \begin{center}
-        \begin{tabular}{l}
-            $(E_{serv}^{pub},\, E_{serv}^{priv}) := \text{DH-Generate()}$\vspace{0.5em}
-            \\
-            public-key := $E_{serv}^{pub}$
-        \end{tabular}
-    \end{center}
+    \begin{align*}
+        & (E_{serv}^{pub},\, E_{serv}^{priv}) := \text{DH-Generate()}\\
+        & \text{public-key} := E_{serv}^{pub}
+    \end{align*}
 
     certificate-verify is defined in \href{https://datatracker.ietf.org/doc/html/rfc8446#section-4.4
 .3}{RFC8445 Section-4.4.3} with the following modification. The content that is signed is:\\
 
-    \begin{center}
-        \begin{tabular}{l}
-            content := ``SreenViewServerVerify'' $||$ 0 $||$ $E_{serv}^{pub}$
-        \end{tabular}
-    \end{center}
+    \begin{align*}
+        \text{content} := \text{``SreenViewServerVerify''}\ ||\ 0\ ||\ E_{serv}^{pub}
+    \end{align*}
 
     The Client MUST validate all signatures in accordance with the TLS spec.
 
     \subsubsection{Transport Data Key Derivation}
 
-    \begin{center}
-        \begin{tabular}{l}
-            $C_{peer} = \text{DH}(E_{serv}^{pub},\, E_{peer}^{priv})$\vspace{0.5em}
-            \\
-            $C_{serv} = \text{DH}(E_{peer}^{pub},\, E_{serv}^{priv})$\vspace{0.5em}
-            \\
-            $(T_{peer}^{send} = T_{serv}^{recv},\, T_{peer}^{recv} = T_{serv}^{send}) := \text{KDF}(C_{peer} =
-            C_{serv},\, \epsilon)$\vspace{0.5em} \\
-            $N_{peer}^{send} = N_{serv}^{recv} = N_{peer}^{recv} = N_{serv}^{send} := 0$
-        \end{tabular}
-    \end{center}
+    \begin{align*}
+        & C_{peer} = \text{DH}(E_{serv}^{pub},\ E_{peer}^{priv})\\
+        & C_{serv} = \text{DH}(E_{peer}^{pub},\ E_{serv}^{priv})\\
+        & (T_{peer}^{send} = T_{serv}^{recv},\ T_{peer}^{recv} = T_{serv}^{send}) := \text{KDF}(C_{peer} = C_{serv},
+        \ \epsilon) \\
+        & N_{peer}^{send} = N_{serv}^{recv} = N_{peer}^{recv} = N_{serv}^{send} := 0
+    \end{align*}
 
     \subsubsection{Subsequent Messages: Transport Data Messages}
 
@@ -202,12 +190,10 @@
         \end{tabular}
     \end{center}
 
-    \begin{center}
-        \begin{tabular}{l}
-            data := AEAD($T_{m}^{send}$, $N_{m}^{send}$, $P$, $\epsilon$)\vspace{0.5em} \\
-            $N_{m}^{send} := N_{m}^{send} + 1 $
-        \end{tabular}
-    \end{center}
+    \begin{align*}
+        & \text{data} := \text{AEAD}(T_{m}^{send}, N_{m}^{send}, P, \epsilon) \\
+        & N_{m}^{send} := N_{m}^{send} + 1
+    \end{align*}
 
     Where $P$ is the payload to be transported
 
@@ -221,16 +207,14 @@
 
     \subsubsection{Transport Data Key Derivation}
 
-    \begin{center}
-        \begin{tabular}{l}
-            $G$ := session-i  \vspace{0.5em}                                                              \\
-            $H$ := peer-id  \vspace{0.5em}                                                                \\
-            $J$ := peer-key  \vspace{0.5em}                                                               \\
-            $(V_{peer}^{send} = T_{serv}^{recv}, P_{peer}^{recv} = P_{serv}^{send}) := \text{KDF}(\text{HASH}(G\,
-            ||\, H\,||\, J), \epsilon)$  \vspace{0.5em}                                                   \\
-            $M_{peer}^{send} = M_{serv}^{recv} = M_{peer}^{recv} = M_{serv}^{send} := 0$ \vspace{0.5em} \\
-        \end{tabular}
-    \end{center}
+    \begin{align*}
+        &  G:= \text{session-id}                                                               \\
+        &  H := \text{peer-id}                                                                \\
+        &  J := \text{peer-key}                                                              \\
+        &  (V_{peer}^{send} = T_{serv}^{recv}, P_{peer}^{recv} = P_{serv}^{send}) := \text{KDF}(\text{HASH}(G\,
+        ||\, H\,||\, J), \epsilon)                                        \\
+        &   M_{peer}^{send} = M_{serv}^{recv} = M_{peer}^{recv} = M_{serv}^{send} := 0
+    \end{align*}
 
     \subsubsection{Transport Data Messages}
 
@@ -267,13 +251,11 @@
     \end{center}
 
 
-    \begin{center}
-        \begin{tabular}{l}
-            data := AEAD($V_{m}^{send}$, $M_{m}^{send}$, $P$, $\epsilon$)\vspace{0.5em} \\
-            counter := $M_{m}^{send}$
-            $M_{m}^{send} := M_{m}^{send} + 1$
-        \end{tabular}
-    \end{center}
+    \begin{align*}
+        & \text{data} := \text{AEAD}(V_{m}^{send}, M_{m}^{send}, P, \epsilon)\\
+        & \text{counter} := M_{m}^{send}\\
+        & M_{m}^{send} := M_{m}^{send} + 1
+    \end{align*}
 
     Where $P$ is the payload to be transported
 
