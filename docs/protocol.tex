@@ -41,6 +41,7 @@
     \section{Definitions}
     The following definitions are used globally throughout the document:
 
+    % TODO crypto definitions
 
     The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
     "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
@@ -153,7 +154,7 @@
 
     \begin{center}
         \begin{tabular}{l}
-            $(E_{serv}^{pub},E_{serv}^{priv}) := \text{DH-Generate()}$\vspace{0.5em}
+            $(E_{serv}^{pub},\, E_{serv}^{priv}) := \text{DH-Generate()}$\vspace{0.5em}
             \\
             public-key := $E_{serv}^{pub}$
         \end{tabular}
@@ -174,12 +175,12 @@
 
     \begin{center}
         \begin{tabular}{l}
-            $C_{peer} = DH(E_{serv}^{pub}, E_{peer}^{priv})$\vspace{0.5em}
+            $C_{peer} = \text{DH}(E_{serv}^{pub},\, E_{peer}^{priv})$\vspace{0.5em}
             \\
-            $C_{serv} = DH(E_{peer}^{pub}, E_{serv}^{priv})$\vspace{0.5em}
+            $C_{serv} = \text{DH}(E_{peer}^{pub},\, E_{serv}^{priv})$\vspace{0.5em}
             \\
-            $(T_{peer}^{send} = T_{serv}^{recv}, T_{peer}^{recv} = T_{serv}^{send}) := \text{KDF}(C_{peer} =
-            C_{serv}, \epsilon)$\vspace{0.5em}\\
+            $(T_{peer}^{send} = T_{serv}^{recv},\, T_{peer}^{recv} = T_{serv}^{send}) := \text{KDF}(C_{peer} =
+            C_{serv},\, \epsilon)$\vspace{0.5em} \\
             $N_{peer}^{send} = N_{serv}^{recv} = N_{peer}^{recv} = N_{serv}^{send} := 0$
         \end{tabular}
     \end{center}
@@ -203,7 +204,8 @@
 
     \begin{center}
         \begin{tabular}{l}
-            data := AEAD($T_{m}^{send}$, $T_{m}^{send}$, $P$, $\epsilon$)
+            data := AEAD($T_{m}^{send}$, $N_{m}^{send}$, $P$, $\epsilon$)\vspace{0.5em} \\
+            $N_{m}^{send} := N_{m}^{send} + 1 $
         \end{tabular}
     \end{center}
 
@@ -211,33 +213,69 @@
 
     \subsection{UDP}
 
-    UDP encryption and authentication rely on the \emph{peer-id} and \emph{peer-key} values established in a session
-    (described in \hyperlink{subsection.5.4}{5.4}). The Server should NOT
-    process any messages that don't pass authentication.\\
+    UDP encryption and authentication rely on the \emph{session-id}, \emph{peer-id} and \emph{peer-key} values
+    established in a session
+    (described in \hyperlink{subsection.5.4}{5.4}). The Server MUST NOT
+    process or reply to any messages that don't pass authentication. This prevents an amplification attack.\\
+    % TODO Consider IP address stuff
 
-    AEAD(key, counter, plain text, auth text) is defined as ChaCha20Poly1305 AEAD, as specified in RFC7539 [17],
-    with its nonce being composed of 32 bits of zeros followed by the 64-bit little-endian value of counter.
-    % TODO little endian?; Cite
+    \subsubsection{Transport Data Key Derivation}
 
     \begin{center}
-        Peer \textrightarrow\ Server\\
-        \begin{tabular}{|c|c|}
+        \begin{tabular}{l}
+            $G$ := session-i  \vspace{0.5em}                                                              \\
+            $H$ := peer-id  \vspace{0.5em}                                                                \\
+            $J$ := peer-key  \vspace{0.5em}                                                               \\
+            $(V_{peer}^{send} = T_{serv}^{recv}, P_{peer}^{recv} = P_{serv}^{send}) := \text{KDF}(\text{HASH}(G\,
+            ||\, H\,||\, J), \epsilon)$  \vspace{0.5em}                                                   \\
+            $M_{peer}^{send} = M_{serv}^{recv} = M_{peer}^{recv} = M_{serv}^{send} := 0$ \vspace{0.5em} \\
+        \end{tabular}
+    \end{center}
+
+    \subsubsection{Transport Data Messages}
+
+    \begin{center}
+        Peer \textrightarrow Server\\
+        \begin{tabular}{|c|c|c|}
             \hline
-            \textbf{Bytes}       & \textbf{Name}  \\
+            \textbf{Bytes}                & \textbf{Name}  & \textbf{Value} \\
             \hline
-            16                   & \emph{peer-id} \\
+            1                             & type           & 4              \\
             \hline
-            8                    & counter        \\
+            16                            & \emph{peer-id} &                \\
             \hline
-            UDP length - 8 bytes & data           \\
+            8                             & counter        &                \\
+            \hline
+            $\text{UDP length} - 8$ bytes & data           &                \\
             \hline
         \end{tabular}
     \end{center}
 
-    When a session is established, the \emph{counter} MUST be 0. The \emph{counter} MUST increment by 1 for every UDP
-    message sent by the Peer.
+    \begin{center}
+        Server \textrightarrow Peer\\
+        \begin{tabular}{|c|c|c|}
+            \hline
+            \textbf{Bytes}                & \textbf{Name} & \textbf{Value} \\
+            \hline
+            1                             & type          & 5              \\
+            \hline
+            8                             & counter       &                \\
+            \hline
+            $\text{UDP length} - 8$ bytes & data          &                \\
+            \hline
+        \end{tabular}
+    \end{center}
 
-    \emph{data} is AEAD(\emph{peer-key}, \emph{counter}, \emph{plaintext}, $\epsilon$).
+
+    \begin{center}
+        \begin{tabular}{l}
+            data := AEAD($V_{m}^{send}$, $M_{m}^{send}$, $P$, $\epsilon$)\vspace{0.5em} \\
+            counter := $M_{m}^{send}$
+            $M_{m}^{send} := M_{m}^{send} + 1$
+        \end{tabular}
+    \end{center}
+
+    Where $P$ is the payload to be transported
 
     \newpage
 
