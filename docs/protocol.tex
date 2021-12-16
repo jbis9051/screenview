@@ -93,9 +93,6 @@
 
     % TODO
 
-    \newpage
-
-
     \section{Server Encryption Layer}
 
     The Server Encryption Layer provides security for communication between Peers and the Server. TCP and UDP have
@@ -258,8 +255,6 @@
     \end{align*}
 
     Where $P$ is the payload to be transported
-
-    \newpage
 
 
     \section{Screen View Server Communication (SVSC) Protocol }
@@ -469,9 +464,9 @@
 
     A session is a connection between two Peers. At least one Peer must have an ID. A Peer can have a maximum of one
     session at any time. Immediately after receiving a \emph{EstablishSessionResponse} message with a \emph{status}
-    of 1 or a \emph{EstablishSessionNotification} message a Peer MUST begin the UDP Heartbeat procedure defined in %
-    TODO
-    and continue for the duration of the session. Failure to do so MAY result in dropped \emph{SessionData*} packets.
+    of 0 or a \emph{EstablishSessionNotification} message a Peer MUST establish UDP connection by sending a
+    \emph{Keepalive} message as defined in \hyperlink{subsection.5.5}{5.5}. Failure to do so MAY result in dropped
+    \emph{SessionData*} packets.
 
     \subsubsection{EstablishSessionRequest}
 
@@ -540,7 +535,7 @@
     \end{center}
 
     A Peer may be considered offline if, for example, an unexpired ID has been assigned to them and then the TCP
-    connection is dropped. Heartbeat messages and timeouts are discussed in % TODO
+    connection is dropped. Keepalive messages and timeouts are discussed in % TODO
     .\\
 
     \emph{session-id} is a 128 bit random value used for session identification\\
@@ -603,7 +598,9 @@
     \subsubsection{SessionDataSend - TCP/UDP}
 
     A \emph{SessionDataSend} is a message from a Peer intended to be forwarded to the Peer on the other side of the
-    session.
+    session. If a connection is not available (e.g. UDP was dropped or never established) for
+    \emph{SessionDataReceive} message to be sent to the other Peer, the
+    \emph{SessionDataSend} message is silently dropped.
 
     \begin{center}
         Peer \textrightarrow\ Server\\
@@ -640,7 +637,28 @@
         \end{tabular}
     \end{center}
 
-    \newpage
+    \subsection{Keepalive - TCP/UDP}
+
+    For each transport (TCP and UDP), if no message has been sent in \emph{KeepaliveTimeout} a Server sends a keepalive
+    message over the respective transport. The Peer MUST respond with another Keepalive message.\\
+
+    For TCP, if a \emph{KeepaliveTimeout} response is not received by the Server in
+    double \emph{KeepaliveTimeout} seconds the TCP connection is considered dropped.\\
+
+    For UDP, if a \emph{KeepaliveTimeout} response is not received by the Server in
+    half  \emph{KeepaliveTimeout} seconds another \emph{Keepalive} message is sent. If a response is not received in
+    an additional half \emph{KeepaliveTimeout} seconds, the UDP connection is considered dropped.
+
+    \begin{center}
+        Server $\leftrightarrow$ Peer\\
+        \begin{tabular}{|c|c|c|c|}
+            \hline
+            \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
+            \hline
+            1              & type          & 0              \\
+            \hline
+        \end{tabular}
+    \end{center}
 
 
     \section{Remote Visual Display (RVD) Protocol}
@@ -652,7 +670,8 @@
     used.\\
 
     With the exception of the \emph{Handshake} messages. All RVD messages' first byte contain a number to indicate
-    the message type.
+    the message type. A \emph{sequence-number} is an incrementing 32-bit counter for UDP each message sent. All
+    messages sent over UDP MUST include a \emph{sequence-number} after the \emph{type} byte.
 
     \subsection{Definitions}
 
@@ -684,9 +703,10 @@
         \end{tabular}
     \end{center}
 
-    The client replies back either \texttt{0} to indicate the version is not acceptable and that the handshake has
-    failed or \texttt{1} if the version is acceptable to the client and the handshake as succeeded. If 0 is sent, all
-    communication MUST cease and an error SHOULD be displayed to user.
+    The Client replies back either \texttt{0} to indicate the version is not acceptable and that the handshake has
+    failed or \texttt{1} if the version is acceptable to the Client and the handshake as succeeded. If 0 is sent, all
+    communication MUST cease and an error SHOULD be displayed to user. A \emph{SessionEnd} message should be sent by
+    the Client. % TODO hyper
 
     \begin{center}
         Client \textrightarrow\ Host\\
@@ -1007,6 +1027,7 @@
     The \emph{FrameData} message contains an update of a particular cell on a particular \emph{Display}.
 
     \begin{center}
+        Host \textrightarrow Client\\
         \begin{tabular}{|c|c|c|}
             \hline
             \textbf{Bytes} & \textbf{Name}   & \textbf{Value} \\
@@ -1026,11 +1047,29 @@
         \end{tabular}
     \end{center}
 
-    \emph{sequence-number} is an incrementing 32-bit counter for each \emph{FrameData} sent
-
     \emph{data} contains jpeg pixel data of the updated cell.
 
-    \newpage
+    \subsection{Congestion}
+
+    When sending messages over a network the network may become congested to avoid congesting the network further RVD
+    implements a congestion detection and congestion control mechanism. RVD uses Additive increase/multiplicative
+    decrease or AIMD to control the \emph{OutputMaximum} which is the maximum messages allowed per
+    \emph{CongestionWindow}.
+
+%    \subsubsection{QoSMessage - TCP}
+%
+%    \begin{center}
+%        Client $\leftrightarrow$ Host\\
+%        \begin{tabular}{|c|c|c|}
+%            \hline
+%            \textbf{Bytes} & \textbf{Name}   & \textbf{Value} \\
+%            \hline
+%            1              & type            & 11             \\
+%            \hline
+%            4              & sequence-number &                \\
+%            \hline
+%        \end{tabular}
+%    \end{center}
 
 
     \section{Weak Pre Shared Key, Key Authentication (WPSKKA) Protocol}
@@ -1210,5 +1249,8 @@
 
     In order to ensure perfect forward secrecy, new key pairs
     ($PK_{H/C}/pk_{H/C}$) should be generated for each session.
+
+
+    \section{Cryptography Definitions and Rationale}
 
 \end{document}
