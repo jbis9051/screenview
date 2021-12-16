@@ -17,7 +17,7 @@
     citecolor   = red
 }
 
-\title{Screen View Protocol}
+\title{\textbf{Screen View Protocol}}
 \author{Josh Brown}
 
 \newcommand{\projectName}{Screen View}
@@ -25,14 +25,23 @@
 % Document
 \begin{document}
     \maketitle
+
+    \begin{abstract}
+        \projectName{} is suite of cryptography and application level networking protocols culminating to create a
+        zero configuration end to end encrypted remote screen viewing and controlling software. Screen View aims to
+        replace TeamViewer, RDP, and VNC for many use cases while being more performant and more secure, while
+        being easier or just as easy to setup and use. Screen View defines four different layers of protocols, each
+        encapsulating all the layers below it. Cryptography for communication between peers and the server is based
+        upon TLS 1.3 and Wireguard. End-to-end cryptography used ALL communication between peers is based upon
+        TLS-SRP. Screen View end-to-end cryptography prevents man-in-the-middle attacks even if the intermediary
+        server is compromised. Screen data is sent over UDP to acheive superior performance than TCP based solutions
+        such as VNC. All UDP packets must be authenticated with keys established over TCP before a response
+        is made by the server preventing amplification attacks. A congestion control mechanism is used to handle low
+        bandwidth and poor networking conditions. Finally, Screen View supports advanced use cases including file
+        transfer, multiple displays, sharing specific windows, shared whiteboards, and clipboard transfer.
+    \end{abstract}
+
     \newpage
-
-
-    \section{Abstract}
-    \projectName{} is an end to end encrypted remote screen viewing and controlling software. This document describes
-    the protocols necessary to make it function.
-    \newpage
-
 
     \tableofcontents
     \newpage
@@ -92,6 +101,7 @@
     \subsection{Transport Messages Total Header Sizes}
 
     % TODO
+
 
     \section{Server Encryption Layer}
 
