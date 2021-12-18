@@ -20,7 +20,7 @@ cfg_if! {
 
 #[neon::main]
 fn main(mut cx: ModuleContext) -> NeonResult<()> {
-    use std::cell::RefCell;
+    use std::{cell::RefCell, time::Instant};
     struct JsCompat<T>(pub RefCell<T>);
 
     impl<T> Finalize for JsCompat<T> {}
@@ -62,12 +62,12 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
         Ok(cx.undefined())
     })?;
 
-    cx.export_function("log_events", |mut cx| {
+    cx.export_function("keypress", |mut cx| {
         let handle = cx.argument::<JsBox<Capture>>(0)?;
-        match handle.wait_for_event() {
-            Ok(event) => println!("Event: {:?}", event.0),
-            Err(error) => println!("Error: {}", error),
-        }
+        let start = Instant::now();
+        handle.key_toggle('a' as _);
+        let elapsed = start.elapsed();
+        println!("Time elapsed: {:?}", elapsed);
         Ok(cx.undefined())
     })?;
 

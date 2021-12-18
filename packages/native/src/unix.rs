@@ -8,26 +8,18 @@ use std::{
     fmt::{self, Debug, Display, Formatter},
     ptr,
 };
+use x11::{
+    xlib::{XDefaultRootWindow, XKeysymToKeycode, XOpenDisplay, XSync},
+    xtest::XTestFakeKeyEvent,
+};
 use xcb::{
     shm::{Attach, Detach, GetImage, Seg},
-    x::{
-        ChangeWindowAttributes,
-        Cw,
-        Drawable,
-        EventMask,
-        GetGeometry,
-        GrabKey,
-        GrabKeyboard,
-        GrabMode,
-        GrabStatus,
-        ModMask,
-        Window,
-        CURRENT_TIME,
-    },
-    xkb::{LedClass, XiFeature, MAJOR_VERSION, MINOR_VERSION},
+    x::{Drawable, GetGeometry, QueryPointer, Window},
+    xkb::{MAJOR_VERSION, MINOR_VERSION},
     ConnError,
     Connection,
     ProtocolError,
+    XidNew,
 };
 use xkbcommon_sys::{
     xkb_context,
@@ -70,27 +62,12 @@ impl NativeCapture for Capture {
     type Error = Error;
 
     fn new() -> Result<Self, Self::Error> {
-        let (conn, screen_num) = Connection::connect(None)?;
-        let root = conn
-            .get_setup()
-            .roots()
-            .nth(screen_num as usize)
-            .ok_or(Error::ScreenNumMismatch)?
-            .root();
-
-        conn.check_request(conn.send_request_checked(&ChangeWindowAttributes {
-            window: root,
-            value_list: &[Cw::EventMask(EventMask::POINTER_MOTION.bits())],
-        }))?;
-
-        let reply = conn.wait_for_reply(conn.send_request(&GrabKeyboard {
-            owner_events: true,
-            grab_window: root,
-            time: CURRENT_TIME,
-            pointer_mode: GrabMode::Async,
-            keyboard_mode: GrabMode::Async,
-        }))?;
-        assert!(reply.status() == GrabStatus::Success);
+        let dpy = unsafe { XOpenDisplay(ptr::null()) };
+        if dpy.is_null() {
+            return Err(Error::DisplayOpenFailed);
+        }
+        let root = unsafe { Window::new(XDefaultRootWindow(dpy) as u32) };
+        let conn = unsafe { Connection::from_xlib_display(dpy) };
 
         let cookie = conn.send_request(&GetGeometry {
             drawable: Drawable::Window(root),
@@ -105,7 +82,7 @@ impl NativeCapture for Capture {
             Self::init_shm(&conn, width as size_t * height as size_t * depth)?;
 
         let (xkb_context, xkb_keymap, xkb_state) = match Self::init_xkb(&conn) {
-            Ok((x, y, z)) => (x, y, z),
+            Ok((ctx, map, state)) => (ctx, map, state),
             Err(err) => {
                 Self::release_shm(&conn, shmid, shmaddr, shmseg);
                 return Err(err.into());
@@ -161,11 +138,23 @@ impl NativeCapture for Capture {
         Ok(())
     }
 
-    fn wait_for_event(&self) -> Result<Event, Self::Error> {
-        self.conn
-            .wait_for_event()
-            .map(|event| Event(Box::new(event)))
-            .map_err(Into::into)
+    fn pointer_position(&self) -> Result<(u32, u32), Self::Error> {
+        let reply = self
+            .conn
+            .wait_for_reply(self.conn.send_request(&QueryPointer { window: self.root }))?;
+
+        Ok((reply.root_x() as u32, reply.root_y() as u32))
+    }
+
+    fn key_toggle(&self, keysym: u32) {
+        let dpy = self.conn.get_raw_dpy();
+
+        unsafe {
+            let keycode = XKeysymToKeycode(dpy, keysym as _);
+            XTestFakeKeyEvent(dpy, keycode as _, 1, 0);
+            XTestFakeKeyEvent(dpy, keycode as _, 0, 0);
+            XSync(dpy, 0);
+        }
     }
 }
 
@@ -360,6 +349,8 @@ impl Drop for Capture {
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
+    #[error("Failed to open display")]
+    DisplayOpenFailed,
     #[error("internal xcb error: {0}")]
     XcbError(#[from] XcbError),
     #[error("failed to map screen number to screen object")]
@@ -383,6 +374,9 @@ pub enum Error {
     #[error("failed to create new state for device")]
     XkbNewState,
 }
+
+// TODO: get this sorted out
+unsafe impl Send for Error {}
 
 impl From<xcb::Error> for Error {
     fn from(error: xcb::Error) -> Self {

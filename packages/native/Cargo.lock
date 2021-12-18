@@ -316,6 +316,7 @@ dependencies = [
  "libc",
  "neon",
  "thiserror",
+ "x11",
  "xcb",
  "xkbcommon-sys",
 ]
@@ -636,6 +637,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 
 [[package]]
+name = "x11"
+version = "2.19.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6dd0565fa8bfba8c5efe02725b14dff114c866724eff2cfd44d76cea74bcd87a"
+dependencies = [
+ "libc",
+ "pkg-config",
+]
+
+[[package]]
 name = "xcb"
 version = "1.0.0-beta.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -645,6 +656,7 @@ dependencies = [
  "libc",
  "log",
  "quick-xml",
+ "x11",
 ]
 
 [[package]]

@@ -1,5 +1,5 @@
 use image::RgbImage;
-use std::{error::Error, fmt::Debug};
+use std::error::Error;
 
 pub(crate) trait NativeCapture: Sized {
     type Error: Error;
@@ -13,7 +13,7 @@ pub(crate) trait NativeCapture: Sized {
         Ok(())
     }
 
-    fn wait_for_event(&self) -> Result<Event, Self::Error>;
-}
+    fn pointer_position(&self) -> Result<(u32, u32), Self::Error>;
 
-pub struct Event(pub Box<dyn Debug>);
+    fn key_toggle(&self, keysym: u32);
+}
