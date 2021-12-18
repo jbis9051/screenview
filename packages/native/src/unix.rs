@@ -146,13 +146,13 @@ impl NativeCapture for Capture {
         Ok((reply.root_x() as u32, reply.root_y() as u32))
     }
 
-    fn key_toggle(&self, keysym: u32) {
+    fn key_toggle(&self, keysym: u32, down: bool) {
         let dpy = self.conn.get_raw_dpy();
+        let down = if down { 1 } else { 0 };
 
         unsafe {
             let keycode = XKeysymToKeycode(dpy, keysym as _);
-            XTestFakeKeyEvent(dpy, keycode as _, 1, 0);
-            XTestFakeKeyEvent(dpy, keycode as _, 0, 0);
+            XTestFakeKeyEvent(dpy, keycode as _, down, 0);
             XSync(dpy, 0);
         }
     }

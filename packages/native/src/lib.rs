@@ -65,7 +65,8 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
     cx.export_function("keypress", |mut cx| {
         let handle = cx.argument::<JsBox<Capture>>(0)?;
         let start = Instant::now();
-        handle.key_toggle('a' as _);
+        handle.key_toggle('a' as _, true);
+        handle.key_toggle('a' as _, false);
         let elapsed = start.elapsed();
         println!("Time elapsed: {:?}", elapsed);
         Ok(cx.undefined())

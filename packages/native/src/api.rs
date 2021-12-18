@@ -15,5 +15,5 @@ pub(crate) trait NativeCapture: Sized {
 
     fn pointer_position(&self) -> Result<(u32, u32), Self::Error>;
 
-    fn key_toggle(&self, keysym: u32);
+    fn key_toggle(&self, keysym: u32, down: bool);
 }
