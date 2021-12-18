@@ -202,6 +202,9 @@
         & N_{m}^{send} := N_{m}^{send} + 1
     \end{align*}
 
+    $N_{m}$ is an 64 bit counter that MUST NOT wrap. After a transport message is sent, if $N_{m}$ equals
+    ($2^{64}-1$) the TCP connection MUST be dropped. Subsequent TCP messages MUST NOT be sent. \\
+
     Where $P$ is the payload to be transported
 
     \subsection{UDP}
@@ -218,7 +221,7 @@
         &  G:= \text{session-id}                                                               \\
         &  H := \text{peer-id}                                                                \\
         &  J := \text{peer-key}                                                              \\
-        &  (V_{peer}^{send} = T_{serv}^{recv}, P_{peer}^{recv} = P_{serv}^{send}) := \text{KDF}(\text{HASH}(G\,
+        &  (V_{peer}^{send} = V_{serv}^{recv}, V_{peer}^{recv} = V_{serv}^{send}) := \text{KDF}(\text{HASH}(G\,
         ||\, H\,||\, J), \epsilon)                                        \\
         &   M_{peer}^{send} = M_{serv}^{recv} = M_{peer}^{recv} = M_{serv}^{send} := 0
     \end{align*}
@@ -263,6 +266,10 @@
         & \text{counter} := M_{m}^{send}\\
         & M_{m}^{send} := M_{m}^{send} + 1
     \end{align*}
+
+
+    $M_{m}$ is an 64 bit counter that MUST NOT wrap. After a transport message is sent, if $M_{m}$ equals
+    ($2^{64}-1$) the TCP connection MUST be dropped. Subsequent UDP messages MUST NOT be sent. \\
 
     Where $P$ is the payload to be transported
 
@@ -670,6 +677,9 @@
         \end{tabular}
     \end{center}
 
+    \section{Weak Pre Shared Key, Key Authentication (WPSKKA) Protocol}
+
+    The WPSKKA protocol
 
     \section{Remote Visual Display (RVD) Protocol}
 
@@ -680,8 +690,50 @@
     used.\\
 
     With the exception of the \emph{Handshake} messages. All RVD messages' first byte contain a number to indicate
-    the message type. A \emph{sequence-number} is an incrementing 32-bit counter for UDP each message sent. All
-    messages sent over UDP MUST include a \emph{sequence-number} after the \emph{type} byte.
+    the message type. \\
+
+    A \emph{sequence-number} is an incrementing 32-bit counter each UDP message sent, separate for Host and Client. All
+    messages sent over UDP MUST begin with a 4 bytes \emph{sequence-number}. \emph{sequence-number} is initialized
+    to 0 and increments once for every UDP message sent by the respective Peer. Therefore each RVD UDP message looks
+    like:
+
+    \begin{center}
+        \begin{tabular}{|c|c|}
+            \hline
+            \textbf{Bytes} & \textbf{Name}   \\
+            \hline
+            4              & sequence-number \\
+            \hline
+            variable       & RVD message     \\
+            \hline
+        \end{tabular}
+    \end{center}
+
+    \subsection{Combining Messages}
+
+    In some situations, such as when a large screen change occurs or when the screen is first sent to the client,
+    large amounts of \emph{FrameData}'s may need to be sent in quick succession. Often individual \emph{FrameData}'s
+    will be much smaller than the MTU. Similar to TCP's Nagle algorithm, multiple UDP messages can be combined into a
+    single UDP packet as long as the total size is remains less than the MTU. Each message directly follows the
+    previous message with the first message directly following the sequence number. Only one \emph{sequence-number}
+    is used:
+
+    \begin{center}
+        \begin{tabular}{|c|c|}
+            \hline
+            \textbf{Bytes} & \textbf{Name}   \\
+            \hline
+            4              & sequence-number \\
+            \hline
+            variable       & RVD message 1   \\
+            \hline
+            variable       & RVD message 2   \\
+            \hline
+            \hline
+            variable       & etc.            \\
+            \hline
+        \end{tabular}
+    \end{center}
 
     \subsection{Definitions}
 
@@ -1040,22 +1092,25 @@
         Host \textrightarrow Client\\
         \begin{tabular}{|c|c|c|}
             \hline
-            \textbf{Bytes} & \textbf{Name}   & \textbf{Value} \\
+            \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
             \hline
-            1              & type            & 10             \\
+            1              & type          & 10             \\
             \hline
-            4              & sequence-number &                \\
+            4              & frame-number  &                \\
             \hline
-            1              & display-id      & 0-255          \\
+            1              & display-id    & 0-255          \\
             \hline
-            2              & cell-number     &                \\
+            2              & cell-number   &                \\
             \hline
-            2              & size            &                \\
+            2              & size          &                \\
             \hline
-            \emph{size}    & data            &                \\
+            \emph{size}    & data          &                \\
             \hline
         \end{tabular}
     \end{center}
+
+    \emph{frame-number} is a 32 bit counter, initialized with 0 at the begining of the protocol, and incremented once
+    from \emph{FrameData} message sent.
 
     \emph{data} contains jpeg pixel data of the updated cell.
 
@@ -1080,7 +1135,6 @@
 %            \hline
 %        \end{tabular}
 %    \end{center}
-
 
     \section{Weak Pre Shared Key, Key Authentication (WPSKKA) Protocol}
 
@@ -1259,7 +1313,6 @@
 
     In order to ensure perfect forward secrecy, new key pairs
     ($PK_{H/C}/pk_{H/C}$) should be generated for each session.
-
 
     \section{Cryptography Definitions and Rationale}
 
