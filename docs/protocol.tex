@@ -175,7 +175,7 @@
     \begin{align*}
         & C_{peer} = \text{DH}(E_{serv}^{pub},\ E_{peer}^{priv})\\
         & C_{serv} = \text{DH}(E_{peer}^{pub},\ E_{serv}^{priv})\\
-        & (T_{peer}^{send} = T_{serv}^{recv},\ T_{peer}^{recv} = T_{serv}^{send}) := \text{KDF}(C_{peer} = C_{serv},
+        & (T_{peer}^{send} = T_{serv}^{recv},\ T_{peer}^{recv} = T_{serv}^{send}) := \text{KDF}_2(C_{peer} = C_{serv},
         \ \epsilon) \\
         & N_{peer}^{send} = N_{serv}^{recv} = N_{peer}^{recv} = N_{serv}^{send} := 0
     \end{align*}
@@ -221,7 +221,7 @@
         &  G:= \text{session-id}                                                               \\
         &  H := \text{peer-id}                                                                \\
         &  J := \text{peer-key}                                                              \\
-        &  (V_{peer}^{send} = V_{serv}^{recv}, V_{peer}^{recv} = V_{serv}^{send}) := \text{KDF}(\text{HASH}(G\,
+        &  (V_{peer}^{send} = V_{serv}^{recv}, V_{peer}^{recv} = V_{serv}^{send}) := \text{KDF}_2(\text{HASH}(G\,
         ||\, H\,||\, J), \epsilon)                                        \\
         &   M_{peer}^{send} = M_{serv}^{recv} = M_{peer}^{recv} = M_{serv}^{send} := 0
     \end{align*}
@@ -677,19 +677,140 @@
         \end{tabular}
     \end{center}
 
+
     \section{Weak Pre Shared Key, Key Authentication (WPSKKA) Protocol}
 
-    The WPSKKA protocol
+    The WPSKKA protocol is the E2EE Encryption layer protocol used to communicate between peers. All WPSKKA messages'
+    first byte contain a number to indicate
+    the message type.\\
+
+    WPSKKA relies on SRP as defined in \href{RFC5054}{https://datatracker.ietf.org/doc/html/rfc5054} to establish a
+    shared key used to authenticate DH keys. The Host will serve as the SRP server, the client will serve as the SRP
+    client.\\
+
+    \begin{center}
+        Host \textrightarrow\ Client\\
+        \begin{tabular}{|c|c|c|}
+            \hline
+            \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
+            \hline
+            1              & type          & 1              \\
+            \hline
+            16             & username      &                \\
+            \hline
+            16             & salt          &                \\
+            \hline
+            256            & srp-B         &                \\
+            \hline
+            16             & public-key    &                \\
+            \hline
+        \end{tabular}
+    \end{center}
+
+    \begin{align*}
+        & \text{SRP-HOST-INIT()}\\
+        & (D_{host}^{pub},\, D_{host}^{priv}) := \text{DH-Generate()}\\
+        & I := RAND(128)\\
+        & s := RAND(128)\\
+        & B := \text{SRP-B()}\\
+        & username := I\\
+        & salt := s\\
+        & srp-B := B\\
+        & \text{public-key} := C_{serv}^{pub}\\
+    \end{align*}
+
+    \begin{center}
+        Client \textrightarrow\ Host\\
+        \begin{tabular}{|c|c|c|}
+            \hline
+            \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
+            \hline
+            1              & type          & 2              \\
+            \hline
+            256            & srp-A         &                \\
+            \hline
+            16             & public-key    &                \\
+            \hline
+            32             & mac           &                \\
+            \hline
+        \end{tabular}
+    \end{center}
+
+    \begin{align*}
+        & \text{SRP-CLIENT-INIT()}\\
+        & (D_{client}^{pub},\, D_{client}^{priv}) := \text{DH-Generate()}\\
+        & A := \text{SRP-A()}\\
+        & L_{client} = L_{host} := \text{SRP-PREMASTER()}\\
+        & \text{public-key} := \text{HMAC}(\text{KDF}_1(D_{client}^{pub}, L_{client}))\\
+    \end{align*}
+
+    \begin{center}
+        Host \textrightarrow\ Client\\
+        \begin{tabular}{|c|c|c|}
+            \hline
+            \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
+            \hline
+            1              & type          & 3              \\
+            \hline
+            32             & mac           &                \\
+            \hline
+        \end{tabular}
+    \end{center}
+
+    \begin{align*}
+        & \text{mac} := \text{HMAC}(\text{KDF}_1(C_{host}^{pub}, L_{host}))\\
+    \end{align*}
+
+    \subsection{Transport Data Key Derivation}
+
+    \begin{align*}
+        & D_{host} = \text{DH}(D_{client}^{pub},\ D_{host}^{priv})\\
+        & D_{client} = \text{DH}(D_{host}^{pub},\ D_{client}^{priv})\\
+        & (U_{peer}^{send} = U_{serv}^{recv},\ U_{peer}^{recv} = U_{serv}^{send}) := \text{KDF}_2(D_{host} = D_{client},
+        \ \epsilon) \\
+        & O_{host}^{send} = O_{client}^{recv} = O_{host}^{recv} = O_{client}^{send} := 0
+    \end{align*}
+
+    \subsubsection{Subsequent Messages: Transport Data Messages}
+
+    \begin{center}
+        Host $\leftrightarrow$ Client\\
+        \begin{tabular}{|c|c|c|}
+            \hline
+            \textbf{Bytes}     & \textbf{Name} & \textbf{Value} \\
+            \hline
+            1                  & type          & 4              \\
+            \hline
+            8                  & counter       &                \\
+            \hline
+            2                  & data-length   &                \\
+            \hline
+            \emph{data-length} & data          &                \\
+            \hline
+        \end{tabular}
+    \end{center}
+
+    \begin{align*}
+        & \text{data} := \text{AEAD}(U_{m}^{send}, O_{m}^{send}, P, \epsilon)\\
+        & \text{counter} := O_{m}^{send}\\
+        & O_{m}^{send} := O_{m}^{send} + 1
+    \end{align*}
+
+    $O_{m}$ is an 64 bit counter that MUST NOT wrap. After a transport message is sent, if $O_{m}$ equals
+    ($2^{64}-1$) the TCP connection MUST be dropped. Subsequent messages MUST NOT be sent. \\
+
+
+    Where \emph{P} is the payload to be transported
+
 
     \section{Remote Visual Display (RVD) Protocol}
 
     The RVD protocol is used to communicate mouse input, keyboard input, frame data, and clipboard data between the
     Host and the Client.\\
 
-    All messages can occur over either TCP or UDP but it is strongly RECOMMENDED that the noted transport protocol is
-    used.\\
+    All messages MUST occur over the transport listed.\\
 
-    With the exception of the \emph{Handshake} messages. All RVD messages' first byte contain a number to indicate
+    With the exception of the \emph{Handshake} messages, all RVD messages' first byte contain a number to indicate
     the message type. \\
 
     A \emph{sequence-number} is an incrementing 32-bit counter each UDP message sent, separate for Host and Client. All
@@ -1136,6 +1257,7 @@
 %        \end{tabular}
 %    \end{center}
 
+
     \section{Weak Pre Shared Key, Key Authentication (WPSKKA) Protocol}
 
     \subsection{Introduction}
@@ -1313,6 +1435,7 @@
 
     In order to ensure perfect forward secrecy, new key pairs
     ($PK_{H/C}/pk_{H/C}$) should be generated for each session.
+
 
     \section{Cryptography Definitions and Rationale}
 
