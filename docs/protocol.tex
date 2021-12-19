@@ -17,28 +17,27 @@
     citecolor   = red
 }
 
-\title{\textbf{Screen View Protocol}}
+\title{\textbf{ScreenView Protocol}}
 \author{Josh Brown}
-
-\newcommand{\projectName}{Screen View}
 
 % Document
 \begin{document}
     \maketitle
 
     \begin{abstract}
-        \projectName{} is suite of cryptography and application level networking protocols culminating to create a
-        zero configuration end to end encrypted remote screen viewing and controlling software. Screen View aims to
-        replace TeamViewer, RDP, and VNC for many use cases while being more performant and more secure, while
-        being easier or just as easy to setup and use. Screen View defines four different layers of protocols, each
-        encapsulating all the layers below it. Cryptography for communication between peers and the server is based
-        upon TLS 1.3 and Wireguard. End-to-end cryptography used ALL communication between peers is based upon
-        TLS-SRP. Screen View end-to-end cryptography prevents man-in-the-middle attacks even if the intermediary
-        server is compromised. Screen data is sent over UDP to acheive superior performance than TCP based solutions
-        such as VNC. All UDP packets must be authenticated with keys established over TCP before a response
-        is made by the server preventing amplification attacks. A congestion control mechanism is used to handle low
-        bandwidth and poor networking conditions. Finally, Screen View supports advanced use cases including file
-        transfer, multiple displays, sharing specific windows, shared whiteboards, and clipboard transfer.
+        ScreenView is suite of cryptographical and application level networking protocols culminating to create a
+        zero configuration end to end encrypted remote screen viewing and controlling software. ScreenView aims to
+        replace TeamViewer, RDP, and VNC for many use cases while being more performant and more secure. ScreenView
+        requires little setup an is just as easy or easier than other solutions. ScreenView defines four different
+        layers of protocols, each encapsulating all the layers below it. Cryptography for communication between peers
+        and the server is based upon TLS 1.3 and Wireguard. End-to-end cryptography used for ALL communication between
+        peers is based upon TLS-SRP. ScreenView end-to-end cryptography prevents man-in-the-middle attacks even if
+        the intermediary server is compromised, unlike TeamViewer. Screen data is sent over UDP to achieve superior
+        performance than TCP based solutions such as VNC. All UDP packets must be authenticated with keys established
+        over TCP before a response is made by the server preventing amplification attacks. A congestion control
+        mechanism is used to handle low bandwidth and poor networking conditions. Finally, ScreenView supports
+        advanced use cases including file transfer, multiple displays, sharing specific windows, shared whiteboards,
+        and clipboard transfer.
     \end{abstract}
 
     \newpage
@@ -48,9 +47,6 @@
 
 
     \section{Definitions}
-    The following definitions are used globally throughout the document:
-
-    % TODO crypto definitions
 
     The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
     "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
@@ -61,12 +57,11 @@
 
     \section{Introduction}
 
-    This section describes the high level protocol for \projectName incorporating all the protocols defined below.
-    Terms used in this section are defined in other sections.\\
+    This section describes the high level overview of ScreenView. Terms used in this section are defined in other sections.\\
 
     \subsection{Application Layers}
 
-    The table belows is an abstract diagram of the different layers of \projectName. Each layer encapsulates all the
+    The table belows is an abstract diagram of the different layers of ScreenView. Each layer encapsulates all the
     below layers.
 
     \begin{center}
@@ -81,10 +76,8 @@
         \end{tabular}
     \end{center}
 
-    The Transport Layer is the OSI Transport Layer level protocol for networking (TCP or UDP). \\
-
-    The Server Encryption layer provides security between the Server and a Peer (Client and Host). The Server
-    Encryption Layer is discussed in \hyperlink{section.4}{4}.
+    The Transport Layer is the OSI Transport Layer level protocol for networking (TCP or UDP). The \hyperlink{section.3}{Server
+    Encryption Layer} provides security between the Server and a Peer. The Server Communication Layer defined in facilities communication between
 
     \subsection{Initialization}
 
@@ -274,7 +267,7 @@
     Where $P$ is the payload to be transported
 
 
-    \section{Screen View Server Communication (SVSC) Protocol }
+    \section{ScreenView Server Communication (SVSC) Protocol }
 
     The SVSC protocol is the Server Communication Layer protocol used for Peers to interact with the relay server,
     Server. Peers can lease an ID as well as begin a session with another Peer. Once a session is established, Peers can
