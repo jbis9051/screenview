@@ -28,13 +28,13 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
         Ok(JsBox::new(&mut cx, RefCell::new(X11Api::new().unwrap())).upcast::<JsValue>())
     })?;
 
-    cx.export_function("list_monitors", |mut cx| {
+    cx.export_function("list_windows", |mut cx| {
         let handle = cx.argument::<JsBox<RefCell<X11Api>>>(0)?;
-        let monitors = handle.borrow_mut().monitors().unwrap();
-        for m in &monitors {
-            println!("{}", m.name);
-        }
-
+        let start = Instant::now();
+        let windows = handle.borrow_mut().windows().unwrap();
+        let elapsed = start.elapsed();
+        println!("{:?}", elapsed);
+        println!("{:#?}", windows);
         Ok(cx.undefined())
     })?;
 
@@ -58,7 +58,9 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
     cx.export_function("movemouse", |mut cx| {
         let handle = cx.argument::<JsBox<X11Api>>(0)?;
         let start = Instant::now();
-        handle.set_pointer_position(MousePosition { x: 500, y: 500 }).unwrap();
+        handle
+            .set_pointer_position(MousePosition { x: 500, y: 500 })
+            .unwrap();
         let elapsed = start.elapsed();
         println!("Time elapsed: {:?}", elapsed);
         Ok(cx.undefined())

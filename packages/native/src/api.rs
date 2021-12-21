@@ -1,4 +1,4 @@
-use image::{RgbImage};
+use image::RgbImage;
 use std::error::Error;
 
 pub struct Monitor {
@@ -8,6 +8,7 @@ pub struct Monitor {
     pub height: u32,
 }
 
+#[derive(Debug)]
 pub struct Window {
     pub id: u32,
     pub name: String,
@@ -18,7 +19,7 @@ pub struct Window {
 #[derive(Clone, Copy)]
 pub struct MousePosition {
     pub x: u32,
-    pub y: u32
+    pub y: u32,
 }
 
 #[derive(Clone, Copy)]
@@ -31,7 +32,7 @@ pub enum MouseButton {
     ScrollLeft,
     ScrollRight,
     Button4,
-    Button5
+    Button5,
 }
 
 #[derive(Clone, Copy)]
@@ -42,6 +43,7 @@ pub struct MouseScroll {
 
 pub type Key = u32; // keysym
 
+#[derive(Clone, Copy, Debug)]
 pub enum ClipboardType {
     Text,
     // Other variants will be added later
@@ -66,9 +68,13 @@ pub(crate) trait NativeAPI: Sized {
 
     fn clipboard_types(&self) -> Result<Vec<ClipboardType>, Self::Error>;
 
-    fn clipboard_content(&self, type_name: &ClipboardType) -> Result<Vec<u8>, Self::Error>;
+    fn clipboard_content(&self, type_name: ClipboardType) -> Result<Vec<u8>, Self::Error>;
 
-    fn set_clipboard_content(&mut self, type_name: &ClipboardType, content: &[u8]) -> Result<(), Self::Error>;
+    fn set_clipboard_content(
+        &mut self,
+        type_name: ClipboardType,
+        content: &[u8],
+    ) -> Result<(), Self::Error>;
 
     fn monitors(&mut self) -> Result<Vec<Monitor>, Self::Error>;
 

@@ -3,40 +3,39 @@ use errno::{errno, Errno};
 use image::RgbImage;
 use libc::{c_int, c_void, shmat, shmctl, shmdt, shmget, size_t, IPC_CREAT, IPC_PRIVATE, IPC_RMID};
 use neon::prelude::Finalize;
+use x11_clipboard::{Clipboard, error::Error as X11ClipboardError};
 use std::{
     error::Error as StdError,
     fmt::{self, Debug, Formatter},
-    ptr
+    ptr,
+    str, time::Duration,
 };
 use x11::{
     xlib::{XDefaultRootWindow, XKeysymToKeycode, XOpenDisplay, XSync},
-    xtest::{XTestFakeKeyEvent, XTestFakeButtonEvent},
+    xtest::{XTestFakeButtonEvent, XTestFakeKeyEvent},
 };
 use xcb::{
-    shm::{Attach, Detach, GetImage, Seg},
-    x::{Drawable, GetGeometry, QueryPointer, Window, WarpPointer, GetAtomName},
-    xkb::{MAJOR_VERSION, MINOR_VERSION},
     randr::GetMonitors,
+    shm::{Attach, Detach, GetImage, Seg},
+    x::{
+        Drawable,
+        GetAtomName,
+        GetGeometry,
+        GetProperty,
+        GetWindowAttributes,
+        MapState,
+        QueryPointer,
+        QueryTree,
+        WarpPointer,
+        Window,
+        ATOM_STRING,
+        ATOM_WM_NAME,
+    },
     ConnError,
     Connection,
     ProtocolError,
-    XidNew, Xid,
-};
-use xkbcommon_sys::{
-    xkb_context,
-    xkb_context_flags::XKB_CONTEXT_NO_FLAGS,
-    xkb_context_new,
-    xkb_context_unref,
-    xkb_keymap,
-    xkb_keymap_compile_flags::XKB_KEYMAP_COMPILE_NO_FLAGS,
-    xkb_keymap_unref,
-    xkb_state,
-    xkb_state_unref,
-    xkb_x11_get_core_keyboard_device_id,
-    xkb_x11_keymap_new_from_device,
-    xkb_x11_setup_xkb_extension,
-    xkb_x11_setup_xkb_extension_flags::XKB_X11_SETUP_XKB_EXTENSION_NO_FLAGS,
-    xkb_x11_state_new_from_device,
+    Xid,
+    XidNew,
 };
 
 struct X11MonitorInfo {
@@ -44,7 +43,7 @@ struct X11MonitorInfo {
     x: u32,
     y: u32,
     width: u32,
-    height: u32
+    height: u32,
 }
 
 impl MouseButton {
@@ -77,13 +76,11 @@ pub struct X11Api {
     shmaddr: *mut u32,
     shmseg: Seg,
 
-    // XKB fields
-    xkb_context: *mut xkb_context,
-    xkb_keymap: *mut xkb_keymap,
-    xkb_state: *mut xkb_state,
-
     // Monitor map
-    monitors: Vec<X11MonitorInfo>
+    monitors: Vec<X11MonitorInfo>,
+
+    // Clipboard API
+    clipboard: Clipboard
 }
 
 unsafe impl Send for X11Api {}
@@ -111,14 +108,6 @@ impl NativeAPI for X11Api {
         let (shmid, shmaddr, shmseg) =
             Self::init_shm(&conn, width as size_t * height as size_t * depth)?;
 
-        let (xkb_context, xkb_keymap, xkb_state) = match Self::init_xkb(&conn) {
-            Ok((ctx, map, state)) => (ctx, map, state),
-            Err(err) => {
-                Self::release_shm(&conn, shmid, shmaddr, shmseg);
-                return Err(err.into());
-            }
-        };
-
         Ok(Self {
             conn,
             root,
@@ -128,10 +117,8 @@ impl NativeAPI for X11Api {
             shmid,
             shmaddr,
             shmseg,
-            xkb_context,
-            xkb_keymap,
-            xkb_state,
-            monitors: Vec::new()
+            monitors: Vec::new(),
+            clipboard: Clipboard::new()?
         })
     }
 
@@ -153,13 +140,12 @@ impl NativeAPI for X11Api {
 
         Ok(MousePosition {
             x: reply.root_x() as _,
-            y: reply.root_y() as _
+            y: reply.root_y() as _,
         })
     }
 
     fn set_pointer_position(&self, pos: MousePosition) -> Result<(), Self::Error> {
-        self
-            .conn
+        self.conn
             .check_request(self.conn.send_request_checked(&WarpPointer {
                 src_window: Window::none(),
                 dst_window: self.root,
@@ -168,7 +154,7 @@ impl NativeAPI for X11Api {
                 src_width: 0,
                 src_height: 0,
                 dst_x: pos.x as _,
-                dst_y: pos.y as _
+                dst_y: pos.y as _,
             }))
             .map_err(Into::into)
     }
@@ -189,23 +175,25 @@ impl NativeAPI for X11Api {
             MouseButton::ScrollUp
         } else {
             MouseButton::ScrollDown
-        }.id();
+        }
+        .id();
         let horiz_button = if scroll.x > 0 {
             MouseButton::ScrollRight
         } else {
             MouseButton::ScrollLeft
-        }.id();
+        }
+        .id();
 
-        let dpy = self.conn.get_raw_dpy();        
+        let dpy = self.conn.get_raw_dpy();
 
-        for _ in 0..scroll.y.abs() {
+        for _ in 0 .. scroll.y.abs() {
             unsafe {
                 XTestFakeButtonEvent(dpy, vert_button, 1, 0);
                 XTestFakeButtonEvent(dpy, vert_button, 0, 0);
             }
         }
 
-        for _ in 0..scroll.x.abs() {
+        for _ in 0 .. scroll.x.abs() {
             unsafe {
                 XTestFakeButtonEvent(dpy, horiz_button, 1, 0);
                 XTestFakeButtonEvent(dpy, horiz_button, 0, 0);
@@ -220,67 +208,149 @@ impl NativeAPI for X11Api {
     }
 
     fn clipboard_types(&self) -> Result<Vec<ClipboardType>, Self::Error> {
-        unimplemented!()
+        Ok(vec![ClipboardType::Text])
     }
 
-    fn clipboard_content(&self, type_name: &ClipboardType) -> Result<Vec<u8>, Self::Error> {
-        unimplemented!()
+    fn clipboard_content(&self, type_name: ClipboardType) -> Result<Vec<u8>, Self::Error> {
+        let atoms = &self.clipboard.setter.atoms;
+        let target = match type_name {
+            ClipboardType::Text => atoms.utf8_string,
+            #[allow(unreachable_patterns)]
+            _ => return Err(Error::UnsupportedClipboardType(type_name))
+        };
+        self.clipboard.load(
+            atoms.clipboard,
+            target,
+            atoms.property,
+            Duration::from_millis(50)
+        ).map_err(Into::into)
     }
 
-    fn set_clipboard_content(&mut self, type_name: &ClipboardType, content: &[u8]) -> Result<(), Self::Error> {
-        unimplemented!()
+    fn set_clipboard_content(
+        &mut self,
+        type_name: ClipboardType,
+        content: &[u8],
+    ) -> Result<(), Self::Error> {
+        let atoms = &self.clipboard.setter.atoms;
+        let target = match type_name {
+            ClipboardType::Text => atoms.utf8_string,
+            #[allow(unreachable_patterns)]
+            _ => return Err(Error::UnsupportedClipboardType(type_name))
+        };
+        self.clipboard.store(atoms.clipboard, target, content).map_err(Into::into)
     }
 
     fn monitors(&mut self) -> Result<Vec<Monitor>, Self::Error> {
         self.update_monitors()?;
-        Ok(self.monitors
+        Ok(self
+            .monitors
             .iter()
             .enumerate()
             .map(|(id, info)| Monitor {
                 id: id as u32,
                 name: info.name.clone(),
                 width: info.width,
-                height: info.height
+                height: info.height,
             })
             .collect())
     }
 
     fn windows(&mut self) -> Result<Vec<api::Window>, Self::Error> {
-        unimplemented!()
+        let mut windows = Vec::new();
+        self.list_windows(self.root, &mut windows)?;
+        let mut api_windows = Vec::with_capacity(windows.len());
+        for window in windows {
+            let reply = self
+                .conn
+                .wait_for_reply(self.conn.send_request(&GetProperty {
+                    delete: false,
+                    window,
+                    property: ATOM_WM_NAME,
+                    r#type: ATOM_STRING,
+                    long_offset: 0,
+                    long_length: 100,
+                }))?;
+
+            if reply.length() == 0 {
+                continue;
+            }
+
+            let name = str::from_utf8(reply.value())
+                .map(|string| string.to_owned())
+                .unwrap_or(String::from("unknown"));
+
+            let geometry = self
+                .conn
+                .wait_for_reply(self.conn.send_request(&GetGeometry {
+                    drawable: Drawable::Window(window),
+                }))?;
+
+            api_windows.push(api::Window {
+                id: window.resource_id(),
+                name,
+                width: geometry.width() as u32,
+                height: geometry.height() as u32,
+            });
+        }
+
+        Ok(api_windows)
     }
 
     fn capture_display_frame(&self, monitor: &Monitor) -> Result<Frame, Self::Error> {
         let info = match self.monitors.get(monitor.id as usize) {
             Some(info) => info,
-            None => return Err(Error::UnknownMonitor)
+            None => return Err(Error::UnknownMonitor),
         };
 
         self.capture(info.x, info.y, info.width, info.height)
     }
 
-    fn update_display_frame(&self, monitor: &Monitor, frame: &mut Frame) -> Result<(), Self::Error> {
+    fn update_display_frame(
+        &self,
+        monitor: &Monitor,
+        frame: &mut Frame,
+    ) -> Result<(), Self::Error> {
         let info = match self.monitors.get(monitor.id as usize) {
             Some(info) => info,
-            None => return Err(Error::UnknownMonitor)
+            None => return Err(Error::UnknownMonitor),
         };
 
         self.update_frame(info.x, info.y, info.width, info.height, frame)
     }
 
     fn capture_window_frame(&self, window: &api::Window) -> Result<Frame, Self::Error> {
-        let geometry = self.conn.wait_for_reply(self.conn.send_request(&GetGeometry {
-            drawable: Drawable::Window(unsafe { Window::new(window.id) })
-        }))?;
-        
-        self.capture(geometry.x() as u32, geometry.y() as u32, geometry.width() as u32, geometry.height() as u32)
+        let geometry = self
+            .conn
+            .wait_for_reply(self.conn.send_request(&GetGeometry {
+                drawable: Drawable::Window(unsafe { Window::new(window.id) }),
+            }))?;
+
+        self.capture(
+            geometry.x() as u32,
+            geometry.y() as u32,
+            geometry.width() as u32,
+            geometry.height() as u32,
+        )
     }
 
-    fn update_window_frame(&self, window: &api::Window, frame: &mut Frame) -> Result<(), Self::Error> {
-        let geometry = self.conn.wait_for_reply(self.conn.send_request(&GetGeometry {
-            drawable: Drawable::Window(unsafe { Window::new(window.id) })
-        }))?;
-        
-        self.update_frame(geometry.x() as u32, geometry.y() as u32, geometry.width() as u32, geometry.height() as u32, frame)
+    fn update_window_frame(
+        &self,
+        window: &api::Window,
+        frame: &mut Frame,
+    ) -> Result<(), Self::Error> {
+        let geometry = self
+            .conn
+            .wait_for_reply(self.conn.send_request(&GetGeometry {
+                drawable: Drawable::Window(unsafe { Window::new(window.id) }),
+            }))?;
+
+        self.update_frame(
+            geometry.x() as u32,
+            geometry.y() as u32,
+            geometry.width() as u32,
+            geometry.height() as u32,
+            frame,
+        )
     }
 }
 
@@ -349,13 +419,17 @@ impl X11Api {
             buf.set_len(len * 3);
         }
 
-        Ok(
-            RgbImage::from_vec(width, height, buf)
-                .expect("buf does not match width and height")
-        )
+        Ok(RgbImage::from_vec(width, height, buf).expect("buf does not match width and height"))
     }
 
-    fn update_frame(&self, x: u32, y: u32, width: u32, height: u32, frame: &mut Frame) -> Result<(), Error> {
+    fn update_frame(
+        &self,
+        x: u32,
+        y: u32,
+        width: u32,
+        height: u32,
+        frame: &mut Frame,
+    ) -> Result<(), Error> {
         let len = self.width as usize * self.height as usize;
         let data = &mut **frame;
 
@@ -420,100 +494,53 @@ impl X11Api {
         }
     }
 
-    fn init_xkb(
-        conn: &Connection,
-    ) -> Result<(*mut xkb_context, *mut xkb_keymap, *mut xkb_state), Error> {
-        let raw_conn = conn.get_raw_conn() as *mut xkbcommon_sys::xcb_connection_t;
-
-        let res = unsafe {
-            xkb_x11_setup_xkb_extension(
-                raw_conn,
-                MAJOR_VERSION as u16,
-                MINOR_VERSION as u16,
-                XKB_X11_SETUP_XKB_EXTENSION_NO_FLAGS,
-                ptr::null_mut(),
-                ptr::null_mut(),
-                ptr::null_mut(),
-                ptr::null_mut(),
-            )
-        };
-        if res == 0 {
-            return Err(Error::XkbInit);
-        }
-
-        let context = unsafe { xkb_context_new(XKB_CONTEXT_NO_FLAGS) };
-        if context.is_null() {
-            return Err(Error::XkbContextInit);
-        }
-
-        let device_id = unsafe { xkb_x11_get_core_keyboard_device_id(raw_conn) };
-        if device_id == -1 {
-            unsafe {
-                xkb_context_unref(context);
-            }
-            return Err(Error::XkbGetCoreKbDev);
-        }
-
-        let keymap = unsafe {
-            xkb_x11_keymap_new_from_device(
-                context,
-                raw_conn,
-                device_id,
-                XKB_KEYMAP_COMPILE_NO_FLAGS,
-            )
-        };
-        if keymap.is_null() {
-            unsafe {
-                xkb_context_unref(context);
-            }
-            return Err(Error::XkbFetchKeymap);
-        }
-
-        let state = unsafe { xkb_x11_state_new_from_device(keymap, raw_conn, device_id) };
-        if state.is_null() {
-            unsafe {
-                xkb_keymap_unref(keymap);
-                xkb_context_unref(context);
-            }
-            return Err(Error::XkbNewState);
-        }
-
-        Ok((context, keymap, state))
-    }
-
-    fn release_xkb(context: *mut xkb_context, keymap: *mut xkb_keymap, state: *mut xkb_state) {
-        unsafe {
-            xkb_state_unref(state);
-            xkb_keymap_unref(keymap);
-            xkb_context_unref(context);
-        }
-    }
-
     fn update_monitors(&mut self) -> Result<(), Error> {
-        let monitors = self.conn.wait_for_reply(self.conn.send_request(
-            &GetMonitors {
+        let monitors = self
+            .conn
+            .wait_for_reply(self.conn.send_request(&GetMonitors {
                 window: self.root,
-                get_active: true
-            }
-        ))?;
+                get_active: true,
+            }))?;
 
         let mut monitor_list = Vec::with_capacity(monitors.length() as usize);
 
-        for (monitor_info, reply) in monitors
-            .monitors()
-            .map(|info| (info, self.conn.wait_for_reply(self.conn.send_request(&GetAtomName { atom: info.name() }))))
-        {
-            let reply = reply?;
+        for (monitor_info, reply) in monitors.monitors().map(|info| {
+            (
+                info,
+                self.conn
+                    .wait_for_reply(self.conn.send_request(&GetAtomName { atom: info.name() })),
+            )
+        }) {
             monitor_list.push(X11MonitorInfo {
-                name: reply.name().to_owned(),
+                name: reply?.name().unwrap_or("unknown").to_owned(),
                 x: monitor_info.x() as u32,
                 y: monitor_info.y() as u32,
                 width: monitor_info.width() as u32,
-                height: monitor_info.height() as u32
+                height: monitor_info.height() as u32,
             });
         }
 
         self.monitors = monitor_list;
+        Ok(())
+    }
+
+    fn list_windows(&self, window: Window, windows: &mut Vec<Window>) -> Result<(), Error> {
+        let wininfo = self
+            .conn
+            .wait_for_reply(self.conn.send_request(&GetWindowAttributes { window }))?;
+
+        if wininfo.map_state() == MapState::Viewable {
+            windows.push(window);
+        }
+
+        let tree_query_reply = self
+            .conn
+            .wait_for_reply(self.conn.send_request(&QueryTree { window }))?;
+
+        for &child in tree_query_reply.children() {
+            self.list_windows(child, windows)?;
+        }
+
         Ok(())
     }
 
@@ -533,7 +560,6 @@ impl Finalize for X11Api {}
 impl Drop for X11Api {
     fn drop(&mut self) {
         Self::release_shm(&self.conn, self.shmid, self.shmaddr, self.shmseg);
-        Self::release_xkb(self.xkb_context, self.xkb_keymap, self.xkb_state);
     }
 }
 
@@ -564,7 +590,11 @@ pub enum Error {
     #[error("failed to create new state for device")]
     XkbNewState,
     #[error("unknown monitor")]
-    UnknownMonitor
+    UnknownMonitor,
+    #[error("clipboard error: {0}")]
+    ClipboardError(#[from] X11ClipboardError),
+    #[error("clipboard type {0:?} not supported")]
+    UnsupportedClipboardType(ClipboardType)
 }
 
 // TODO: get this sorted out
