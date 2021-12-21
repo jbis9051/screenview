@@ -85,7 +85,7 @@ pub struct X11Api {
 
 unsafe impl Send for X11Api {}
 
-impl NativeAPI for X11Api {
+impl NativeApiTemplate for X11Api {
     type Error = Error;
 
     fn new() -> Result<Self, Self::Error> {
@@ -569,8 +569,6 @@ pub enum Error {
     DisplayOpenFailed,
     #[error("internal xcb error: {0}")]
     XcbError(#[from] XcbError),
-    #[error("failed to map screen number to screen object")]
-    ScreenNumMismatch,
     #[error("failed to initialize shared memory object: error code {0}")]
     ShmInit(Errno),
     #[error("failed to attach to shared memory object: error code {0}")]
@@ -579,16 +577,6 @@ pub enum Error {
     ShmDetach(Errno),
     #[error("failed to mark shared memory object for deletion: error code {0}")]
     ShmRmid(Errno),
-    #[error("failed to setup xkb extension")]
-    XkbInit,
-    #[error("failed to initialize xkb context")]
-    XkbContextInit,
-    #[error("failed to fetch core keyboard device ID")]
-    XkbGetCoreKbDev,
-    #[error("failed to fetch keymap")]
-    XkbFetchKeymap,
-    #[error("failed to create new state for device")]
-    XkbNewState,
     #[error("unknown monitor")]
     UnknownMonitor,
     #[error("clipboard error: {0}")]

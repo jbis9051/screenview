@@ -7,11 +7,13 @@ use neon::prelude::*;
 cfg_if! {
     if #[cfg(target_os="linux")] {
         mod unix;
-        pub use unix::*;
+        pub use unix::X11Api as NativeApi;
     } else if #[cfg(windows)] {
-        compile_error!("Windows not supported yet");
+        mod windows;
+        pub use windows::WindowsApi as NativeApi;
     } else if #[cfg(any(target_os="ios", target_os="macos"))] {
-        compile_error!("MacOS/iOS not supported yet");
+        mod macos;
+        pub use macos::MacosApi as NativeApi;
     } else {
         compile_error!("Unknown target operating system");
     }
@@ -25,11 +27,11 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
     impl<T> Finalize for JsCompat<T> {}
 
     cx.export_function("new_handle", |mut cx| {
-        Ok(JsBox::new(&mut cx, RefCell::new(X11Api::new().unwrap())).upcast::<JsValue>())
+        Ok(JsBox::new(&mut cx, RefCell::new(NativeApi::new().unwrap())).upcast::<JsValue>())
     })?;
 
     cx.export_function("list_windows", |mut cx| {
-        let handle = cx.argument::<JsBox<RefCell<X11Api>>>(0)?;
+        let handle = cx.argument::<JsBox<RefCell<NativeApi>>>(0)?;
         let start = Instant::now();
         let windows = handle.borrow_mut().windows().unwrap();
         let elapsed = start.elapsed();
@@ -42,7 +44,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
         use image::ImageFormat;
         use std::time::Instant;
 
-        let handle = cx.argument::<JsBox<RefCell<X11Api>>>(0)?;
+        let handle = cx.argument::<JsBox<RefCell<NativeApi>>>(0)?;
         let mut h = handle.borrow_mut();
         let start = Instant::now();
         let m = h.monitors().unwrap();
@@ -56,7 +58,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
     })?;
 
     cx.export_function("movemouse", |mut cx| {
-        let handle = cx.argument::<JsBox<X11Api>>(0)?;
+        let handle = cx.argument::<JsBox<NativeApi>>(0)?;
         let start = Instant::now();
         handle
             .set_pointer_position(MousePosition { x: 500, y: 500 })

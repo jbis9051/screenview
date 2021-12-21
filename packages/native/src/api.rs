@@ -51,7 +51,7 @@ pub enum ClipboardType {
 
 pub type Frame = RgbImage;
 
-pub(crate) trait NativeAPI: Sized {
+pub(crate) trait NativeApiTemplate: Sized {
     type Error: Error;
 
     fn new() -> Result<Self, Self::Error>;
