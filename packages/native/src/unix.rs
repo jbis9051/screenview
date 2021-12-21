@@ -1,25 +1,26 @@
-use crate::api::*;
+use crate::api::{self, *};
 use errno::{errno, Errno};
 use image::RgbImage;
 use libc::{c_int, c_void, shmat, shmctl, shmdt, shmget, size_t, IPC_CREAT, IPC_PRIVATE, IPC_RMID};
 use neon::prelude::Finalize;
 use std::{
     error::Error as StdError,
-    fmt::{self, Debug, Display, Formatter},
-    ptr,
+    fmt::{self, Debug, Formatter},
+    ptr
 };
 use x11::{
     xlib::{XDefaultRootWindow, XKeysymToKeycode, XOpenDisplay, XSync},
-    xtest::XTestFakeKeyEvent,
+    xtest::{XTestFakeKeyEvent, XTestFakeButtonEvent},
 };
 use xcb::{
     shm::{Attach, Detach, GetImage, Seg},
-    x::{Drawable, GetGeometry, QueryPointer, Window},
+    x::{Drawable, GetGeometry, QueryPointer, Window, WarpPointer, GetAtomName},
     xkb::{MAJOR_VERSION, MINOR_VERSION},
+    randr::GetMonitors,
     ConnError,
     Connection,
     ProtocolError,
-    XidNew,
+    XidNew, Xid,
 };
 use xkbcommon_sys::{
     xkb_context,
@@ -38,7 +39,32 @@ use xkbcommon_sys::{
     xkb_x11_state_new_from_device,
 };
 
-pub struct Capture {
+struct X11MonitorInfo {
+    name: String,
+    x: u32,
+    y: u32,
+    width: u32,
+    height: u32
+}
+
+impl MouseButton {
+    #[inline(always)]
+    fn id(&self) -> u32 {
+        match self {
+            MouseButton::Left => 1,
+            MouseButton::Center => 2,
+            MouseButton::Right => 3,
+            MouseButton::ScrollUp => 4,
+            MouseButton::ScrollDown => 5,
+            MouseButton::ScrollLeft => 6,
+            MouseButton::ScrollRight => 7,
+            MouseButton::Button4 => 8,
+            MouseButton::Button5 => 9,
+        }
+    }
+}
+
+pub struct X11Api {
     // General fields
     conn: Connection,
     root: Window,
@@ -46,6 +72,7 @@ pub struct Capture {
     // Screen capture fields
     width: u16,
     height: u16,
+    depth: usize,
     shmid: c_int,
     shmaddr: *mut u32,
     shmseg: Seg,
@@ -54,11 +81,14 @@ pub struct Capture {
     xkb_context: *mut xkb_context,
     xkb_keymap: *mut xkb_keymap,
     xkb_state: *mut xkb_state,
+
+    // Monitor map
+    monitors: Vec<X11MonitorInfo>
 }
 
-unsafe impl Send for Capture {}
+unsafe impl Send for X11Api {}
 
-impl NativeCapture for Capture {
+impl NativeAPI for X11Api {
     type Error = Error;
 
     fn new() -> Result<Self, Self::Error> {
@@ -94,56 +124,15 @@ impl NativeCapture for Capture {
             root,
             width,
             height,
+            depth,
             shmid,
             shmaddr,
             shmseg,
             xkb_context,
             xkb_keymap,
             xkb_state,
+            monitors: Vec::new()
         })
-    }
-
-    fn capture_screen(&self) -> Result<RgbImage, Self::Error> {
-        self.update_shm()?;
-
-        let len = self.width as usize * self.height as usize * 3;
-        let mut buf: Vec<u8> = Vec::with_capacity(len);
-
-        unsafe {
-            Self::copy_rgb(self.shmaddr, buf.as_mut_ptr(), len / 3);
-            buf.set_len(len);
-        }
-
-        Ok(
-            RgbImage::from_vec(self.width as u32, self.height as u32, buf)
-                .expect("buf does not match width and height"),
-        )
-    }
-
-    fn update_screen_capture(&self, cap: &mut RgbImage) -> Result<(), Self::Error> {
-        let len = self.width as usize * self.height as usize * 3;
-        let data = &mut **cap;
-
-        if data.len() != len {
-            *cap = self.capture_screen()?;
-            return Ok(());
-        }
-
-        self.update_shm()?;
-
-        unsafe {
-            Self::copy_rgb(self.shmaddr, data.as_mut_ptr(), len / 3);
-        }
-
-        Ok(())
-    }
-
-    fn pointer_position(&self) -> Result<(u32, u32), Self::Error> {
-        let reply = self
-            .conn
-            .wait_for_reply(self.conn.send_request(&QueryPointer { window: self.root }))?;
-
-        Ok((reply.root_x() as u32, reply.root_y() as u32))
     }
 
     fn key_toggle(&self, keysym: u32, down: bool) {
@@ -156,9 +145,146 @@ impl NativeCapture for Capture {
             XSync(dpy, 0);
         }
     }
+
+    fn pointer_position(&self) -> Result<MousePosition, Self::Error> {
+        let reply = self
+            .conn
+            .wait_for_reply(self.conn.send_request(&QueryPointer { window: self.root }))?;
+
+        Ok(MousePosition {
+            x: reply.root_x() as _,
+            y: reply.root_y() as _
+        })
+    }
+
+    fn set_pointer_position(&self, pos: MousePosition) -> Result<(), Self::Error> {
+        self
+            .conn
+            .check_request(self.conn.send_request_checked(&WarpPointer {
+                src_window: Window::none(),
+                dst_window: self.root,
+                src_x: 0,
+                src_y: 0,
+                src_width: 0,
+                src_height: 0,
+                dst_x: pos.x as _,
+                dst_y: pos.y as _
+            }))
+            .map_err(Into::into)
+    }
+
+    fn toggle_mouse(&self, button: MouseButton, down: bool) -> Result<(), Self::Error> {
+        let dpy = self.conn.get_raw_dpy();
+
+        unsafe {
+            XTestFakeButtonEvent(dpy, button.id(), if down { 1 } else { 0 }, 0);
+            XSync(dpy, 0);
+        }
+
+        Ok(())
+    }
+
+    fn scroll_mouse(&self, scroll: MouseScroll) -> Result<(), Self::Error> {
+        let vert_button = if scroll.y > 0 {
+            MouseButton::ScrollUp
+        } else {
+            MouseButton::ScrollDown
+        }.id();
+        let horiz_button = if scroll.x > 0 {
+            MouseButton::ScrollRight
+        } else {
+            MouseButton::ScrollLeft
+        }.id();
+
+        let dpy = self.conn.get_raw_dpy();        
+
+        for _ in 0..scroll.y.abs() {
+            unsafe {
+                XTestFakeButtonEvent(dpy, vert_button, 1, 0);
+                XTestFakeButtonEvent(dpy, vert_button, 0, 0);
+            }
+        }
+
+        for _ in 0..scroll.x.abs() {
+            unsafe {
+                XTestFakeButtonEvent(dpy, horiz_button, 1, 0);
+                XTestFakeButtonEvent(dpy, horiz_button, 0, 0);
+            }
+        }
+
+        unsafe {
+            XSync(dpy, 0);
+        }
+
+        Ok(())
+    }
+
+    fn clipboard_types(&self) -> Result<Vec<ClipboardType>, Self::Error> {
+        unimplemented!()
+    }
+
+    fn clipboard_content(&self, type_name: &ClipboardType) -> Result<Vec<u8>, Self::Error> {
+        unimplemented!()
+    }
+
+    fn set_clipboard_content(&mut self, type_name: &ClipboardType, content: &[u8]) -> Result<(), Self::Error> {
+        unimplemented!()
+    }
+
+    fn monitors(&mut self) -> Result<Vec<Monitor>, Self::Error> {
+        self.update_monitors()?;
+        Ok(self.monitors
+            .iter()
+            .enumerate()
+            .map(|(id, info)| Monitor {
+                id: id as u32,
+                name: info.name.clone(),
+                width: info.width,
+                height: info.height
+            })
+            .collect())
+    }
+
+    fn windows(&mut self) -> Result<Vec<api::Window>, Self::Error> {
+        unimplemented!()
+    }
+
+    fn capture_display_frame(&self, monitor: &Monitor) -> Result<Frame, Self::Error> {
+        let info = match self.monitors.get(monitor.id as usize) {
+            Some(info) => info,
+            None => return Err(Error::UnknownMonitor)
+        };
+
+        self.capture(info.x, info.y, info.width, info.height)
+    }
+
+    fn update_display_frame(&self, monitor: &Monitor, frame: &mut Frame) -> Result<(), Self::Error> {
+        let info = match self.monitors.get(monitor.id as usize) {
+            Some(info) => info,
+            None => return Err(Error::UnknownMonitor)
+        };
+
+        self.update_frame(info.x, info.y, info.width, info.height, frame)
+    }
+
+    fn capture_window_frame(&self, window: &api::Window) -> Result<Frame, Self::Error> {
+        let geometry = self.conn.wait_for_reply(self.conn.send_request(&GetGeometry {
+            drawable: Drawable::Window(unsafe { Window::new(window.id) })
+        }))?;
+        
+        self.capture(geometry.x() as u32, geometry.y() as u32, geometry.width() as u32, geometry.height() as u32)
+    }
+
+    fn update_window_frame(&self, window: &api::Window, frame: &mut Frame) -> Result<(), Self::Error> {
+        let geometry = self.conn.wait_for_reply(self.conn.send_request(&GetGeometry {
+            drawable: Drawable::Window(unsafe { Window::new(window.id) })
+        }))?;
+        
+        self.update_frame(geometry.x() as u32, geometry.y() as u32, geometry.width() as u32, geometry.height() as u32, frame)
+    }
 }
 
-impl Capture {
+impl X11Api {
     fn init_shm(conn: &Connection, size: size_t) -> Result<(c_int, *mut u32, Seg), Error> {
         let shmid = unsafe {
             shmget(
@@ -212,20 +338,56 @@ impl Capture {
         Ok((shmid, shmaddr, shmseg))
     }
 
-    fn update_shm(&self) -> Result<(), Error> {
+    fn capture(&self, x: u32, y: u32, width: u32, height: u32) -> Result<Frame, Error> {
+        let offset = self.update_shm(x, y, width, height)?;
+
+        let len = width as usize * height as usize;
+        let mut buf: Vec<u8> = Vec::with_capacity(len * 3);
+
+        unsafe {
+            Self::copy_rgb(self.shmaddr.add(offset), buf.as_mut_ptr(), len);
+            buf.set_len(len * 3);
+        }
+
+        Ok(
+            RgbImage::from_vec(width, height, buf)
+                .expect("buf does not match width and height")
+        )
+    }
+
+    fn update_frame(&self, x: u32, y: u32, width: u32, height: u32, frame: &mut Frame) -> Result<(), Error> {
+        let len = self.width as usize * self.height as usize;
+        let data = &mut **frame;
+
+        if data.len() != len * 3 {
+            *frame = self.capture(x, y, width, height)?;
+            return Ok(());
+        }
+
+        let offset = self.update_shm(x, y, width, height)?;
+
+        unsafe {
+            Self::copy_rgb(self.shmaddr.add(offset), data.as_mut_ptr(), len);
+        }
+
+        Ok(())
+    }
+
+    fn update_shm(&self, x: u32, y: u32, width: u32, height: u32) -> Result<usize, Error> {
+        let offset = (y * self.width as u32 + x) * self.depth as u32;
         let cookie = self.conn.send_request(&GetImage {
             drawable: Drawable::Window(self.root),
-            x: 0,
-            y: 0,
-            width: self.width as u16,
-            height: self.height as u16,
+            x: x as _,
+            y: y as _,
+            width: width as _,
+            height: height as _,
             plane_mask: u32::MAX, // All planes
             format: 2,            // ZPixmap
             shmseg: self.shmseg,
-            offset: 0,
+            offset,
         });
         let _reply = self.conn.wait_for_reply(cookie)?;
-        Ok(())
+        Ok(offset as usize)
     }
 
     #[inline]
@@ -327,6 +489,34 @@ impl Capture {
         }
     }
 
+    fn update_monitors(&mut self) -> Result<(), Error> {
+        let monitors = self.conn.wait_for_reply(self.conn.send_request(
+            &GetMonitors {
+                window: self.root,
+                get_active: true
+            }
+        ))?;
+
+        let mut monitor_list = Vec::with_capacity(monitors.length() as usize);
+
+        for (monitor_info, reply) in monitors
+            .monitors()
+            .map(|info| (info, self.conn.wait_for_reply(self.conn.send_request(&GetAtomName { atom: info.name() }))))
+        {
+            let reply = reply?;
+            monitor_list.push(X11MonitorInfo {
+                name: reply.name().to_owned(),
+                x: monitor_info.x() as u32,
+                y: monitor_info.y() as u32,
+                width: monitor_info.width() as u32,
+                height: monitor_info.height() as u32
+            });
+        }
+
+        self.monitors = monitor_list;
+        Ok(())
+    }
+
     #[inline]
     unsafe fn copy_rgb(mut src: *const u32, mut dst: *mut u8, len: usize) {
         for _ in 0 .. len {
@@ -338,9 +528,9 @@ impl Capture {
     }
 }
 
-impl Finalize for Capture {}
+impl Finalize for X11Api {}
 
-impl Drop for Capture {
+impl Drop for X11Api {
     fn drop(&mut self) {
         Self::release_shm(&self.conn, self.shmid, self.shmaddr, self.shmseg);
         Self::release_xkb(self.xkb_context, self.xkb_keymap, self.xkb_state);
@@ -373,6 +563,8 @@ pub enum Error {
     XkbFetchKeymap,
     #[error("failed to create new state for device")]
     XkbNewState,
+    #[error("unknown monitor")]
+    UnknownMonitor
 }
 
 // TODO: get this sorted out
@@ -399,7 +591,7 @@ impl From<ProtocolError> for Error {
 #[derive(Debug)]
 pub struct XcbError(pub xcb::Error);
 
-impl Display for XcbError {
+impl fmt::Display for XcbError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         Debug::fmt(self, f)
     }
