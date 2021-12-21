@@ -8,6 +8,7 @@
 \usepackage{multirow}
 \usepackage{algorithm}
 \usepackage{algpseudocode}
+\usepackage{tikz}
 \usepackage[linktocpage]{hyperref}
 
 \hypersetup{
@@ -57,7 +58,8 @@
 
     \section{Introduction}
 
-    This section describes the high level overview of ScreenView. Terms used in this section are defined in other sections.\\
+    This section describes the high level overview of ScreenView. Terms used in this section are defined in other
+    sections.\\
 
     \subsection{Application Layers}
 
@@ -76,19 +78,24 @@
         \end{tabular}
     \end{center}
 
-    The Transport Layer is the OSI Transport Layer level protocol for networking (TCP or UDP). The \hyperlink{section.3}{Server
-    Encryption Layer} provides security between the Server and a Peer. The Server Communication Layer defined in facilities communication between
+    The Transport Layer is the OSI Transport Layer level protocol for networking (TCP or UDP). The \hyperlink{section
+    .3}{Server
+    Encryption Layer} provides security between the Server and a Peer. \hyperlink{section.4}{The Server Communication
+    Layer} facilities communication between Peers and the Client. The \hyperlink{section.5}{E2EE (Peer
+        $\leftrightarrow$ Peer) Encryption Layer} provides end-to-end encryption between Peers and other Peers. The
+    \hyperlink{section.6}{Host $\leftrightarrow$ Client Communication Layer} facilities communication between Peers.
 
-    \subsection{Initialization}
+    \subsection{Overview}
 
     To begin, a Peer connects to the server over TCP and commences the Server Encryption Layer protocol for TCP
-    defined in \hyperlink{section.4}{4}. Next the Server Communication Layer defined in section \hyperlink{section
-    .5}{5} commences. All Server Communication Layer messages are encrypted and encapsulated in messages defined in
+    defined. Next the Server Communication Layer is used. All Server Communication Layer messages are encrypted,
+    authenticated, and encapsulated in messages defined in
     the Server Encryption Layer. Once a session is established between two peers, the E2EE (Peer $\leftrightarrow$ Peer)
-    Encryption Layer commences as defined in \hyperlink{section.6}{6}. All E2EE (Peer $\leftrightarrow$ Peer)
-    Encryption messages are encapsulated in Server Communication Layer messages. Finally, the Host $\leftrightarrow$
+    Encryption Layer commences. All E2EE (Peer $\leftrightarrow$ Peer) Encryption messages are encapsulated in Server
+    Communication Layer messages. Finally, the Host $\leftrightarrow$
     Client Communication Layer commences as defined in \hyperlink{section.6}{6}. All Host $\leftrightarrow$ Client
-    Communication Layer messages are encrypted and encapsulated in E2EE (Peer $\leftrightarrow$ Peer) Encryption
+    Communication Layer messages are encrypted, authenticated, and encapsulated in E2EE (Peer $\leftrightarrow$ Peer)
+    Encryption
     Layer messages.
 
     \subsection{Transport Messages Total Header Sizes}
@@ -956,7 +963,7 @@
         \item \emph{cell-width} MUST be less than \emph{width}. \emph{cell-height} must be less than \emph{height}.\\
         % // TODO define more restrictions %
         \item The \emph{access} byte defines what type of access is available for the display. The bits of the
-        \item \emph{access} byte are described below in little endian.
+        \emph{access} byte are described below in little endian.
     \end{itemize}
 
 
@@ -986,7 +993,52 @@
     a different \emph{Display} than the same \emph{display-id} did in the previous \emph{DisplayChange} message. In
     initialization, this MUST always be 1 (as there is no previous \emph{DisplayChange}). If the display hasn't
     changed (0) then the frame data may be maintained. If \emph{Flush} is 0, \emph{width}, \emph{height} MUST remain
-    the same as the previous \emph{DisplayChange} specified for the \emph{display-id}.
+    the same as the previous \emph{DisplayChange} specified for the \emph{display-id}.\\
+
+
+    Display cell numbering is right to left, up to down, 0 indexed as seen below. If $\text{cell-width}\ \%\
+    \text{width} > 0$ the right column's width will be $\text{width}\ \%\ \text{cell-width}$. If $\text{height}\
+    \%\ \text{cell-height} > 0$ the bottom row's height will be $\text{height}\ \%\ \text{cell-height}$.
+
+    \begin{center}
+        \begin{tikzpicture}
+            \draw[step=1cm,black,very thin] (0,0) grid (4,3);
+            \draw[thick,->] (-0.7,3) -- (-0.2,3);
+            \draw[thick] (-0.7,3) -- (-0.7,0);
+            \draw[thick,->] (-0.7,0) -- (-0.2,0);
+            \draw (-1.5,1.4) node{height};
+
+            \draw[thick,->] (0,3.7) -- (0,3.2);
+            \draw[thick] (0,3.7) -- (4,3.7);
+            \draw[thick,->] (4,3.7) -- (4,3.2);
+            \draw (1.9,4) node{width};
+
+            \draw[thick,->] (4.7,1) -- (4.2,1);
+            \draw[thick] (4.7,1) -- (4.7,0);
+            \draw[thick,->] (4.7,0) -- (4.2,0);
+            \draw (5.7,0.45) node{cell-height};
+
+            \draw[thick,->] (3,-0.7) -- (3,-0.2);
+            \draw[thick] (3,-0.7) -- (4,-0.7);
+            \draw[thick,->] (4,-0.7) -- (4,-0.2);
+            \draw (3.5, -1) node{cell-width};
+
+            \draw (0.5, 2.5) node{0};
+            \draw (1.5, 2.5) node{1};
+            \draw (2.5, 2.5) node{2};
+            \draw (3.5, 2.5) node{3};
+
+            \draw (0.5, 1.5) node{4};
+            \draw (1.5, 1.5) node{5};
+            \draw (2.5, 1.5) node{6};
+            \draw (3.5, 1.5) node{7};
+
+            \draw (0.5, 0.5) node{8};
+            \draw (1.5, 0.5) node{9};
+            \draw (2.5, 0.5) node{10};
+            \draw (3.5, 0.5) node{11};
+        \end{tikzpicture}
+    \end{center}
 
     \subsubsection{DisplayChangeReceived - TCP}
 
