@@ -1,0 +1,406 @@
+\section{ScreenView Server Communication (SVSC) Protocol }
+
+The SVSC protocol is the Server Communication Layer protocol used for Peers to interact with the relay server,
+Server. Peers can lease an ID as well as begin a session with another Peer. Once a session is established, Peers can
+forward messages to another Peer. Unless otherwise noted, all messages MUST occur over TCP.\\
+
+With the exception of the \hyperref{subsection.4.2}{Handshake} messages. All SVSC messages' first byte contain a
+number to indicate
+the message type.
+
+\subsection{Definitions}
+
+\begin{itemize}
+    \item Peer - denotes a client in classical server/client environment
+    \item Server - The intermediary server used for routing and proxying data between
+\end{itemize}
+
+\subsection{Handshake}
+
+\subsubsection{ProtocolVersion}
+
+Handshaking begins by the Server sending the Peer a ProtocolVersion message. This lets the server know
+the version supported by the Host. the ProtocolVersion message consists of 12 bytes interpreted as a string of ASCII
+characters in the format
+"SVSC xxx.yyy" where xxx and yyy are the major and minor version numbers, padded with zeros.
+
+\begin{center}
+    Server \textrightarrow\ Peer\\
+    \begin{tabular}{|c|c|c|}
+        \hline
+        \textbf{Bytes} & \textbf{Name} & \textbf{Value}            \\
+        \hline
+        11             & version       & ``\texttt{SVSC 001.000}'' \\
+        \hline
+    \end{tabular}
+\end{center}
+
+The Peer replies back either \texttt{0} to indicate the version is not acceptable and that the handshake has
+failed or \texttt{1} if the version is acceptable to the Peer and the handshake as succeeded. If 0 is sent, all
+communication MUST cease and the TCP connection MUST be terminated.
+
+\begin{center}
+    Peer \textrightarrow\ Server\\
+    \begin{tabular}{|c|c|c|}
+        \hline
+        \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
+        \hline
+        1              & ok            & 0 or 1         \\
+        \hline
+    \end{tabular}
+\end{center}
+
+\subsection{Leasing}
+
+A lease is a temporary assignment of an ID to a Peer. The ID format and generation is discussed in
+\hyperlink{subsubsection.4.3.5}{4.3.5}. A maximum of 1 ID can be leased per TCP connection. ID generation MUST be
+rate limited to prevent ID exhaustion. Rate limiting rules are out of scope for this protocol, however some
+suggestions are listed in \hyperlink{subsubsection.4.3.6}{4.3.6}.
+
+\subsubsection{LeaseRequest}
+
+A \emph{LeaseRequest} message requests a lease of an ID.
+
+\begin{center}
+    Peer \textrightarrow\ Server\\
+    \begin{tabular}{|c|c|c|}
+        \hline
+        \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
+        \hline
+        1              & type          & 1              \\
+        \hline
+        1              & has-cookie    & 0 or 1         \\
+        \hline
+        \multicolumn{3}{|c|}{\textbf{Below only if \emph{has-cookie} is 1} } \\
+        \hline
+        24             & cookie        &                \\
+        \hline
+    \end{tabular}
+\end{center}
+
+If a Peer would like to request an ID it had previously been issued after expiration, it may include the cookie
+value it received in the LeaseResponse. There is no guarantee that the Peer will receive the same ID or that the Server
+will even consider the cookie value.
+
+\subsubsection{LeaseResponse}
+
+A LeaseResponse message is a response to a LeaseRequest. If has-cookie is 1, a Server MAY consider the cookie value
+in LeaseRequest or completely
+ignore it.
+
+\begin{center}
+    Server \textrightarrow\ Peer\\
+    \begin{tabular}{|c|c|c|}
+        \hline
+        \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
+        \hline
+        1              & type          & 2              \\
+        \hline
+        1              & accepted      & 0 or 1         \\
+        \hline
+        \multicolumn{3}{|c|}{\textbf{Below only if \emph{accepted} is 1} } \\
+        \hline
+        4              & id            &                \\
+        \hline
+        24             & cookie        &                \\
+        \hline
+        8              & expiration    &                \\
+        \hline
+    \end{tabular}
+\end{center}
+
+\emph{expiration} is a 64 bit Unix timestamp representing the expiry of lease. Disconnection of a Peer (e.g,
+the TCP connection is dropped) does not end a lease.\\
+
+\emph{cookie} a 128 bit value. The generation of this value is discussed in \hyperlink{subsubsection.4.2.7}{4.2
+.7}.\\
+
+Consideration of the cookie value MUST have no effect on the the value of accepted. That is, if the
+request is for a specific ID (implied by the presence of a cookie value and a has-cookie value equal to 1
+in the LeaseRequest) and the ID requested is not available, the Server SHOULD respond with a different
+available ID and an accepted value of 1 (assuming an ID is available). accepted MUST only be 0 if no IDs are left,
+for rate limiting reasons, or some other reasons unrelated to the cookie value.
+
+\subsubsection{LeaseExtensionRequest}
+
+A LeaseExtensionRequest message is used to extend a lease. Before a lease has expired, the Peer can
+request a lease extension. The Server can accept or deny this request. The Peer SHOULD send this message no earlier
+than as soon as 50 percent of the lease duration has expired.
+
+\begin{center}
+    Peer \textrightarrow\ Server\\
+    \begin{tabular}{|c|c|c|}
+        \hline
+        \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
+        \hline
+        1              & type          & 3              \\
+        \hline
+        24             & cookie        &                \\
+        \hline
+    \end{tabular}
+\end{center}
+
+\subsubsection{LeaseExtensionResponse}
+
+A LeaseExtensionResponse message is a response to a LeaseExtensionRequest.
+
+\begin{center}
+    Server \textrightarrow\ Peer\\
+    \begin{tabular}{|c|c|c|}
+        \hline
+        \textbf{Bytes} & \textbf{Name}  & \textbf{Value} \\
+        \hline
+        1              & type           & 4              \\
+        \hline
+        1              & extended       & 0 or 1         \\
+        \hline
+        \multicolumn{3}{|c|}{\textbf{Below only if \emph{extended} is 1} } \\
+        \hline
+        8              & new-expiration &                \\
+        \hline
+    \end{tabular}
+\end{center}
+
+\emph{new-expiration} is a 64 bit Unix timestamp representing the expiry of lease.
+
+\subsubsection{ID Generation}
+
+An ID is a 26 to 33 bit decimal number. This comes out to about up to 8 to 10 decimal digits, respectively. The
+Server may scale the keyspace depending on current usage. For optimal user experience while maintaining
+efficiency, the Server MUST only use keyspaces between 26 bits and 33 bits for ID generation. ID generation must
+also be uniformly random. All active IDs must be stored on the server. New IDs MUST be unique. ID generation MAY
+occur using the below
+algorithm:\\
+
+Let $S$ represents a set of all active IDs, $B$ be a number of bits between 26 and 33, and $generate(x)$ be a
+functions that returns a $x$ uniformly random bits.
+
+\begin{algorithm}
+    \caption{ID generation}
+    \begin{algorithmic}
+        \State $id$
+        \Repeat
+            \State $id\gets generate(B)$
+        \Until{$id\notin S$}
+        \State $S\gets S\cup \{id\}$
+        \State \textbf{return} $id$
+    \end{algorithmic}
+\end{algorithm}
+
+\subsubsection{Rate Limits}
+
+To prevent ID exhaustion, rate limits SHOULD be in place. TCP is used for LeaseRequests so IP addresses
+can not be spoofed. However, using proxy services such as Tor, simple IP based rate limits are likely not
+entirely sufficient. Servers MAY want to block all known proxy IP addresses.
+
+\subsubsection{Cookie Value}
+
+A \emph{cookie} value is a 128 bit value used for authentication in LeaseExtensionRequest and
+LeaseRequest messages. Specific generation of a cookie is out of scope, however care must be taken
+to ensure it is not predictable or exploitable. This value MAY be simply a random 24 byte key, HMAC-SHA1($id$,
+$key$) $||$ $id$, or something else entirely.
+
+\subsection{Sessions}
+
+A session is a connection between two Peers. At least one Peer must have an ID. A Peer can have a maximum of one
+session at any time. Immediately after receiving a EstablishSessionResponse message with a status
+of 0 or a EstablishSessionNotification message a Peer MUST establish UDP connection by sending a
+Keepalive message as defined in \hyperlink{subsection.4.5}{4.5}. Failure to do so MAY result in dropped
+SessionData* packets.
+
+\subsubsection{EstablishSessionRequest}
+
+An EstablishSessionRequest message is a Peer request to establish a session with another Peer.
+
+\begin{center}
+    Peer \textrightarrow\ Server\\
+    \begin{tabular}{|c|c|c|c|}
+        \hline
+        \textbf{Bytes} & \textbf{Name} & \textbf{Value} & \textbf{Description}                                 \\
+        \hline
+        1              & type          & 5              &                                                      \\
+        \hline
+        4              & lease-id      &                & The ID of the Peer to establish this connection with \\
+        \hline
+    \end{tabular}
+\end{center}
+
+\subsubsection{EstablishSessionResponse}
+
+An EstablishSessionResponse message is a response to EstablishSessionRequest.
+
+\begin{center}
+    Server \textrightarrow\ Peer\\
+    \begin{tabular}{|c|c|c|c|}
+        \hline
+        \textbf{Bytes} & \textbf{Name} & \textbf{Value} & \textbf{Description}                       \\
+        \hline
+        1              & type          & 6              &                                            \\
+        \hline
+        4              & lease-id      &                & the ID of the Peer attempted to connect to \\
+        \hline
+        1              & status        & 0-5            & described below                            \\
+        \hline
+        \multicolumn{4}{|c|}{\textbf{Below only if \emph{status} is 0} } \\
+        \hline
+        16             & session-id    &                & described below                            \\
+        \hline
+        16             & peer-id       &                & described below                            \\
+        \hline
+        16             & peer-key      &                & described below                            \\
+        \hline
+    \end{tabular}
+\end{center}
+
+\emph{status} can have the following values:
+
+\begin{center}
+    \begin{tabular}{|c|c|}
+        \hline
+        \textbf{Value} & \textbf{Description}                 \\
+        \hline
+        0              & session establishment was successful \\
+        \hline
+        1              & ID not found                         \\
+        \hline
+        2              & Peer is offline                      \\
+        \hline
+        3              & Peer is busy                         \\
+        \hline
+        4              & You are busy                         \\
+        \hline
+        5              & Other error                          \\
+        \hline
+    \end{tabular}
+\end{center}
+
+A Peer may be considered offline if, for example, an unexpired ID has been assigned to them and then the TCP
+connection is dropped.\\
+
+\emph{session-id} is a 128 bit random value used for session identification\\
+
+\emph{peer-id} is a 128 bit random value used to authentication a Peer for a given session. A Peer's peer-key MUST
+never be revealed to anyone but the Peer it belongs to (and the Server that generated it)
+for security reasons.\\
+
+\subsubsection{EstablishSessionNotification}
+
+A EstablishSessionNotification notifies a Peer that a session has been established with them.
+
+\begin{center}
+    Server \textrightarrow\ Host\\
+    \begin{tabular}{|c|c|c|c|}
+        \hline
+        \textbf{Bytes} & \textbf{Name} & \textbf{Value} & \textbf{Description}                                \\
+        \hline
+        1              & type          & 7              &                                                     \\
+        \hline
+        16             & session-id    &                & described in \hyperlink{subsubsection.4.4.2}{4.4.2} \\
+        \hline
+        16             & peer-id       &                & described in \hyperlink{subsubsection.4.4.2}{4.4.2} \\
+        \hline
+        16             & peer-key      &                & described in \hyperlink{subsubsection.4.4.2}{4.4.2} \\
+        \hline
+    \end{tabular}
+\end{center}
+
+peer-id and peer-key are the id and key of the Peer being notified NOT the id and key of the Peer they are connecting
+to.
+
+\subsubsection{SessionEnd}
+
+A \emph{SessionEnd} message is used to terminate a session. Once a Server receives a SessionEnd message, the Server
+MUST immediately stop forwarding messages and send a SessionEndNotification to the other Peer. The Peer must ignore
+any SessionDataPacket message received after this.
+
+\begin{center}
+    Peer \textrightarrow\ Server\\
+    \begin{tabular}{|c|c|c|c|}
+        \hline
+        \textbf{Bytes} & \textbf{Name} & \textbf{Value} & \textbf{Description} \\
+        \hline
+        1              & type          & 8              &                      \\
+        \hline
+    \end{tabular}
+\end{center}
+
+\subsubsection{SessionEndNotification}
+
+A SessionEndNotification notifies a Peer that a session has ended. If a Peer sends a SessionEnd
+message, the Server MUST send a SessionEndNotification message to a Peer. The Peer must ignore
+any SessionDataPacket message received after this
+
+\begin{center}
+    Server \textrightarrow\ Peer\\
+    \begin{tabular}{|c|c|c|c|}
+        \hline
+        \textbf{Bytes} & \textbf{Name} & \textbf{Value} & \textbf{Description} \\
+        \hline
+        1              & type          & 9              &                      \\
+        \hline
+    \end{tabular}
+\end{center}
+
+\subsubsection{SessionDataSend - TCP/UDP}
+
+A SessionDataSend is a message from a Peer intended to be forwarded to the Peer on the other side of the
+session. If a connection is not available (e.g. UDP was dropped or never established) for
+SessionDataReceive message to be sent to the other Peer, the SessionDataSend message is silently dropped.
+
+\begin{center}
+    Peer \textrightarrow\ Server\\
+    \begin{tabular}{|c|c|c|c|}
+        \hline
+        \textbf{Bytes} & \textbf{Name} & \textbf{Value} & \textbf{Description}           \\
+        \hline
+        1              & type          & 10             &                                \\
+        \hline
+        3              & data-length   &                & length of the content in bytes \\
+        \hline
+        data-length    & data          &                & data to be forwarded           \\
+        \hline
+    \end{tabular}
+\end{center}
+
+\subsubsection{SessionDataReceive - TCP/UDP}
+
+A SessionDataReceive is a message being forwarded to a Peer from the Peer on the other side of the
+session. The Server SHOULD forward the message along the same transport as it was received.
+
+\begin{center}
+    Server \textrightarrow\ Peer\\
+    \begin{tabular}{|c|c|c|c|}
+        \hline
+        \textbf{Bytes} & \textbf{Name} & \textbf{Value} & \textbf{Description}           \\
+        \hline
+        1              & type          & 11             &                                \\
+        \hline
+        3              & data-length   &                & length of the content in bytes \\
+        \hline
+        data-length    & data          &                & data to be forwarded           \\
+        \hline
+    \end{tabular}
+\end{center}
+
+\subsection{Keepalive - TCP/UDP}
+
+For each transport (TCP and UDP), if no message has been sent in \emph{KeepaliveTimeout} a Server sends a keepalive
+message over the respective transport. The Peer MUST respond with another Keepalive message.\\
+
+For TCP, if a \emph{KeepaliveTimeout} response is not received by the Server in
+double \emph{KeepaliveTimeout} seconds the TCP connection is considered dropped.\\
+
+For UDP, if a \emph{KeepaliveTimeout} response is not received by the Server in
+half  \emph{KeepaliveTimeout} seconds another \emph{Keepalive} message is sent. If a response is not received in
+an additional half \emph{KeepaliveTimeout} seconds, the UDP connection is considered dropped.
+
+\begin{center}
+    Server $\leftrightarrow$ Peer\\
+    \begin{tabular}{|c|c|c|c|}
+        \hline
+        \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
+        \hline
+        1              & type          & 0              \\
+        \hline
+    \end{tabular}
+\end{center}

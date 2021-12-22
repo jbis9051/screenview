@@ -1,0 +1,30 @@
+\section{Introduction}
+
+This section describes the high level overview of ScreenView. Terms used in this section are defined in other
+sections.
+
+\subsection{Application Layers}
+
+The table belows is an abstract diagram of the different layers of ScreenView. Each layer encapsulates all the
+below layers.
+
+\begin{center}
+    \begin{tabular}{|l|}
+        \hline
+        Transport Layer                                         \\
+        | Server Encryption Layer                               \\
+        || Server Communication Layer                           \\
+        ||| E2EE (Peer $\leftrightarrow$ Peer) Encryption Layer \\
+        |||| Host $\leftrightarrow$ Client Communication Layer  \\
+        \hline
+    \end{tabular}
+\end{center}
+
+
+The Transport Layer is the OSI Transport Layer level protocol for networking (TCP or UDP). The \hyperlink{section
+.3}{Server
+Encryption Layer} provides security between the Server and a Peer. \hyperlink{section.4}{The Server Communication
+Layer} facilities communication between Peers and the Server. The \hyperlink{section.5}{E2EE (Peer
+    $\leftrightarrow$ Peer) Encryption Layer} provides end-to-end encryption between a Peer and another Peer. The
+\hyperlink{section.6}{Host $\leftrightarrow$ Client Communication Layer} facilities communication between a Peer and
+another Peer.
