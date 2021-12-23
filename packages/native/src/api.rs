@@ -1,6 +1,7 @@
 use image::RgbImage;
 use std::error::Error;
 
+#[derive(Debug)]
 pub struct Monitor {
     pub id: u32,
     pub name: String,
@@ -16,10 +17,11 @@ pub struct Window {
     pub height: u32,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct MousePosition {
     pub x: u32,
     pub y: u32,
+    pub monitor_id: u32,
 }
 
 #[derive(Clone, Copy)]

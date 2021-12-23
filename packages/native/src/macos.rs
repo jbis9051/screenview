@@ -1,12 +1,22 @@
+use std::ffi::CStr;
+use cocoa::appkit::*;
+use cocoa::base::{id, nil};
+use cocoa::foundation::NSString;
+use cocoa_foundation::foundation::*;
+use core_graphics::display::*;
+use core_graphics::window::*;
+use neon::prelude::Finalize;
 use crate::api::*;
 
 pub struct MacosApi;
+
+impl Finalize for MacosApi {}
 
 impl NativeApiTemplate for MacosApi {
     type Error = std::convert::Infallible;
 
     fn new() -> Result<Self, Self::Error> {
-        unimplemented!()
+        Ok(Self {})
     }
 
     fn key_toggle(&self, key: Key, down: bool) {
@@ -14,7 +24,15 @@ impl NativeApiTemplate for MacosApi {
     }
 
     fn pointer_position(&self) -> Result<MousePosition, Self::Error> {
-        unimplemented!()
+        let point = unsafe {
+            NSEvent::mouseLocation(nil)
+        };
+        Ok(
+        MousePosition {
+            x: point.x as u32,
+            y: point.y as u32,
+            monitor_id: 0,
+        })
     }
 
     fn set_pointer_position(&self, pos: MousePosition) -> Result<(), Self::Error> {
@@ -46,11 +64,40 @@ impl NativeApiTemplate for MacosApi {
     }
 
     fn monitors(&mut self) -> Result<Vec<Monitor>, Self::Error> {
-        unimplemented!()
+        let display = unsafe {
+            NSScreen::screens(nil)
+        };
+        let count = unsafe { NSArray::count(display) };
+        let mut monitors = vec![];
+        for i in 0..count {
+            let nsscreen = unsafe { NSArray::objectAtIndex(display, i)};
+            let nsrect = unsafe {NSScreen::frame(nsscreen)};
+            let name = unsafe {CStr::from_ptr(NSString::UTF8String(nsscreen.localizedName())).to_str().unwrap().to_owned()};
+            monitors.push(Monitor {
+                id: i as u32,
+                name,
+                width: nsrect.size.width as u32,
+                height: nsrect.size.height as u32,
+            });
+        };
+        Ok(monitors)
     }
 
     fn windows(&mut self) -> Result<Vec<Window>, Self::Error> {
-        unimplemented!()
+        let windowsArray = unsafe { CGWindowListCopyWindowInfo(kCGWindowListOptionExcludeDesktopElements, kCGNullWindowID) };
+        let count = unsafe { NSArray::count(windows) };
+        let mut windows = vec![];
+        for i in 0..count {
+            let nsdictionary = unsafe { NSArray::objectAtIndex(windowsArray, i)};
+            let val = unsafe {NSDictionary::objectForKey_(nsdictionary,kCGWindowName)};
+            let name = unsafe {CStr::from_ptr(NSString::UTF8String(nsscreen.localizedName())).to_str().unwrap().to_owned()};
+            windows.push(Monitor {
+                id: i as u32,
+                name,
+                width: nsrect.size.width as u32,
+                height: nsrect.size.height as u32,
+            });
+        };
     }
 
     fn capture_display_frame(&self, display: &Monitor) -> Result<Frame, Self::Error> {

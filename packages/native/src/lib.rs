@@ -11,7 +11,7 @@ cfg_if! {
     } else if #[cfg(windows)] {
         mod windows;
         pub use windows::WindowsApi as NativeApi;
-    } else if #[cfg(any(target_os="ios", target_os="macos"))] {
+    } else if #[cfg(target_os="macos")] {
         mod macos;
         pub use macos::MacosApi as NativeApi;
     } else {
@@ -40,6 +40,16 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
         Ok(cx.undefined())
     })?;
 
+    cx.export_function("list_monitors", |mut cx| {
+        let handle = cx.argument::<JsBox<RefCell<NativeApi>>>(0)?;
+        let start = Instant::now();
+        let windows = handle.borrow_mut().monitors().unwrap();
+        let elapsed = start.elapsed();
+        println!("{:?}", elapsed);
+        println!("{:#?}", windows);
+        Ok(cx.undefined())
+    })?;
+
     cx.export_function("capture", |mut cx| {
         use image::ImageFormat;
         use std::time::Instant;
@@ -61,10 +71,20 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
         let handle = cx.argument::<JsBox<NativeApi>>(0)?;
         let start = Instant::now();
         handle
-            .set_pointer_position(MousePosition { x: 500, y: 500 })
+            .set_pointer_position(MousePosition { x: 500, y: 500, monitor_id: 0 })
             .unwrap();
         let elapsed = start.elapsed();
         println!("Time elapsed: {:?}", elapsed);
+        Ok(cx.undefined())
+    })?;
+
+    cx.export_function("mouse_pos", |mut cx| {
+        let handle = cx.argument::<JsBox<RefCell<NativeApi>>>(0)?;
+        let start = Instant::now();
+        let position = handle.borrow_mut().pointer_position().unwrap();
+        println!("{:?}", position);
+        let elapsed = start.elapsed();
+        println!("{:?}", elapsed);
         Ok(cx.undefined())
     })?;
 
