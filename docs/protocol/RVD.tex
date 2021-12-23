@@ -1,15 +1,15 @@
 \section{Remote Visual Display (RVD) Protocol}
 
-The RVD protocol is used to communicate mouse input, keyboard input, frame data, and clipboard data between the
+The RVD protocol is used to communicate messages regarding mouse input, keyboard input, frame data, and clipboard data between the
 Host and the Client.\\
 
 All messages MUST occur over the transport listed.\\
 
-With the exception of the \emph{Handshake} messages, all RVD messages' first byte contain a number to indicate
+With the exception of the Handshake messages, all RVD messages' first byte contain a number to indicate
 the message type. \\
 
-A \emph{sequence-number} is an incrementing 32-bit counter each UDP message sent, separate for Host and Client. All
-messages sent over UDP MUST begin with a 4 bytes \emph{sequence-number}. \emph{sequence-number} is initialized
+A sequence-number is an incrementing 32-bit counter each UDP message sent, separate for Host and Client. All
+messages sent over UDP MUST begin with a 4 bytes sequence-number. sequence-number is initialized
 to 0 and increments once for every UDP message sent by the respective Peer. Therefore each RVD UDP message looks
 like:
 
@@ -28,10 +28,10 @@ like:
 \subsection{Combining Messages}
 
 In some situations, such as when a large screen change occurs or when the screen is first sent to the client,
-large amounts of \emph{FrameData}'s may need to be sent in quick succession. Often individual \emph{FrameData}'s
+large amounts of FrameData's may need to be sent in quick succession. Often individual FrameData's
 will be much smaller than the MTU. Similar to TCP's Nagle algorithm, multiple UDP messages can be combined into a
 single UDP packet as long as the total size is remains less than the MTU. Each message directly follows the
-previous message with the first message directly following the sequence number. Only one \emph{sequence-number}
+previous message with the first message directly following the sequence number. Only one sequence-number
 is used:
 
 \begin{center}
@@ -51,6 +51,8 @@ is used:
     \end{tabular}
 \end{center}
 
+This ONLY applies to UDP messages.
+
 \subsection{Definitions}
 
 \begin{itemize}
@@ -58,16 +60,16 @@ is used:
     \item Client - A peer that wants to view and maybe control the Host's screen
     \item Display - A rectangular visual region that is shared by a Host to a Client. May or may not be
     \item \emph{Controllable}.
-    \item Controllable - A \emph{Display} that accepts keyboard and mouse input.
+    \item Controllable - A Display that accepts keyboard and mouse input.
 \end{itemize}
 
 \subsection{Handshake}
 
 \subsubsection{ProtocolVersion - TCP}
-Handshaking begins by the Host sending the client a \emph{ProtocolVersion} message. This lets the Client know the
-verison supported by the Host.\\
+Handshaking begins by the Host sending the client a ProtocolVersion message. This lets the Client know the
+version supported by the Host.\\
 
-The \emph{ProtocolVersion} message consists of 11 bytes interpreted as a string of ASCII characters in the format
+The ProtocolVersion message consists of 11 bytes interpreted as a string of ASCII characters in the format
 "RVD xxx.yyy" where xxx and yyy are the major and minor version numbers, padded with zeros.
 
 \begin{center}
@@ -83,8 +85,8 @@ The \emph{ProtocolVersion} message consists of 11 bytes interpreted as a string 
 
 The Client replies back either \texttt{0} to indicate the version is not acceptable and that the handshake has
 failed or \texttt{1} if the version is acceptable to the Client and the handshake as succeeded. If 0 is sent, all
-communication MUST cease and an error SHOULD be displayed to user. A \emph{SessionEnd} message should be sent by
-the Client. % TODO hyper
+communication MUST cease and an error SHOULD be displayed to user. A SessionEnd message should be sent by
+the Client.
 
 \begin{center}
     Client \textrightarrow\ Host\\
@@ -99,14 +101,14 @@ the Client. % TODO hyper
 
 \subsubsection{Initialization}
 
-Once the handshake has succeeded the Host responds with a \emph{DisplayChange} message.
+Once the handshake has succeeded the Host responds with a DisplayChange message.
 
 \subsection{Control messages}
-Control messages are messages that instruct client about changes regarding the Host.
+Control messages are messages that instruct the Client about changes regarding the Host.
 
 \subsubsection{DisplayChange - TCP}
-A \emph{DisplayChange} message informs the client about the available \emph{Display}s. RVD supports up to 255
-displays.
+A DisplayChange message informs the Client about the available Displays. RVD supports up to 255
+Displays.
 
 \begin{center}
     Host \textrightarrow\ Client\\
@@ -118,15 +120,15 @@ displays.
         \hline
         1              & clipboard-readable   & 0 or 1                    \\
         \hline
-        1              & number-of-displays   & 1 - 255                   \\
+        1              & number-of-displays   & 0 - 255                   \\
         \hline
         variable       & displays-information & \emph{DisplayInformation} \\
         \hline
     \end{tabular}
 \end{center}
 
-Each \emph{Display} has an associated \emph{DisplayInformation}. \emph{displays-information} contains
-\emph{number-of-displays} \emph{DisplayInformation}'s. A \emph{DisplayInformation} is defined below:
+Each Display has an associated DisplayInformation. displays-information contains
+number-of-displays DisplayInformations. A DisplayInformation is defined below:
 
 \begin{center}
     \begin{tabular}{|c|c|c|}
@@ -155,10 +157,10 @@ Each \emph{Display} has an associated \emph{DisplayInformation}. \emph{displays-
 \textbf{Restrictions:}
 
 \begin{itemize}
-    \item \emph{cell-width} MUST be less than \emph{width}. \emph{cell-height} must be less than \emph{height}.\\
-    % // TODO define more restrictions %
-    \item The \emph{access} byte defines what type of access is available for the display. The bits of the
-    \emph{access} byte are described below in little endian.
+    \item cell-width MUST be less than width. cell-height must be less than height.\\
+    \item cell-width * cell-height must be less than the MTU
+    \item The access byte defines what type of access is available for the display. The bits of the
+    access byte are described below in little endian.
 \end{itemize}
 
 
@@ -181,8 +183,8 @@ Each \emph{Display} has an associated \emph{DisplayInformation}. \emph{displays-
     \end{tabular}
 \end{center}
 
-If the \emph{Controllable} bit is 1 and the \emph{clipboard-readable} byte is set to 1, then the clipboard is
-writable. The \emph{Controllable} bit SHOULD be consistent throughout all displays.\\
+If the Controllable bit is 1 and the clipboard-readable byte is set to 1, then the clipboard is
+writable. The Controllable bit SHOULD be consistent throughout all displays.\\
 
 The \emph{Flush} bit indicates whether this display has changed, specifically if this \emph{display-id} refers to
 a different \emph{Display} than the same \emph{display-id} did in the previous \emph{DisplayChange} message. In

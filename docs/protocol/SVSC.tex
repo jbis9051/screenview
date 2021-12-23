@@ -4,7 +4,7 @@ The SVSC protocol is the Server Communication Layer protocol used for Peers to i
 Server. Peers can lease an ID as well as begin a session with another Peer. Once a session is established, Peers can
 forward messages to another Peer. Unless otherwise noted, all messages MUST occur over TCP.\\
 
-With the exception of the \hyperref{subsection.4.2}{Handshake} messages. All SVSC messages' first byte contain a
+With the exception of the \hyperlink{subsection.4.2}{Handshake} messages. All SVSC messages' first byte contain a
 number to indicate
 the message type.
 
@@ -19,7 +19,7 @@ the message type.
 
 \subsubsection{ProtocolVersion}
 
-Handshaking begins by the Server sending the Peer a ProtocolVersion message. This lets the server know
+Handshaking begins with the Server sending the Peer a ProtocolVersion message. This lets the server know
 the version supported by the Host. the ProtocolVersion message consists of 12 bytes interpreted as a string of ASCII
 characters in the format
 "SVSC xxx.yyy" where xxx and yyy are the major and minor version numbers, padded with zeros.
@@ -36,7 +36,7 @@ characters in the format
 \end{center}
 
 The Peer replies back either \texttt{0} to indicate the version is not acceptable and that the handshake has
-failed or \texttt{1} if the version is acceptable to the Peer and the handshake as succeeded. If 0 is sent, all
+failed or \texttt{1} if the version is acceptable to the Peer and the handshake as succeeded. If \texttt{0} is sent, all
 communication MUST cease and the TCP connection MUST be terminated.
 
 \begin{center}

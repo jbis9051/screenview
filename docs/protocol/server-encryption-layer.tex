@@ -33,10 +33,9 @@ The Peer begins by sending a PeerHello message with their ephemeral public key.
 
 \subsubsection{ServerHello}
 
-The Server replies with their certificate list. Like TLS, the is a certificate chain. The certificate validates each
-certificate as they would in TLS. This ensures that a MITM attack between the Peer and the Server cannot occur.
-Additionally, the Server sends their ephemeral public key and a signature. These ephemeral keys ensure perfect
-forward secrecy.
+The Server replies with their certificate list. Like TLS, the is a certificate chain. This ensures that a MITM attack
+between the Peer and the Server cannot occur. Additionally, the Server sends their ephemeral public key and a
+signature. These ephemeral keys ensure perfect forward secrecy.
 
 \begin{center}
     Server \textrightarrow\ Peer\\
@@ -66,7 +65,7 @@ Section-4.4.2}.
 \end{align*}
 
 certificate-verify is defined in \href{https://datatracker.ietf.org/doc/html/rfc8446#section-4.4
-.3}{RFC8445 Section-4.4.3} with the following modification. The content that is signed is:\\
+.3}{RFC8446 Section-4.4.3} with the following modification. The content that is signed is:\\
 
 \begin{align*}
     \text{content} := \text{``SreenViewServerVerify''}\ ||\ 0\ ||\ E_{serv}^{pub}
@@ -111,7 +110,7 @@ MUST be dropped.
     & N_{m}^{send} := N_{m}^{send} + 1
 \end{align*}
 
-Where $P$ is the payload to be transported
+Where $P$ is the payload to be transported\\
 
 $N_{m}$ is an 64 bit counter that MUST NOT wrap. After a transport message is sent, if $N_{m}$ equals
 ($2^{64}-1$) the TCP connection MUST be dropped. Subsequent TCP messages MUST NOT be sent. \\
@@ -178,7 +177,7 @@ The Server and Peer derive keys.
 \end{align*}
 
 
-Where $P$ is the payload to be transported
+Where $P$ is the payload to be transported\\
 
 $M_{m}$ is an 64 bit counter that MUST NOT wrap. After a transport message is sent, if $M_{m}$ equals
 ($2^{64}-1$) the TCP connection MUST be dropped. Subsequent UDP messages MUST NOT be sent. \\
