@@ -38,3 +38,5 @@ xcb = { version="1.0.0-beta.0", features=["shm", "xlib_xcb", "randr"] }
 cocoa = "0.20.1"
 cocoa-foundation = "0.1.0"
 core-graphics = "0.22.3"
+core-graphics-types = "0.1.1"
+core-foundation = "0.9.2"

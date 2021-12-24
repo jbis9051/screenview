@@ -5,9 +5,10 @@
     "description": "Native bindings to screen, keyboard, and mouse APIs",
     "scripts": {
         "build": "rm -f index.node && cargo-cp-artifact -nc index.node -- cargo build --message-format=json-render-diagnostics",
-        "build-debug": "npm run build --",
-        "build-release": "npm run build -- --release",
-        "install": "npm run build-release",
+        "build-debug": "yarn build --",
+        "build-release": "yarn build -- --release",
+        "node:test": "yarn run build && node index.js",
+        "install": "yarn run build-release",
         "test": "cargo test"
     },
     "devDependencies": {
