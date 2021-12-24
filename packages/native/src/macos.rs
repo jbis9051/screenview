@@ -84,7 +84,7 @@ impl NativeApiTemplate for MacosApi {
             NSScreen::screens(nil)
         };
         let count = unsafe { NSArray::count(display) };
-        let mut monitors = vec![];
+        let mut monitors = Vec::with_capacity(count as usize);
         for i in 0..count {
             let nsscreen = unsafe { NSArray::objectAtIndex(display, i) };
             let nsrect = unsafe { NSScreen::frame(nsscreen) };
@@ -105,7 +105,7 @@ impl NativeApiTemplate for MacosApi {
             return Err(Error::CouldNotGetWindowArray);
         }
         let count = unsafe { CFArrayGetCount(windows_array) };
-        let mut windows = vec![];
+        let mut windows = Vec::with_capacity(count as usize);
         for i in 0..count {
             let window = unsafe { CFArrayGetValueAtIndex(windows_array, i) as CFDictionaryRef };
             if window.is_null() {
