@@ -1,42 +1,29 @@
-use crate::api::{self, *};
 use errno::{errno, Errno};
 use image::RgbImage;
 use libc::{c_int, c_void, shmat, shmctl, shmdt, shmget, size_t, IPC_CREAT, IPC_PRIVATE, IPC_RMID};
 use neon::prelude::Finalize;
-use x11_clipboard::{Clipboard, error::Error as X11ClipboardError};
 use std::{
     error::Error as StdError,
     fmt::{self, Debug, Formatter},
-    ptr,
-    str, time::Duration,
+    ptr, str,
+    time::Duration,
 };
 use x11::{
     xlib::{XDefaultRootWindow, XKeysymToKeycode, XOpenDisplay, XSync},
     xtest::{XTestFakeButtonEvent, XTestFakeKeyEvent},
 };
+use x11_clipboard::{error::Error as X11ClipboardError, Clipboard};
 use xcb::{
     randr::GetMonitors,
     shm::{Attach, Detach, GetImage, Seg},
     x::{
-        Drawable,
-        GetAtomName,
-        GetGeometry,
-        GetProperty,
-        GetWindowAttributes,
-        MapState,
-        QueryPointer,
-        QueryTree,
-        WarpPointer,
-        Window,
-        ATOM_STRING,
-        ATOM_WM_NAME,
+        Drawable, GetAtomName, GetGeometry, GetProperty, GetWindowAttributes, MapState,
+        QueryPointer, QueryTree, WarpPointer, Window, ATOM_STRING, ATOM_WM_NAME,
     },
-    ConnError,
-    Connection,
-    ProtocolError,
-    Xid,
-    XidNew,
+    ConnError, Connection, ProtocolError, Xid, XidNew,
 };
+
+use crate::api::{self, *};
 
 struct X11MonitorInfo {
     name: String,
@@ -80,7 +67,7 @@ pub struct X11Api {
     monitors: Vec<X11MonitorInfo>,
 
     // Clipboard API
-    clipboard: Clipboard
+    clipboard: Clipboard,
 }
 
 unsafe impl Send for X11Api {}
@@ -118,7 +105,7 @@ impl NativeApiTemplate for X11Api {
             shmaddr,
             shmseg,
             monitors: Vec::new(),
-            clipboard: Clipboard::new()?
+            clipboard: Clipboard::new()?,
         })
     }
 
@@ -186,14 +173,14 @@ impl NativeApiTemplate for X11Api {
 
         let dpy = self.conn.get_raw_dpy();
 
-        for _ in 0 .. scroll.y.abs() {
+        for _ in 0..scroll.y.abs() {
             unsafe {
                 XTestFakeButtonEvent(dpy, vert_button, 1, 0);
                 XTestFakeButtonEvent(dpy, vert_button, 0, 0);
             }
         }
 
-        for _ in 0 .. scroll.x.abs() {
+        for _ in 0..scroll.x.abs() {
             unsafe {
                 XTestFakeButtonEvent(dpy, horiz_button, 1, 0);
                 XTestFakeButtonEvent(dpy, horiz_button, 0, 0);
@@ -216,14 +203,16 @@ impl NativeApiTemplate for X11Api {
         let target = match type_name {
             ClipboardType::Text => atoms.utf8_string,
             #[allow(unreachable_patterns)]
-            _ => return Err(Error::UnsupportedClipboardType(type_name))
+            _ => return Err(Error::UnsupportedClipboardType(type_name)),
         };
-        self.clipboard.load(
-            atoms.clipboard,
-            target,
-            atoms.property,
-            Duration::from_millis(50)
-        ).map_err(Into::into)
+        self.clipboard
+            .load(
+                atoms.clipboard,
+                target,
+                atoms.property,
+                Duration::from_millis(50),
+            )
+            .map_err(Into::into)
     }
 
     fn set_clipboard_content(
@@ -235,9 +224,11 @@ impl NativeApiTemplate for X11Api {
         let target = match type_name {
             ClipboardType::Text => atoms.utf8_string,
             #[allow(unreachable_patterns)]
-            _ => return Err(Error::UnsupportedClipboardType(type_name))
+            _ => return Err(Error::UnsupportedClipboardType(type_name)),
         };
-        self.clipboard.store(atoms.clipboard, target, content).map_err(Into::into)
+        self.clipboard
+            .store(atoms.clipboard, target, content)
+            .map_err(Into::into)
     }
 
     fn monitors(&mut self) -> Result<Vec<Monitor>, Self::Error> {
@@ -546,7 +537,7 @@ impl X11Api {
 
     #[inline]
     unsafe fn copy_rgb(mut src: *const u32, mut dst: *mut u8, len: usize) {
-        for _ in 0 .. len {
+        for _ in 0..len {
             let [b, g, r, _a] = (*src).to_le_bytes();
             *(dst as *mut [u8; 3]) = [r, g, b];
             src = src.add(1);
@@ -582,7 +573,7 @@ pub enum Error {
     #[error("clipboard error: {0}")]
     ClipboardError(#[from] X11ClipboardError),
     #[error("clipboard type {0:?} not supported")]
-    UnsupportedClipboardType(ClipboardType)
+    UnsupportedClipboardType(ClipboardType),
 }
 
 // TODO: get this sorted out

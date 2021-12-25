@@ -1,11 +1,12 @@
 use std::thread::sleep;
 use std::time::Duration;
+
 use cfg_if::cfg_if;
 use neon::prelude::*;
 
 use api::*;
 
-use crate::keymaps::keysym::{XK_a, XK_Shift_L};
+use crate::keymaps::keysym::{XK_Shift_L, XK_a};
 
 mod api;
 mod keymaps;
@@ -76,7 +77,11 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
         let handle = cx.argument::<JsBox<NativeApi>>(0)?;
         let start = Instant::now();
         handle
-            .set_pointer_position(MousePosition { x: 500, y: 500, monitor_id: 0 })
+            .set_pointer_position(MousePosition {
+                x: 500,
+                y: 500,
+                monitor_id: 0,
+            })
             .unwrap();
         let elapsed = start.elapsed();
         println!("Time elapsed: {:?}", elapsed);
@@ -98,7 +103,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
 
     cx.export_function("key_toggle", |mut cx| {
         let handle = cx.argument::<JsBox<RefCell<NativeApi>>>(0)?;
-        let start = Instant::now();//
+        let start = Instant::now(); //
         handle.borrow_mut().key_toggle(XK_Shift_L, true);
         handle.borrow_mut().key_toggle(XK_a, true);
         handle.borrow_mut().key_toggle(XK_a, false);
@@ -113,8 +118,12 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
     cx.export_function("set_pointer_position", |mut cx| {
         let handle = cx.argument::<JsBox<RefCell<NativeApi>>>(0)?;
         for i in 0..20 {
-            let start = Instant::now();//
-            handle.borrow_mut().set_pointer_position(MousePosition { x: 10 * i, y: 10 * i, monitor_id: 0 });
+            let start = Instant::now(); //
+            handle.borrow_mut().set_pointer_position(MousePosition {
+                x: 10 * i,
+                y: 10 * i,
+                monitor_id: 0,
+            });
             let elapsed = start.elapsed();
             println!("{:?}", elapsed);
             sleep(Duration::from_millis(500));
@@ -124,9 +133,11 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
 
     cx.export_function("toggle_mouse", |mut cx| {
         let handle = cx.argument::<JsBox<RefCell<NativeApi>>>(0)?;
-        for i in 0..20 {
-            let start = Instant::now();//
-            handle.borrow_mut().toggle_mouse(MouseButton::ScrollUp, false);
+        for _i in 0..20 {
+            let start = Instant::now(); //
+            handle
+                .borrow_mut()
+                .toggle_mouse(MouseButton::ScrollUp, false);
             let elapsed = start.elapsed();
             println!("{:?}", elapsed);
             sleep(Duration::from_millis(500));
@@ -137,7 +148,16 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
     cx.export_function("clipboard_content", |mut cx| {
         let handle = cx.argument::<JsBox<RefCell<NativeApi>>>(0)?;
         let start = Instant::now();
-        println!("{:?}", String::from_utf8(handle.borrow_mut().clipboard_content(ClipboardType::Text).unwrap()).unwrap());
+        println!(
+            "{:?}",
+            String::from_utf8(
+                handle
+                    .borrow_mut()
+                    .clipboard_content(ClipboardType::Text)
+                    .unwrap()
+            )
+            .unwrap()
+        );
         let elapsed = start.elapsed();
         println!("{:?}", elapsed);
         sleep(Duration::from_millis(500));
@@ -147,7 +167,10 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
     cx.export_function("set_clipboard_content", |mut cx| {
         let handle = cx.argument::<JsBox<RefCell<NativeApi>>>(0)?;
         let start = Instant::now();
-        handle.borrow_mut().set_clipboard_content(ClipboardType::Text, b"YELLOWSUBMARINE").unwrap();
+        handle
+            .borrow_mut()
+            .set_clipboard_content(ClipboardType::Text, b"YELLOWSUBMARINE")
+            .unwrap();
         let elapsed = start.elapsed();
         println!("{:?}", elapsed);
         sleep(Duration::from_millis(500));

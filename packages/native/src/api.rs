@@ -50,7 +50,7 @@ pub enum ClipboardType {
 impl Display for ClipboardType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let str = match self {
-            ClipboardType::Text => "ClipboardType::Text"
+            ClipboardType::Text => "ClipboardType::Text",
         };
         write!(f, "{}", str)
     }
