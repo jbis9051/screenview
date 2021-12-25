@@ -8,7 +8,7 @@ use std::ptr::{null, null_mut};
 use std::slice::from_raw_parts;
 use cocoa::appkit::{NSColorSpace, NSEvent, NSPasteboardTypeColor, NSScreen, NSPasteboard, NSPasteboardTypeString};
 use cocoa::base::{id, nil};
-use cocoa::foundation::{NSArray, NSData, NSString};
+use cocoa::foundation::{NSArray, NSData, NSString, NSUInteger};
 use core_foundation::base::{Boolean, FromVoid, TCFType, ToVoid};
 use core_foundation::string::{CFString, CFStringGetCStringPtr, CFStringRef, kCFStringEncodingUTF8};
 use core_graphics::display::{CFArray, CFArrayGetCount, CFArrayGetValueAtIndex, CFDictionary, CFDictionaryGetValueIfPresent, CFDictionaryRef, CGRect, kCGNullWindowID, kCGWindowListExcludeDesktopElements, kCGWindowListOptionOnScreenOnly};
@@ -26,7 +26,7 @@ use crate::api::*;
 use crate::keymaps::keycode_mac::KeyCodeMac;
 use crate::keymaps::keysym::*;
 use crate::keymaps::keysym_to_mac::*;
-use crate::mac::Error::ClipboardNotFound;
+use crate::mac::Error::{ClipboardNotFound, ClipboardSetError};
 
 pub struct MacApi {
     modifier_keys: CGEventFlags,
@@ -87,6 +87,19 @@ impl MacApi {
             }
         };
         return true;
+    }
+
+    fn set_clipboard_content_mac(
+        type_name: id,
+        content: &[u8],
+    ) -> Result<(), Error> {
+        let paste_board = unsafe { NSPasteboard::generalPasteboard(nil) };
+        unsafe { NSPasteboard::clearContents(paste_board) };
+        let data = unsafe { NSData::dataWithBytes_length_(nil, content.as_ptr() as *const c_void, content.len() as NSUInteger) };
+        if unsafe { NSPasteboard::setData_forType(paste_board, data, type_name) } {
+            return Ok(());
+        }
+        return Err(ClipboardSetError("Generic".to_string()));
     }
 }
 
@@ -169,7 +182,7 @@ impl NativeApiTemplate for MacApi {
                 if data == nil {
                     return Err(ClipboardNotFound(ClipboardType::Text.to_string()));
                 }
-                Ok(MacApi::nsdata_to_vec(data)) // TODO may be null terminated :(
+                Ok(Self::nsdata_to_vec(data)) // TODO may be null terminated :(
             }
         }
     }
@@ -180,7 +193,7 @@ impl NativeApiTemplate for MacApi {
         if data == nil {
             return Err(ClipboardNotFound(type_name.to_string()));
         }
-        Ok(MacApi::nsdata_to_vec(data))
+        Ok(Self::nsdata_to_vec(data))
     }
 
     fn set_clipboard_content(
@@ -188,7 +201,16 @@ impl NativeApiTemplate for MacApi {
         type_name: ClipboardType,
         content: &[u8],
     ) -> Result<(), Self::Error> {
-        unimplemented!()
+        let type_name = unsafe {
+            match type_name {
+                ClipboardType::Text => NSPasteboardTypeString,
+            }
+        };
+        MacApi::set_clipboard_content_mac(type_name, content)
+    }
+
+    fn set_clipboard_content_custom(&mut self, type_name: &str, content: &[u8]) -> Result<(), Self::Error> {
+        MacApi::set_clipboard_content_mac(unsafe { NSString::alloc(nil).init_str(type_name) } , content)
     }
 
     fn monitors(&mut self) -> Result<Vec<Monitor>, Self::Error> {
@@ -275,4 +297,6 @@ pub enum Error {
     CouldNotGetWindowArray,
     #[error("Could not get pasteboard data for key `{0}`")]
     ClipboardNotFound(String),
+    #[error("Could not set pasteboard data for key `{0}`")]
+    ClipboardSetError(String),
 }

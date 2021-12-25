@@ -1,8 +1,6 @@
 use std::collections::HashMap;
-
 use libc::c_uint;
 use once_cell::sync::Lazy;
-
 use crate::keymaps::keycode_mac::KeyCodeMac;
 use crate::keymaps::keycode_mac::KeyCodeMac::*;
 use crate::keymaps::keysym::*;

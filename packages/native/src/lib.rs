@@ -144,5 +144,15 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
         Ok(cx.undefined())
     })?;
 
+    cx.export_function("set_clipboard_content", |mut cx| {
+        let handle = cx.argument::<JsBox<RefCell<NativeApi>>>(0)?;
+        let start = Instant::now();
+        handle.borrow_mut().set_clipboard_content(ClipboardType::Text, b"YELLOWSUBMARINE").unwrap();
+        let elapsed = start.elapsed();
+        println!("{:?}", elapsed);
+        sleep(Duration::from_millis(500));
+        Ok(cx.undefined())
+    })?;
+
     Ok(())
 }
