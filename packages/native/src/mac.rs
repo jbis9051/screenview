@@ -1,24 +1,34 @@
+use std::{mem, ptr};
 use std::borrow::Borrow;
 use std::ffi::{CStr, CString};
 use std::ops::Deref;
-use std::ptr::null_mut;
+use std::ptr::{null, null_mut};
+
 use cocoa::appkit::*;
 use cocoa::base::{id, nil};
 use cocoa::foundation::{NSArray, NSString};
 use core_foundation::base::{Boolean, FromVoid, TCFType, ToVoid};
 use core_foundation::string::{CFString, CFStringGetCStringPtr, CFStringRef, kCFStringEncodingUTF8};
 use core_graphics::display::{CFArray, CFArrayGetCount, CFArrayGetValueAtIndex, CFDictionary, CFDictionaryGetValueIfPresent, CFDictionaryRef, CGRect, kCGNullWindowID, kCGWindowListExcludeDesktopElements, kCGWindowListOptionOnScreenOnly};
+use core_graphics::event::{CGEvent, CGEventFlags, CGEventRef, CGEventTapLocation, CGKeyCode};
+use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
 use core_graphics::window::{CGWindowListCopyWindowInfo, kCGWindowBounds, kCGWindowListOptionExcludeDesktopElements, kCGWindowName, kCGWindowOwnerName};
 use libc::c_void;
 use neon::prelude::Finalize;
 use neon::types::StringOverflow;
+
 use crate::api::*;
+use crate::keymaps::keycode_mac::KeyCodeMac;
+use crate::keymaps::keysym::*;
+use crate::keymaps::keysym_to_mac::*;
 
-pub struct MacosApi;
+pub struct MacApi {
+    modifier_keys: CGEventFlags,
+}
 
-impl Finalize for MacosApi {}
+impl Finalize for MacApi {}
 
-impl MacosApi {
+impl MacApi {
     fn cgstring_to_string(cf_ref: CFStringRef) -> Option<String> {
         let c_ptr = unsafe { CFStringGetCStringPtr(cf_ref, kCFStringEncodingUTF8) };
         if c_ptr.is_null() {
@@ -26,17 +36,60 @@ impl MacosApi {
         }
         Some(unsafe { CStr::from_ptr(c_ptr).to_str().unwrap().to_owned() })
     }
+
+    fn handle_modifier(&mut self, key_sym: Key, down: bool) -> bool {
+        match key_sym {
+            XK_Shift_L | XK_Shift_R => {
+                if down {
+                    self.modifier_keys |= CGEventFlags::CGEventFlagShift;
+                } else {
+                    self.modifier_keys &= !CGEventFlags::CGEventFlagShift;
+                }
+            }
+            XK_Control_L | XK_Control_R => {
+                if down {
+                    self.modifier_keys |= CGEventFlags::CGEventFlagControl;
+                } else {
+                    self.modifier_keys &= !CGEventFlags::CGEventFlagControl;
+                }
+            }
+            XK_Meta_L | XK_Meta_R => {
+                if down {
+                    self.modifier_keys |= CGEventFlags::CGEventFlagAlternate;
+                } else {
+                    self.modifier_keys &= !CGEventFlags::CGEventFlagAlternate;
+                }
+            }
+            XK_Alt_L | XK_Alt_R => {
+                if down {
+                    self.modifier_keys |= CGEventFlags::CGEventFlagCommand;
+                } else {
+                    self.modifier_keys &= !CGEventFlags::CGEventFlagCommand;
+                }
+            }
+            _ => {
+                return false;
+            }
+        };
+        return true;
+    }
 }
 
-impl NativeApiTemplate for MacosApi {
+impl NativeApiTemplate for MacApi {
     type Error = Error;
 
     fn new() -> Result<Self, Self::Error> {
-        Ok(Self {})
+        Ok(Self { modifier_keys: CGEventFlags::empty() })
     }
 
-    fn key_toggle(&self, key: Key, down: bool) {
-        unimplemented!()
+    fn key_toggle(&mut self, key: Key, down: bool) -> Result<(), Self::Error> {
+        self.handle_modifier(key, down);
+        let key_code = KEYSYM_MAC.get(&key).unwrap();
+        let source = CGEventSource::new(CGEventSourceStateID::CombinedSessionState).unwrap();
+        let key_event = CGEvent::new_keyboard_event(source, key_code.clone() as CGKeyCode, down).unwrap();
+        key_event.set_flags(self.modifier_keys);
+        key_event.post(CGEventTapLocation::Session);
+        Ok(())
     }
 
     fn pointer_position(&self) -> Result<MousePosition, Self::Error> {
@@ -119,7 +172,7 @@ impl NativeApiTemplate for MacosApi {
             if name.is_null() {
                 continue;
             }
-            let name = match MacosApi::cgstring_to_string(name as CFStringRef) {
+            let name = match MacApi::cgstring_to_string(name as CFStringRef) {
                 None => {
                     continue;
                 }

@@ -294,6 +294,7 @@ dependencies = [
  "image",
  "libc",
  "neon",
+ "once_cell",
  "thiserror",
  "x11",
  "x11-clipboard",
@@ -390,6 +391,12 @@ checksum = "915b1b472bc21c53464d6c8461c9d3af805ba1ef837e1cac254428f4a77177b1"
 dependencies = [
  "malloc_buf",
 ]
+
+[[package]]
+name = "once_cell"
+version = "1.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "da32515d9f6e6e489d7bc9d84c71b060db7247dc035bbe44eac88cf87486d8d5"
 
 [[package]]
 name = "pkg-config"

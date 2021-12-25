@@ -1,5 +1,6 @@
-use image::RgbImage;
 use std::error::Error;
+
+use image::RgbImage;
 
 #[derive(Debug)]
 pub struct Monitor {
@@ -58,7 +59,7 @@ pub(crate) trait NativeApiTemplate: Sized {
 
     fn new() -> Result<Self, Self::Error>;
 
-    fn key_toggle(&self, key: Key, down: bool);
+    fn key_toggle(&mut self, key: Key, down: bool) ->  Result<(), Self::Error>;
 
     fn pointer_position(&self) -> Result<MousePosition, Self::Error>;
 

@@ -1,9 +1,7 @@
-use crate::api::{self, *};
 use errno::{errno, Errno};
 use image::RgbImage;
-use libc::{c_int, c_void, shmat, shmctl, shmdt, shmget, size_t, IPC_CREAT, IPC_PRIVATE, IPC_RMID};
+use libc::{c_int, c_void, IPC_CREAT, IPC_PRIVATE, IPC_RMID, shmat, shmctl, shmdt, shmget, size_t};
 use neon::prelude::Finalize;
-use x11_clipboard::{Clipboard, error::Error as X11ClipboardError};
 use std::{
     error::Error as StdError,
     fmt::{self, Debug, Formatter},
@@ -14,10 +12,16 @@ use x11::{
     xlib::{XDefaultRootWindow, XKeysymToKeycode, XOpenDisplay, XSync},
     xtest::{XTestFakeButtonEvent, XTestFakeKeyEvent},
 };
+use x11_clipboard::{Clipboard, error::Error as X11ClipboardError};
 use xcb::{
+    Connection,
+    ConnError,
+    ProtocolError,
     randr::GetMonitors,
     shm::{Attach, Detach, GetImage, Seg},
     x::{
+        ATOM_STRING,
+        ATOM_WM_NAME,
         Drawable,
         GetAtomName,
         GetGeometry,
@@ -28,15 +32,12 @@ use xcb::{
         QueryTree,
         WarpPointer,
         Window,
-        ATOM_STRING,
-        ATOM_WM_NAME,
     },
-    ConnError,
-    Connection,
-    ProtocolError,
     Xid,
     XidNew,
 };
+
+use crate::api::{self, *};
 
 struct X11MonitorInfo {
     name: String,

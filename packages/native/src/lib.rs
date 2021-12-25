@@ -1,9 +1,12 @@
-mod api;
-
-use api::*;
 use cfg_if::cfg_if;
 use neon::prelude::*;
 
+use api::*;
+
+use crate::keymaps::keysym::{XK_a, XK_Shift_L};
+
+mod api;
+mod keymaps;
 cfg_if! {
     if #[cfg(target_os="linux")] {
         mod unix;
@@ -12,8 +15,8 @@ cfg_if! {
         mod windows;
         pub use windows::WindowsApi as NativeApi;
     } else if #[cfg(target_os="macos")] {
-        mod macos;
-        pub use macos::MacosApi as NativeApi;
+        mod mac;
+        pub use mac::MacApi as NativeApi;
     } else {
         compile_error!("Unknown target operating system");
     }
@@ -83,6 +86,20 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
         let start = Instant::now();
         let position = handle.borrow_mut().pointer_position().unwrap();
         println!("{:?}", position);
+        let elapsed = start.elapsed();
+        println!("{:?}", elapsed);
+        Ok(cx.undefined())
+    })?;
+
+    cx.export_function("key_toggle", |mut cx| {
+        let handle = cx.argument::<JsBox<RefCell<NativeApi>>>(0)?;
+        let start = Instant::now();//
+        handle.borrow_mut().key_toggle(XK_Shift_L, true);
+        handle.borrow_mut().key_toggle(XK_a, true);
+        handle.borrow_mut().key_toggle(XK_a, false);
+        handle.borrow_mut().key_toggle(XK_Shift_L, false);
+        handle.borrow_mut().key_toggle(XK_a, true);
+        handle.borrow_mut().key_toggle(XK_a, false);
         let elapsed = start.elapsed();
         println!("{:?}", elapsed);
         Ok(cx.undefined())
