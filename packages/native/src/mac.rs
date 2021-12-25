@@ -1,19 +1,24 @@
 use std::{mem, ptr};
 use std::borrow::Borrow;
+use std::convert::Infallible;
 use std::ffi::{CStr, CString};
 use std::ops::Deref;
+use std::os::raw::c_uchar;
 use std::ptr::{null, null_mut};
-
-use cocoa::appkit::*;
+use std::slice::from_raw_parts;
+use cocoa::appkit::{NSColorSpace, NSEvent, NSPasteboardTypeColor, NSScreen, NSPasteboard, NSPasteboardTypeString};
 use cocoa::base::{id, nil};
-use cocoa::foundation::{NSArray, NSString};
+use cocoa::foundation::{NSArray, NSData, NSString};
 use core_foundation::base::{Boolean, FromVoid, TCFType, ToVoid};
 use core_foundation::string::{CFString, CFStringGetCStringPtr, CFStringRef, kCFStringEncodingUTF8};
 use core_graphics::display::{CFArray, CFArrayGetCount, CFArrayGetValueAtIndex, CFDictionary, CFDictionaryGetValueIfPresent, CFDictionaryRef, CGRect, kCGNullWindowID, kCGWindowListExcludeDesktopElements, kCGWindowListOptionOnScreenOnly};
-use core_graphics::event::{CGEvent, CGEventFlags, CGEventRef, CGEventTapLocation, CGKeyCode};
+use core_graphics::event::{CGEvent, CGEventFlags, CGEventRef, CGEventTapLocation, CGEventType, CGKeyCode, CGMouseButton, ScrollEventUnit};
 use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
 use core_graphics::window::{CGWindowListCopyWindowInfo, kCGWindowBounds, kCGWindowListOptionExcludeDesktopElements, kCGWindowName, kCGWindowOwnerName};
-use libc::c_void;
+use core_graphics_types::base::CGFloat;
+use core_graphics_types::geometry::CGPoint;
+use libc::{c_char, c_uint, c_void};
+use neon::macro_internal::runtime::call::len;
 use neon::prelude::Finalize;
 use neon::types::StringOverflow;
 
@@ -21,6 +26,7 @@ use crate::api::*;
 use crate::keymaps::keycode_mac::KeyCodeMac;
 use crate::keymaps::keysym::*;
 use crate::keymaps::keysym_to_mac::*;
+use crate::mac::Error::ClipboardNotFound;
 
 pub struct MacApi {
     modifier_keys: CGEventFlags,
@@ -35,6 +41,15 @@ impl MacApi {
             return None;
         }
         Some(unsafe { CStr::from_ptr(c_ptr).to_str().unwrap().to_owned() })
+    }
+
+    fn nsdata_to_vec(data: id) -> Vec<u8> {
+        let length = unsafe { NSData::length(data) } as usize;
+        let ptr = unsafe { data.bytes() } as *const c_uchar;
+        if ptr.is_null() {
+            return Vec::new();
+        }
+        unsafe { from_raw_parts(ptr, length) }.to_vec()
     }
 
     fn handle_modifier(&mut self, key_sym: Key, down: bool) -> bool {
@@ -93,35 +108,79 @@ impl NativeApiTemplate for MacApi {
     }
 
     fn pointer_position(&self) -> Result<MousePosition, Self::Error> {
-        let point = unsafe {
-            NSEvent::mouseLocation(nil)
-        };
+        let source = CGEventSource::new(CGEventSourceStateID::CombinedSessionState).unwrap();
+        let event = CGEvent::new(source).unwrap();
+        let point = event.location();
         Ok(
             MousePosition {
                 x: point.x as u32,
                 y: point.y as u32,
                 monitor_id: 0,
-            })
+            }
+        )
     }
 
     fn set_pointer_position(&self, pos: MousePosition) -> Result<(), Self::Error> {
-        unimplemented!()
+        let source = CGEventSource::new(CGEventSourceStateID::CombinedSessionState).unwrap();
+        let event = CGEvent::new_mouse_event(source, CGEventType::MouseMoved, CGPoint::new(pos.x as CGFloat, pos.y as CGFloat), CGMouseButton::Left).unwrap();
+        event.post(CGEventTapLocation::Session);
+        Ok(())
     }
 
-    fn toggle_mouse(&self, button: MouseButton, down: bool) -> Result<(), Self::Error> {
-        unimplemented!()
-    }
-
-    fn scroll_mouse(&self, scroll: MouseScroll) -> Result<(), Self::Error> {
-        unimplemented!()
-    }
-
-    fn clipboard_types(&self) -> Result<Vec<ClipboardType>, Self::Error> {
-        unimplemented!()
+    fn toggle_mouse(&self, button: MouseButton, down: bool) -> Result<(), Self::Error> { // TODO can we get smooth scrolling?
+        let source = CGEventSource::new(CGEventSourceStateID::CombinedSessionState).unwrap();
+        match button {
+            MouseButton::ScrollUp | MouseButton::ScrollDown | MouseButton::ScrollLeft | MouseButton::ScrollRight => {
+                let scroll_speed = 4;
+                let scroll_event = match button {
+                    MouseButton::ScrollUp => CGEvent::new_scroll_event(source, ScrollEventUnit::PIXEL, 2, scroll_speed, 0, 0),
+                    MouseButton::ScrollDown => CGEvent::new_scroll_event(source, ScrollEventUnit::PIXEL, 2, -scroll_speed, 0, 0),
+                    MouseButton::ScrollLeft => CGEvent::new_scroll_event(source, ScrollEventUnit::PIXEL, 2, 0, -scroll_speed, 0),
+                    MouseButton::ScrollRight => CGEvent::new_scroll_event(source, ScrollEventUnit::PIXEL, 2, 0, scroll_speed, 0),
+                    _ => { Err(()) }
+                }.unwrap();
+                scroll_event.post(CGEventTapLocation::Session);
+            }
+            _ => {
+                let mouse_position = self.pointer_position()?;
+                let mouse_position = CGPoint::new(mouse_position.x as CGFloat, mouse_position.y as CGFloat);
+                let mouse_type = match button {
+                    MouseButton::Left => if down { CGEventType::LeftMouseDown } else { CGEventType::LeftMouseUp }
+                    MouseButton::Right => if down { CGEventType::RightMouseDown } else { CGEventType::RightMouseUp }
+                    _ => if down { CGEventType::OtherMouseDown } else { CGEventType::OtherMouseUp }
+                };
+                let moose_button = match button {
+                    MouseButton::Left => CGMouseButton::Left,
+                    MouseButton::Right => CGMouseButton::Right,
+                    _ => CGMouseButton::Center,
+                };
+                let event = CGEvent::new_mouse_event(source, mouse_type, mouse_position, moose_button).unwrap();
+                event.post(CGEventTapLocation::Session);
+            }
+        }
+        Ok(())
     }
 
     fn clipboard_content(&self, type_name: ClipboardType) -> Result<Vec<u8>, Self::Error> {
-        unimplemented!()
+        let paste_board = unsafe { NSPasteboard::generalPasteboard(nil) };
+        match type_name {
+            ClipboardType::Text => {
+                let data = unsafe { NSPasteboard::dataForType(paste_board, NSPasteboardTypeString) };
+                if data == nil {
+                    return Err(ClipboardNotFound(ClipboardType::Text.to_string()));
+                }
+                Ok(MacApi::nsdata_to_vec(data)) // TODO may be null terminated :(
+            }
+        }
+    }
+
+    fn clipboard_content_custom(&self, type_name: &str) -> Result<Vec<u8>, Self::Error> {
+        let paste_board = unsafe { NSPasteboard::generalPasteboard(nil) };
+        let data = unsafe { NSPasteboard::dataForType(paste_board, NSString::alloc(nil).init_str(type_name)) };
+        if data == nil {
+            return Err(ClipboardNotFound(type_name.to_string()));
+        }
+        Ok(MacApi::nsdata_to_vec(data))
     }
 
     fn set_clipboard_content(
@@ -204,15 +263,7 @@ impl NativeApiTemplate for MacApi {
         unimplemented!()
     }
 
-    fn update_display_frame(&self, display: &Monitor, cap: &mut Frame) -> Result<(), Self::Error> {
-        unimplemented!()
-    }
-
     fn capture_window_frame(&self, display: &Window) -> Result<Frame, Self::Error> {
-        unimplemented!()
-    }
-
-    fn update_window_frame(&self, window: &Window, cap: &mut Frame) -> Result<(), Self::Error> {
         unimplemented!()
     }
 }
@@ -222,4 +273,6 @@ impl NativeApiTemplate for MacApi {
 pub enum Error {
     #[error("Could not get Window Array")]
     CouldNotGetWindowArray,
+    #[error("Could not get pasteboard data for key `{0}`")]
+    ClipboardNotFound(String),
 }

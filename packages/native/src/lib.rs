@@ -1,3 +1,5 @@
+use std::thread::sleep;
+use std::time::Duration;
 use cfg_if::cfg_if;
 use neon::prelude::*;
 
@@ -81,13 +83,16 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
         Ok(cx.undefined())
     })?;
 
-    cx.export_function("mouse_pos", |mut cx| {
+    cx.export_function("pointer_position", |mut cx| {
         let handle = cx.argument::<JsBox<RefCell<NativeApi>>>(0)?;
-        let start = Instant::now();
-        let position = handle.borrow_mut().pointer_position().unwrap();
-        println!("{:?}", position);
-        let elapsed = start.elapsed();
-        println!("{:?}", elapsed);
+        loop {
+            let start = Instant::now();
+            let position = handle.borrow_mut().pointer_position().unwrap();
+            println!("{:?}", position);
+            let elapsed = start.elapsed();
+            println!("{:?}", elapsed);
+            sleep(Duration::from_millis(500));
+        }
         Ok(cx.undefined())
     })?;
 
@@ -102,6 +107,40 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
         handle.borrow_mut().key_toggle(XK_a, false);
         let elapsed = start.elapsed();
         println!("{:?}", elapsed);
+        Ok(cx.undefined())
+    })?;
+
+    cx.export_function("set_pointer_position", |mut cx| {
+        let handle = cx.argument::<JsBox<RefCell<NativeApi>>>(0)?;
+        for i in 0..20 {
+            let start = Instant::now();//
+            handle.borrow_mut().set_pointer_position(MousePosition { x: 10 * i, y: 10 * i, monitor_id: 0 });
+            let elapsed = start.elapsed();
+            println!("{:?}", elapsed);
+            sleep(Duration::from_millis(500));
+        }
+        Ok(cx.undefined())
+    })?;
+
+    cx.export_function("toggle_mouse", |mut cx| {
+        let handle = cx.argument::<JsBox<RefCell<NativeApi>>>(0)?;
+        for i in 0..20 {
+            let start = Instant::now();//
+            handle.borrow_mut().toggle_mouse(MouseButton::ScrollUp, false);
+            let elapsed = start.elapsed();
+            println!("{:?}", elapsed);
+            sleep(Duration::from_millis(500));
+        }
+        Ok(cx.undefined())
+    })?;
+
+    cx.export_function("clipboard_content", |mut cx| {
+        let handle = cx.argument::<JsBox<RefCell<NativeApi>>>(0)?;
+        let start = Instant::now();
+        println!("{:?}", String::from_utf8(handle.borrow_mut().clipboard_content(ClipboardType::Text).unwrap()).unwrap());
+        let elapsed = start.elapsed();
+        println!("{:?}", elapsed);
+        sleep(Duration::from_millis(500));
         Ok(cx.undefined())
     })?;
 
