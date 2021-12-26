@@ -182,7 +182,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
     cx.export_function("capture_window", |mut cx| {
         use image::ImageFormat;
         use std::time::Instant;
-        for i in 0..1 {
+        for i in 0..20 {
             let handle = cx.argument::<JsBox<RefCell<NativeApi>>>(0)?;
             let mut h = handle.borrow_mut();
             let w = h.windows().unwrap();
@@ -192,7 +192,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
             let img = h.capture_window_frame(chosen).unwrap();
             let elapsed = start.elapsed();
             println!("Time elapsed: {:?}", elapsed);
-            if i == 0 {
+            if i == 19 {
                 img.save_with_format("./cap_w.png", ImageFormat::Png).unwrap();
             }
         }

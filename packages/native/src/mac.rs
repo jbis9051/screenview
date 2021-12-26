@@ -3,6 +3,7 @@ use std::ops::Deref;
 use std::os::raw::c_uchar;
 use std::ptr;
 use std::slice::from_raw_parts;
+use std::str::Utf8Error;
 
 use cocoa::appkit::{NSColorSpace, NSPasteboard, NSPasteboardTypeString, NSScreen};
 use cocoa::base::{id, nil};
@@ -27,9 +28,10 @@ use libc::{c_void, intptr_t};
 use neon::prelude::Finalize;
 
 use crate::api::*;
+use crate::keymaps::keycode_mac::KeyCodeMac;
 use crate::keymaps::keysym::*;
 use crate::keymaps::keysym_to_mac::*;
-use crate::mac::Error::{CaptureDisplayError, ClipboardNotFound, ClipboardSetError};
+use crate::mac::Error::*;
 
 pub struct MacApi {
     modifier_keys: CGEventFlags,
@@ -43,7 +45,7 @@ impl MacApi {
         if c_ptr.is_null() {
             return None;
         }
-        Some(unsafe { CStr::from_ptr(c_ptr).to_str().unwrap().to_owned() })
+        Some(unsafe { CStr::from_ptr(c_ptr) }.to_str().ok()?.to_owned())
     }
 
     fn nsdata_to_vec(data: id) -> Vec<u8> {
@@ -148,17 +150,17 @@ impl NativeApiTemplate for MacApi {
 
     fn key_toggle(&mut self, key: Key, down: bool) -> Result<(), Self::Error> {
         self.handle_modifier(key, down);
-        let key_code = KEYSYM_MAC.get(&key).unwrap();
-        let source = CGEventSource::new(CGEventSourceStateID::CombinedSessionState).unwrap();
-        let key_event = CGEvent::new_keyboard_event(source, *key_code as CGKeyCode, down).unwrap();
+        let key_code = KEYSYM_MAC.get(&key).ok_or(Err(KeyNotFoundError(key)))?;
+        let source = CGEventSource::new(CGEventSourceStateID::CombinedSessionState).map_err(UnableToCreateCGSource)?;
+        let key_event = CGEvent::new_keyboard_event(source, *key_code as CGKeyCode, down).map_err(CGEventError)?;
         key_event.set_flags(self.modifier_keys);
         key_event.post(CGEventTapLocation::Session);
         Ok(())
     }
 
     fn pointer_position(&self) -> Result<MousePosition, Self::Error> {
-        let source = CGEventSource::new(CGEventSourceStateID::CombinedSessionState).unwrap();
-        let event = CGEvent::new(source).unwrap();
+        let source = CGEventSource::new(CGEventSourceStateID::CombinedSessionState).map_err(UnableToCreateCGSource)?;
+        let event = CGEvent::new(source).map_err(CGEventError)?;
         let point = event.location();
         Ok(MousePosition {
             x: point.x as u32,
@@ -168,21 +170,21 @@ impl NativeApiTemplate for MacApi {
     }
 
     fn set_pointer_position(&self, pos: MousePosition) -> Result<(), Self::Error> {
-        let source = CGEventSource::new(CGEventSourceStateID::CombinedSessionState).unwrap();
+        let source = CGEventSource::new(CGEventSourceStateID::CombinedSessionState).map_err(UnableToCreateCGSource)?;
         let event = CGEvent::new_mouse_event(
             source,
             CGEventType::MouseMoved,
             CGPoint::new(pos.x as CGFloat, pos.y as CGFloat),
             CGMouseButton::Left,
         )
-            .unwrap();
+            .map_err(CGEventError)?;
         event.post(CGEventTapLocation::Session);
         Ok(())
     }
 
     fn toggle_mouse(&self, button: MouseButton, down: bool) -> Result<(), Self::Error> {
         // TODO can we get smooth scrolling?
-        let source = CGEventSource::new(CGEventSourceStateID::CombinedSessionState).unwrap();
+        let source = CGEventSource::new(CGEventSourceStateID::CombinedSessionState).map_err(UnableToCreateCGSource)?;
         match button {
             MouseButton::ScrollUp
             | MouseButton::ScrollDown
@@ -224,7 +226,7 @@ impl NativeApiTemplate for MacApi {
                     ),
                     _ => Err(()),
                 }
-                    .unwrap();
+                    .map_err(CGEventError)?;
                 scroll_event.post(CGEventTapLocation::Session);
             }
             _ => {
@@ -261,7 +263,7 @@ impl NativeApiTemplate for MacApi {
                 };
                 let event =
                     CGEvent::new_mouse_event(source, mouse_type, mouse_position, moose_button)
-                        .unwrap();
+                        .map_err(CGEventError)?;
                 event.post(CGEventTapLocation::Session);
             }
         }
@@ -270,6 +272,9 @@ impl NativeApiTemplate for MacApi {
 
     fn clipboard_content(&self, type_name: ClipboardType) -> Result<Vec<u8>, Self::Error> {
         let paste_board = unsafe { NSPasteboard::generalPasteboard(nil) };
+        if paste_board == nil {
+            Err(NSPasteboardError);
+        }
         match type_name {
             ClipboardType::Text => {
                 let data =
@@ -284,6 +289,9 @@ impl NativeApiTemplate for MacApi {
 
     fn clipboard_content_custom(&self, type_name: &str) -> Result<Vec<u8>, Self::Error> {
         let paste_board = unsafe { NSPasteboard::generalPasteboard(nil) };
+        if paste_board == nil {
+            Err(NSPasteboardError);
+        }
         let data = unsafe {
             NSPasteboard::dataForType(paste_board, NSString::alloc(nil).init_str(type_name))
         };
@@ -333,7 +341,7 @@ impl NativeApiTemplate for MacApi {
             let name = unsafe {
                 CStr::from_ptr(NSString::UTF8String(nsscreen.localizedName()))
                     .to_str()
-                    .unwrap()
+                    .map_err(NSStringError)?
                     .to_owned()
             };
             monitors.push(Monitor {
@@ -428,18 +436,12 @@ impl NativeApiTemplate for MacApi {
 
     fn capture_display_frame(&self, display: &Monitor) -> Result<Frame, Self::Error> {
         let core_display = CGDisplay::new(display.id);
-        let frame = core_display.image().expect("bad image");
+        let frame = core_display.image().ok_or_else(|_| CaptureDisplayError(display.name.clone()))?;
         MacApi::cgimage_to_frame(&frame).map_err(|_| CaptureDisplayError(display.name.clone()))
     }
 
     fn capture_window_frame(&self, window: &Window) -> Result<Frame, Self::Error> {
-        //let image = match CGDisplay::screenshot(unsafe { CGRect::new(&CGPoint::new(CGFloat::from(400), CGFloat::from(400)), &CGSize::new(CGFloat::from(1), CGFloat::from(1))) }, kCGWindowListOptionIncludingWindow, window.id, kCGWindowImageBoundsIgnoreFraming) {
-        let image = match CGDisplay::screenshot(unsafe { CGRectNull }, kCGWindowListOptionIncludingWindow, window.id, kCGWindowImageBoundsIgnoreFraming) {
-            None => {
-                return Err(CaptureDisplayError(window.name.clone()));
-            }
-            Some(img) => { img }
-        };
+        let image = CGDisplay::screenshot(unsafe { CGRectNull }, kCGWindowListOptionIncludingWindow, window.id, kCGWindowImageBoundsIgnoreFraming).ok_or_else(|| Err(CaptureDisplayError(window.name.clone())))?;
         MacApi::cgimage_to_frame(&image).map_err(|_| CaptureDisplayError(window.name.clone()))
     }
 }
@@ -456,4 +458,14 @@ pub enum Error {
     CaptureDisplayError(String),
     #[error("Could not capture window: `{0}`")]
     CaptureWindowError(String),
+    #[error("Keymap not found for keysym `{0}`")]
+    KeyNotFoundError(u32),
+    #[error("Could not create CG Source")]
+    UnableToCreateCGSource,
+    #[error("Could not create or post CG event")]
+    CGEventError,
+    #[error("Error occurred with NSPasteboard API")]
+    NSPasteboardError,
+    #[error("Error occurred with NSString API")]
+    NSStringError,
 }
