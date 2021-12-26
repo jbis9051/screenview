@@ -59,18 +59,20 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
     cx.export_function("capture", |mut cx| {
         use image::ImageFormat;
         use std::time::Instant;
-
-        let handle = cx.argument::<JsBox<RefCell<NativeApi>>>(0)?;
-        let mut h = handle.borrow_mut();
-        let start = Instant::now();
-        let m = h.monitors().unwrap();
-        let img = h.capture_display_frame(&m[0]).unwrap();
-        let elapsed = start.elapsed();
-        println!("{}", elapsed.as_micros());
-
-        img.save_with_format("./cap.png", ImageFormat::Png).unwrap();
-
-        Ok(JsBox::new(&mut cx, JsCompat(RefCell::new(img))))
+        for i in 0..20 {
+            let handle = cx.argument::<JsBox<RefCell<NativeApi>>>(0)?;
+            let mut h = handle.borrow_mut();
+            let m = h.monitors().unwrap();
+            println!("{:?}", m);
+            let start = Instant::now();
+            let img = h.capture_display_frame(&m[0]).unwrap();
+            let elapsed = start.elapsed();
+            println!("Time elapsed: {:?}", elapsed);
+            if i == 19 {
+                img.save_with_format("./cap.png", ImageFormat::Png).unwrap();
+            }
+        }
+        Ok(cx.undefined())
     })?;
 
     cx.export_function("movemouse", |mut cx| {
@@ -174,6 +176,26 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
         let elapsed = start.elapsed();
         println!("{:?}", elapsed);
         sleep(Duration::from_millis(500));
+        Ok(cx.undefined())
+    })?;
+
+    cx.export_function("capture_window", |mut cx| {
+        use image::ImageFormat;
+        use std::time::Instant;
+        for i in 0..1 {
+            let handle = cx.argument::<JsBox<RefCell<NativeApi>>>(0)?;
+            let mut h = handle.borrow_mut();
+            let w = h.windows().unwrap();
+            let chosen = &w[5];
+            println!("{:?}", chosen);
+            let start = Instant::now();
+            let img = h.capture_window_frame(chosen).unwrap();
+            let elapsed = start.elapsed();
+            println!("Time elapsed: {:?}", elapsed);
+            if i == 0 {
+                img.save_with_format("./cap_w.png", ImageFormat::Png).unwrap();
+            }
+        }
         Ok(cx.undefined())
     })?;
 

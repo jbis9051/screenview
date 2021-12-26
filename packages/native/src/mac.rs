@@ -1,33 +1,35 @@
 use std::ffi::CStr;
 use std::ops::Deref;
 use std::os::raw::c_uchar;
+use std::ptr;
 use std::slice::from_raw_parts;
 
 use cocoa::appkit::{NSColorSpace, NSPasteboard, NSPasteboardTypeString, NSScreen};
 use cocoa::base::{id, nil};
-use cocoa::foundation::{NSArray, NSData, NSString, NSUInteger};
+use cocoa::foundation::{NSArray, NSData, NSDictionary, NSString, NSUInteger};
 use core_foundation::base::FromVoid;
+use core_foundation::number::{CFNumber, CFNumberGetValue, CFNumberRef, CFNumberType, kCFNumberIntType};
 use core_foundation::string::{kCFStringEncodingUTF8, CFStringGetCStringPtr, CFStringRef};
-use core_graphics::display::{
-    kCGNullWindowID, kCGWindowListExcludeDesktopElements, kCGWindowListOptionOnScreenOnly,
-    CFArrayGetCount, CFArrayGetValueAtIndex, CFDictionary, CFDictionaryGetValueIfPresent,
-    CFDictionaryRef, CGRect,
-};
+use core_graphics::display::{kCGNullWindowID, kCGWindowListExcludeDesktopElements, kCGWindowListOptionOnScreenOnly, CFArrayGetCount, CFArrayGetValueAtIndex, CFDictionary, CFDictionaryGetValueIfPresent, CFDictionaryRef, CGRect, CGDisplayCreateImage, CGDisplay, CGMainDisplayID, CGRectNull, kCGWindowListOptionIncludingWindow, kCGWindowImageBoundsIgnoreFraming};
 use core_graphics::event::{
     CGEvent, CGEventFlags, CGEventTapLocation, CGEventType, CGKeyCode, CGMouseButton,
     ScrollEventUnit,
 };
 use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
-use core_graphics::window::{kCGWindowBounds, kCGWindowName, CGWindowListCopyWindowInfo};
+use core_graphics::image::{CGImage, CGImageRef};
+use core_graphics::window::{kCGWindowBounds, kCGWindowName, CGWindowListCopyWindowInfo, kCGWindowNumber, CGWindowListCreateImage};
 use core_graphics_types::base::CGFloat;
-use core_graphics_types::geometry::CGPoint;
-use libc::c_void;
+use core_graphics_types::geometry::{CGPoint, CGSize};
+use image::DynamicImage::ImageRgba8;
+use image::{Bgra, DynamicImage, ImageBuffer, ImageFormat, Rgba, RgbaImage, RgbImage};
+use image::ImageFormat::{Bmp, Png};
+use libc::{c_void, intptr_t};
 use neon::prelude::Finalize;
 
 use crate::api::*;
 use crate::keymaps::keysym::*;
 use crate::keymaps::keysym_to_mac::*;
-use crate::mac::Error::{ClipboardNotFound, ClipboardSetError};
+use crate::mac::Error::{CaptureDisplayError, ClipboardNotFound, ClipboardSetError};
 
 pub struct MacApi {
     modifier_keys: CGEventFlags,
@@ -53,6 +55,7 @@ impl MacApi {
         unsafe { from_raw_parts(ptr, length) }.to_vec()
     }
 
+    #[allow(non_upper_case_globals)]
     fn handle_modifier(&mut self, key_sym: Key, down: bool) -> bool {
         match key_sym {
             XK_Shift_L | XK_Shift_R => {
@@ -105,6 +108,33 @@ impl MacApi {
         }
         Err(ClipboardSetError("Generic".to_string()))
     }
+
+    fn cgimage_to_frame(image: &CGImage) -> Result<Frame, ()> {
+        let bytes_per_pixel = (image.bits_per_pixel() / 8);
+        if bytes_per_pixel != 4 {
+            // TODO error
+        }
+        let data = image.data();
+        let rgba = data.bytes();
+        let rgb = vec![0u8; image.width() * image.height() * 3];
+        let mut rgba_ptr = rgba.as_ptr();
+        let mut rgb_ptr = rgb.as_ptr();
+        let num_pixels = image.width() * image.height();
+        let padding_per_row = image.bytes_per_row() - (image.width() * (image.bits_per_pixel() / 8));
+        let width = image.width();
+        unsafe {
+            for i in 0..num_pixels {
+                let [b, g, r] = *(rgba_ptr as *const [u8; 3]);
+                *(rgb_ptr as *mut [u8; 3]) = [r, g, b];
+                rgba_ptr = rgba_ptr.add(bytes_per_pixel);
+                if i > 0 && i % width == 0 {
+                    rgba_ptr = rgba_ptr.add(padding_per_row);
+                }
+                rgb_ptr = rgb_ptr.add(3);
+            }
+        }
+        Ok(RgbImage::from_vec(image.width() as u32, image.height() as u32, rgb).expect("couldn't convert"))
+    }
 }
 
 impl NativeApiTemplate for MacApi {
@@ -145,7 +175,7 @@ impl NativeApiTemplate for MacApi {
             CGPoint::new(pos.x as CGFloat, pos.y as CGFloat),
             CGMouseButton::Left,
         )
-        .unwrap();
+            .unwrap();
         event.post(CGEventTapLocation::Session);
         Ok(())
     }
@@ -194,7 +224,7 @@ impl NativeApiTemplate for MacApi {
                     ),
                     _ => Err(()),
                 }
-                .unwrap();
+                    .unwrap();
                 scroll_event.post(CGEventTapLocation::Session);
             }
             _ => {
@@ -294,6 +324,12 @@ impl NativeApiTemplate for MacApi {
         for i in 0..count {
             let nsscreen = unsafe { NSArray::objectAtIndex(display, i) };
             let nsrect = unsafe { NSScreen::frame(nsscreen) };
+            let nsdictionary = unsafe { NSScreen::deviceDescription(nsscreen) };
+            let nsnumber = unsafe { NSDictionary::objectForKey_(nsdictionary, NSString::alloc(nil).init_str("NSScreenNumber")) };
+            let mut number: u32 = 0u32;
+            if !unsafe { CFNumberGetValue(nsnumber as CFNumberRef, kCFNumberIntType, (&mut number) as *mut _ as *mut c_void) } {
+                continue;
+            };
             let name = unsafe {
                 CStr::from_ptr(NSString::UTF8String(nsscreen.localizedName()))
                     .to_str()
@@ -301,7 +337,7 @@ impl NativeApiTemplate for MacApi {
                     .to_owned()
             };
             monitors.push(Monitor {
-                id: i as u32,
+                id: number,
                 name,
                 width: nsrect.size.width as u32,
                 height: nsrect.size.height as u32,
@@ -327,11 +363,30 @@ impl NativeApiTemplate for MacApi {
             if window.is_null() {
                 continue;
             }
-            let name = unsafe {
-                let mut value: *const c_void = std::ptr::null();
-                CFDictionaryGetValueIfPresent(window, kCGWindowName as *mut c_void, &mut value);
-                value
+            let mut window_id: *const c_void = std::ptr::null();
+            if unsafe {
+                CFDictionaryGetValueIfPresent(
+                    window,
+                    kCGWindowNumber as *mut c_void,
+                    &mut window_id,
+                )
+            } == 0 {
+                continue;
+            }
+            if window_id.is_null() {
+                continue;
+            }
+            let window_id = unsafe {
+                let mut number: u32 = 0u32;
+                if !unsafe { CFNumberGetValue(window_id as CFNumberRef, kCFNumberIntType, (&mut number) as *mut _ as *mut c_void) } {
+                    continue;
+                };
+                number
             };
+            let mut name: *const c_void = std::ptr::null();
+            if unsafe { CFDictionaryGetValueIfPresent(window, kCGWindowName as *mut c_void, &mut name) } == 0 {
+                continue;
+            }
             if name.is_null() {
                 continue;
             }
@@ -342,13 +397,15 @@ impl NativeApiTemplate for MacApi {
                 Some(name) => name,
             };
             let mut window_bounds: *const c_void = std::ptr::null();
-            unsafe {
+            if unsafe {
                 CFDictionaryGetValueIfPresent(
                     window,
                     kCGWindowBounds as *mut c_void,
                     &mut window_bounds,
                 )
-            };
+            } == 0 {
+                continue;
+            }
             if window_bounds.is_null() {
                 continue;
             }
@@ -360,7 +417,7 @@ impl NativeApiTemplate for MacApi {
                 Some(rect) => rect,
             };
             windows.push(Window {
-                id: i as u32,
+                id: window_id,
                 name,
                 width: rect.size.width as u32,
                 height: rect.size.height as u32,
@@ -369,12 +426,21 @@ impl NativeApiTemplate for MacApi {
         Ok(windows)
     }
 
-    fn capture_display_frame(&self, _display: &Monitor) -> Result<Frame, Self::Error> {
-        unimplemented!()
+    fn capture_display_frame(&self, display: &Monitor) -> Result<Frame, Self::Error> {
+        let core_display = CGDisplay::new(display.id);
+        let frame = core_display.image().expect("bad image");
+        MacApi::cgimage_to_frame(&frame).map_err(|_| CaptureDisplayError(display.name.clone()))
     }
 
-    fn capture_window_frame(&self, _display: &Window) -> Result<Frame, Self::Error> {
-        unimplemented!()
+    fn capture_window_frame(&self, window: &Window) -> Result<Frame, Self::Error> {
+        //let image = match CGDisplay::screenshot(unsafe { CGRect::new(&CGPoint::new(CGFloat::from(400), CGFloat::from(400)), &CGSize::new(CGFloat::from(1), CGFloat::from(1))) }, kCGWindowListOptionIncludingWindow, window.id, kCGWindowImageBoundsIgnoreFraming) {
+        let image = match CGDisplay::screenshot(unsafe { CGRectNull }, kCGWindowListOptionIncludingWindow, window.id, kCGWindowImageBoundsIgnoreFraming) {
+            None => {
+                return Err(CaptureDisplayError(window.name.clone()));
+            }
+            Some(img) => { img }
+        };
+        MacApi::cgimage_to_frame(&image).map_err(|_| CaptureDisplayError(window.name.clone()))
     }
 }
 
@@ -386,4 +452,8 @@ pub enum Error {
     ClipboardNotFound(String),
     #[error("Could not set pasteboard data for key `{0}`")]
     ClipboardSetError(String),
+    #[error("Could not capture display: `{0}`")]
+    CaptureDisplayError(String),
+    #[error("Could not capture window: `{0}`")]
+    CaptureWindowError(String),
 }
