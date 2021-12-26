@@ -1,5 +1,7 @@
-use std::error::Error;
-use std::fmt::{Display, Formatter};
+use std::{
+    error::Error,
+    fmt::{Display, Formatter},
+};
 
 use image::RgbImage;
 
@@ -41,16 +43,17 @@ pub enum MouseButton {
 
 pub type Key = u32; // keysym
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub enum ClipboardType {
     Text,
-    // TODO other variants will be added later
+    Custom(String), // TODO other variants will be added later
 }
 
 impl Display for ClipboardType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let str = match self {
             ClipboardType::Text => "ClipboardType::Text",
+            ClipboardType::Custom(custom) => return write!(f, "ClipboardType::Custom({})", custom),
         };
         write!(f, "{}", str)
     }
@@ -71,19 +74,11 @@ pub(crate) trait NativeApiTemplate: Sized {
 
     fn toggle_mouse(&self, button: MouseButton, down: bool) -> Result<(), Self::Error>;
 
-    fn clipboard_content(&self, type_name: ClipboardType) -> Result<Vec<u8>, Self::Error>;
-
-    fn clipboard_content_custom(&self, type_name: &str) -> Result<Vec<u8>, Self::Error>;
+    fn clipboard_content(&self, type_name: &ClipboardType) -> Result<Vec<u8>, Self::Error>;
 
     fn set_clipboard_content(
         &mut self,
-        type_name: ClipboardType,
-        content: &[u8],
-    ) -> Result<(), Self::Error>;
-
-    fn set_clipboard_content_custom(
-        &mut self,
-        type_name: &str,
+        type_name: &ClipboardType,
         content: &[u8],
     ) -> Result<(), Self::Error>;
 

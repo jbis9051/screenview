@@ -3,9 +3,10 @@ use std::collections::HashMap;
 use libc::c_uint;
 use once_cell::sync::Lazy;
 
-use crate::keymaps::keycode_mac::KeyCodeMac;
-use crate::keymaps::keycode_mac::KeyCodeMac::*;
-use crate::keymaps::keysym::*;
+use crate::keymaps::{
+    keycode_mac::{KeyCodeMac, KeyCodeMac::*},
+    keysym::*,
+};
 
 pub static KEYSYM_MAC: Lazy<HashMap<c_uint, KeyCodeMac>> = Lazy::new(|| {
     let mut m = HashMap::new();

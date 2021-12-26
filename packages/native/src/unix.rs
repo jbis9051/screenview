@@ -5,7 +5,8 @@ use neon::prelude::Finalize;
 use std::{
     error::Error as StdError,
     fmt::{self, Debug, Formatter},
-    ptr, str,
+    ptr,
+    str,
     time::Duration,
 };
 use x11::{
@@ -17,10 +18,24 @@ use xcb::{
     randr::GetMonitors,
     shm::{Attach, Detach, GetImage, Seg},
     x::{
-        Drawable, GetAtomName, GetGeometry, GetProperty, GetWindowAttributes, MapState,
-        QueryPointer, QueryTree, WarpPointer, Window, ATOM_STRING, ATOM_WM_NAME,
+        Drawable,
+        GetAtomName,
+        GetGeometry,
+        GetProperty,
+        GetWindowAttributes,
+        MapState,
+        QueryPointer,
+        QueryTree,
+        WarpPointer,
+        Window,
+        ATOM_STRING,
+        ATOM_WM_NAME,
     },
-    ConnError, Connection, ProtocolError, Xid, XidNew,
+    ConnError,
+    Connection,
+    ProtocolError,
+    Xid,
+    XidNew,
 };
 
 use crate::api::{self, *};
@@ -58,7 +73,6 @@ pub struct X11Api {
     // Screen capture fields
     width: u16,
     height: u16,
-    depth: usize,
     shmid: c_int,
     shmaddr: *mut u32,
     shmseg: Seg,
@@ -100,7 +114,6 @@ impl NativeApiTemplate for X11Api {
             root,
             width,
             height,
-            depth,
             shmid,
             shmaddr,
             shmseg,
@@ -109,7 +122,7 @@ impl NativeApiTemplate for X11Api {
         })
     }
 
-    fn key_toggle(&self, keysym: u32, down: bool) {
+    fn key_toggle(&mut self, keysym: u32, down: bool) -> Result<(), Self::Error> {
         let dpy = self.conn.get_raw_dpy();
         let down = if down { 1 } else { 0 };
 
@@ -118,16 +131,31 @@ impl NativeApiTemplate for X11Api {
             XTestFakeKeyEvent(dpy, keycode as _, down, 0);
             XSync(dpy, 0);
         }
+
+        Ok(())
     }
 
     fn pointer_position(&self) -> Result<MousePosition, Self::Error> {
         let reply = self
             .conn
             .wait_for_reply(self.conn.send_request(&QueryPointer { window: self.root }))?;
+        let x = reply.root_x() as u32;
+        let y = reply.root_y() as u32;
+        let monitor_id = self
+            .monitors
+            .iter()
+            .position(|info| {
+                x >= info.x
+                    && y >= info.y
+                    && (x - info.x) < info.width
+                    && (y - info.y) < info.height
+            })
+            .unwrap_or(0) as u32;
 
         Ok(MousePosition {
             x: reply.root_x() as _,
             y: reply.root_y() as _,
+            monitor_id,
         })
     }
 
@@ -157,74 +185,33 @@ impl NativeApiTemplate for X11Api {
         Ok(())
     }
 
-    fn scroll_mouse(&self, scroll: MouseScroll) -> Result<(), Self::Error> {
-        let vert_button = if scroll.y > 0 {
-            MouseButton::ScrollUp
-        } else {
-            MouseButton::ScrollDown
-        }
-        .id();
-        let horiz_button = if scroll.x > 0 {
-            MouseButton::ScrollRight
-        } else {
-            MouseButton::ScrollLeft
-        }
-        .id();
-
-        let dpy = self.conn.get_raw_dpy();
-
-        for _ in 0..scroll.y.abs() {
-            unsafe {
-                XTestFakeButtonEvent(dpy, vert_button, 1, 0);
-                XTestFakeButtonEvent(dpy, vert_button, 0, 0);
-            }
-        }
-
-        for _ in 0..scroll.x.abs() {
-            unsafe {
-                XTestFakeButtonEvent(dpy, horiz_button, 1, 0);
-                XTestFakeButtonEvent(dpy, horiz_button, 0, 0);
-            }
-        }
-
-        unsafe {
-            XSync(dpy, 0);
-        }
-
-        Ok(())
-    }
-
-    fn clipboard_types(&self) -> Result<Vec<ClipboardType>, Self::Error> {
-        Ok(vec![ClipboardType::Text])
-    }
-
-    fn clipboard_content(&self, type_name: ClipboardType) -> Result<Vec<u8>, Self::Error> {
+    fn clipboard_content(&self, type_name: &ClipboardType) -> Result<Vec<u8>, Self::Error> {
         let atoms = &self.clipboard.setter.atoms;
         let target = match type_name {
             ClipboardType::Text => atoms.utf8_string,
             #[allow(unreachable_patterns)]
-            _ => return Err(Error::UnsupportedClipboardType(type_name)),
+            _ => return Err(Error::UnsupportedClipboardType(type_name.clone())),
         };
         self.clipboard
             .load(
                 atoms.clipboard,
                 target,
                 atoms.property,
-                Duration::from_millis(50),
+                Duration::from_secs(1),
             )
             .map_err(Into::into)
     }
 
     fn set_clipboard_content(
         &mut self,
-        type_name: ClipboardType,
+        type_name: &ClipboardType,
         content: &[u8],
     ) -> Result<(), Self::Error> {
         let atoms = &self.clipboard.setter.atoms;
         let target = match type_name {
             ClipboardType::Text => atoms.utf8_string,
             #[allow(unreachable_patterns)]
-            _ => return Err(Error::UnsupportedClipboardType(type_name)),
+            _ => return Err(Error::UnsupportedClipboardType(type_name.clone())),
         };
         self.clipboard
             .store(atoms.clipboard, target, content)
@@ -293,7 +280,7 @@ impl NativeApiTemplate for X11Api {
             None => return Err(Error::UnknownMonitor),
         };
 
-        self.capture(info.x, info.y, info.width, info.height)
+        self.capture(self.root, info.x, info.y, info.width, info.height)
     }
 
     fn update_display_frame(
@@ -306,19 +293,21 @@ impl NativeApiTemplate for X11Api {
             None => return Err(Error::UnknownMonitor),
         };
 
-        self.update_frame(info.x, info.y, info.width, info.height, frame)
+        self.update_frame(self.root, info.x, info.y, info.width, info.height, frame)
     }
 
     fn capture_window_frame(&self, window: &api::Window) -> Result<Frame, Self::Error> {
+        let x11_window = unsafe { Window::new(window.id) };
         let geometry = self
             .conn
             .wait_for_reply(self.conn.send_request(&GetGeometry {
-                drawable: Drawable::Window(unsafe { Window::new(window.id) }),
+                drawable: Drawable::Window(x11_window),
             }))?;
 
         self.capture(
-            geometry.x() as u32,
-            geometry.y() as u32,
+            x11_window,
+            0,
+            0,
             geometry.width() as u32,
             geometry.height() as u32,
         )
@@ -329,15 +318,17 @@ impl NativeApiTemplate for X11Api {
         window: &api::Window,
         frame: &mut Frame,
     ) -> Result<(), Self::Error> {
+        let x11_window = unsafe { Window::new(window.id) };
         let geometry = self
             .conn
             .wait_for_reply(self.conn.send_request(&GetGeometry {
-                drawable: Drawable::Window(unsafe { Window::new(window.id) }),
+                drawable: Drawable::Window(x11_window),
             }))?;
 
         self.update_frame(
-            geometry.x() as u32,
-            geometry.y() as u32,
+            x11_window,
+            0,
+            0,
             geometry.width() as u32,
             geometry.height() as u32,
             frame,
@@ -399,14 +390,21 @@ impl X11Api {
         Ok((shmid, shmaddr, shmseg))
     }
 
-    fn capture(&self, x: u32, y: u32, width: u32, height: u32) -> Result<Frame, Error> {
-        let offset = self.update_shm(x, y, width, height)?;
+    fn capture(
+        &self,
+        window: Window,
+        x: u32,
+        y: u32,
+        width: u32,
+        height: u32,
+    ) -> Result<Frame, Error> {
+        self.update_shm(window, x, y, width, height)?;
 
         let len = width as usize * height as usize;
         let mut buf: Vec<u8> = Vec::with_capacity(len * 3);
 
         unsafe {
-            Self::copy_rgb(self.shmaddr.add(offset), buf.as_mut_ptr(), len);
+            Self::copy_rgb(self.shmaddr, buf.as_mut_ptr(), len);
             buf.set_len(len * 3);
         }
 
@@ -415,6 +413,7 @@ impl X11Api {
 
     fn update_frame(
         &self,
+        window: Window,
         x: u32,
         y: u32,
         width: u32,
@@ -425,23 +424,29 @@ impl X11Api {
         let data = &mut **frame;
 
         if data.len() != len * 3 {
-            *frame = self.capture(x, y, width, height)?;
+            *frame = self.capture(window, x, y, width, height)?;
             return Ok(());
         }
 
-        let offset = self.update_shm(x, y, width, height)?;
+        self.update_shm(window, x, y, width, height)?;
 
         unsafe {
-            Self::copy_rgb(self.shmaddr.add(offset), data.as_mut_ptr(), len);
+            Self::copy_rgb(self.shmaddr, data.as_mut_ptr(), len);
         }
 
         Ok(())
     }
 
-    fn update_shm(&self, x: u32, y: u32, width: u32, height: u32) -> Result<usize, Error> {
-        let offset = (y * self.width as u32 + x) * self.depth as u32;
+    fn update_shm(
+        &self,
+        window: Window,
+        x: u32,
+        y: u32,
+        width: u32,
+        height: u32,
+    ) -> Result<(), Error> {
         let cookie = self.conn.send_request(&GetImage {
-            drawable: Drawable::Window(self.root),
+            drawable: Drawable::Window(window),
             x: x as _,
             y: y as _,
             width: width as _,
@@ -449,10 +454,10 @@ impl X11Api {
             plane_mask: u32::MAX, // All planes
             format: 2,            // ZPixmap
             shmseg: self.shmseg,
-            offset,
+            offset: 0,
         });
         let _reply = self.conn.wait_for_reply(cookie)?;
-        Ok(offset as usize)
+        Ok(())
     }
 
     #[inline]
@@ -537,7 +542,7 @@ impl X11Api {
 
     #[inline]
     unsafe fn copy_rgb(mut src: *const u32, mut dst: *mut u8, len: usize) {
-        for _ in 0..len {
+        for _ in 0 .. len {
             let [b, g, r, _a] = (*src).to_le_bytes();
             *(dst as *mut [u8; 3]) = [r, g, b];
             src = src.add(1);
