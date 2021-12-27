@@ -12,7 +12,7 @@ the message type.
 
 \begin{itemize}
     \item Peer - denotes a client in classical server/client environment
-    \item Server - The intermediary server used for routing and proxying data between
+    \item Server - The intermediary server used for routing and proxying data between two Peers
 \end{itemize}
 
 \subsection{Handshake}
@@ -309,7 +309,7 @@ to.
 
 \subsubsection{SessionEnd}
 
-A \emph{SessionEnd} message is used to terminate a session. Once a Server receives a SessionEnd message, the Server
+A SessionEnd message is used to terminate a session. Once a Server receives a SessionEnd message, the Server
 MUST immediately stop forwarding messages and send a SessionEndNotification to the other Peer. The Peer must ignore
 any SessionDataPacket message received after this.
 
@@ -384,15 +384,15 @@ session. The Server SHOULD forward the message along the same transport as it wa
 
 \subsection{Keepalive - TCP/UDP}
 
-For each transport (TCP and UDP), if no message has been sent in \emph{KeepaliveTimeout} a Server sends a keepalive
+For each transport (TCP and UDP), if no message has been sent in KeepaliveTimeout a Server sends a keepalive
 message over the respective transport. The Peer MUST respond with another Keepalive message.\\
 
-For TCP, if a \emph{KeepaliveTimeout} response is not received by the Server in
-double \emph{KeepaliveTimeout} seconds the TCP connection is considered dropped.\\
+For TCP, if a KeepaliveTimeout response is not received by the Server in
+double KeepaliveTimeout seconds the TCP connection is considered dropped.\\
 
-For UDP, if a \emph{KeepaliveTimeout} response is not received by the Server in
-half  \emph{KeepaliveTimeout} seconds another \emph{Keepalive} message is sent. If a response is not received in
-an additional half \emph{KeepaliveTimeout} seconds, the UDP connection is considered dropped.
+For UDP, if a KeepaliveTimeout response is not received by the Server in
+half  KeepaliveTimeout seconds another Keepalive message is sent. If a response is not received in
+an additional half KeepaliveTimeout seconds, the UDP connection is considered dropped.
 
 \begin{center}
     Server $\leftrightarrow$ Peer\\

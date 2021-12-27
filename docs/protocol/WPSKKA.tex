@@ -59,8 +59,8 @@ client.\\
     & (D_{client}^{pub},\, D_{client}^{priv}) := \text{DH-Generate()}\\
     & \text{srp-A} := \text{SRP-A()}\\
     & L_{client} = L_{host} := \text{SRP-PREMASTER()}\\
-    & \text{public-key} := D_{client}^{pub}
-    & \text{mac} := \text{HMAC}(\text{KDF}_1(D_{client}^{pub}, L_{client}))\\
+    & \text{public-key} := D_{client}^{pub}\\
+    & \text{mac} := \text{HMAC}(D_{client}^{pub}, \text{KDF}_1(L_{client}))\\
 \end{align*}
 
 \begin{center}
@@ -77,7 +77,7 @@ client.\\
 \end{center}
 
 \begin{align*}
-    & \text{mac} := \text{HMAC}(\text{KDF}_1(D_{host}^{pub}, L_{host}))\\
+    & \text{mac} := \text{HMAC}((D_{host}^{pub},\text{KDF}_1(L_{host}))\\
 \end{align*}
 
 \subsection{Transport Data Key Derivation}
@@ -116,7 +116,7 @@ client.\\
 \end{align*}
 
 
-Where \emph{P} is the payload to be transported.
+Where \emph{P} is the payload to be transported.\\
 
 $O_{m}$ is an 64 bit counter that MUST NOT wrap. After a transport message is sent, if $O_{m}$ equals
 ($2^{64}-1$) the TCP connection MUST be dropped. Subsequent messages MUST NOT be sent. \\
