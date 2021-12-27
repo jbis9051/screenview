@@ -90,10 +90,29 @@ pub struct KeyInput {
     pub key: u16, // keysym
 }
 
-// TODO Clipboard
+pub enum ClipboardType {
+    Text,
+    Rtf,
+    Html,
+    FilePointer,
+    Custom(String)
+}
 
 #[derive(MessageComponent)]
-#[message_id(10)]
+#[message_id(6)]
+pub struct ClipboardRequest {
+    clipboard_type: ClipboardType
+}
+
+#[derive(MessageComponent)]
+#[message_id(7)]
+pub struct ClipboardResponse {
+    clipboard_type: ClipboardType,
+    content: Option<Vec<u8>>
+}
+
+#[derive(MessageComponent)]
+#[message_id(8)]
 pub struct FrameData {
     pub frame_number: u32,
     pub display_id: u8,
