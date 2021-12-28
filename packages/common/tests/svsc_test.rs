@@ -103,6 +103,13 @@ fn test_establish_session_response_success() {
 }
 
 #[test]
+#[should_panic]
+fn test_establish_session_response_success_no_data() {
+    let bytes = include_bytes!("binary/svsc/establish_session_response_success_no_data.bin");
+    EstablishSessionResponse::read(&mut Cursor::new(bytes)).unwrap();
+}
+
+#[test]
 fn test_establish_session_response_error() {
     let bytes = include_bytes!("binary/svsc/establish_session_response_error.bin");
     let message: EstablishSessionResponse = EstablishSessionResponse::read(&mut Cursor::new(bytes)).unwrap();
