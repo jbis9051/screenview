@@ -70,7 +70,7 @@ fn gen_serialize_struct_field(field: &Field) -> TokenStream {
         }
         TypeInfo::Option { condition, .. } => {
             let field_ref = quote! { __value };
-            let condition = condition.gen_write_condition(&quote! { &self.#name });
+            let condition = condition.gen_write_condition(&quote! { self.#name });
 
             quote! {
                 #condition

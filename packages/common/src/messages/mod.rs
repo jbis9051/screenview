@@ -31,6 +31,8 @@ pub enum Error {
     InvalidEnumValue { name: &'static str, value: u16 },
     #[error("encountered a length parameter too long to fit in a usize")]
     LengthTooLong(#[from] TryFromIntError),
+    #[error("invalid date: {0}")]
+    InvalidDate(i64),
 }
 
 impl From<Infallible> for Error {

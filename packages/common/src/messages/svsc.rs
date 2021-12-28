@@ -1,13 +1,14 @@
 use super::Error;
 use super::MessageComponent;
-use byteorder::{ReadBytesExt, WriteBytesExt};
+use byteorder::{BigEndian, LittleEndian, ReadBytesExt, WriteBytesExt};
 use parser::{message_id, MessageComponent};
-use std::io::{self, Cursor};
+use std::io::{self, Cursor, Read};
+use chrono::{DateTime, LocalResult, TimeZone, Utc};
 
 #[derive(MessageComponent)]
 pub struct ProtocolVersion {
-    #[parse(fixed_len(11))]
-    pub version: String, // fixed 11 bytes
+    #[parse(fixed_len(12))]
+    pub version: String,
 }
 
 #[derive(MessageComponent)]
@@ -20,24 +21,37 @@ pub type Cookie = [u8; 24];
 #[derive(MessageComponent)]
 #[message_id(1)]
 pub struct LeaseRequest {
-    pub has_cookie: bool,
-    #[parse(condition = "has_cookie")]
+    #[parse(bool_prefixed)]
     pub cookie: Option<Cookie>,
 }
 
 #[derive(MessageComponent)]
 #[message_id(2)]
 pub struct LeaseResponse {
-    pub accepted: bool,
-    #[parse(condition = "accepted")]
+    #[parse(bool_prefixed)]
     pub response_data: Option<LeaseResponseData>,
 }
 
-pub type ExpirationTime = u64;
+pub type ExpirationTime = DateTime<Utc>;
+
+impl MessageComponent for  ExpirationTime {
+    fn read(cursor: &mut Cursor<&[u8]>) -> Result<Self, Error> {
+        let date = cursor.read_i64::<LittleEndian>()?;
+        match Utc.timestamp_opt(date, 0) {
+            LocalResult::Single(time) => Ok(time),
+            _ => Err(Error::InvalidDate(date)),
+        }
+    }
+
+    fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> io::Result<()> {
+        println!("{:?}",self.timestamp().to_ne_bytes());
+        cursor.write_i64::<LittleEndian>(self.timestamp())
+    }
+}
 
 #[derive(MessageComponent)]
 pub struct LeaseResponseData {
-    pub id: u16,
+    pub id: u32,
     pub cookie: Cookie,
     pub expiration: ExpirationTime,
 }
@@ -51,8 +65,7 @@ pub struct LeaseExtensionRequest {
 #[derive(MessageComponent)]
 #[message_id(4)]
 pub struct LeaseExtensionResponse {
-    pub extended: bool,
-    #[parse(condition = "extended")]
+    #[parse(bool_prefixed)]
     pub new_expiration: Option<ExpirationTime>,
 }
 
