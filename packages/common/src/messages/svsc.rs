@@ -44,7 +44,6 @@ impl MessageComponent for ExpirationTime {
     }
 
     fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> io::Result<()> {
-        println!("{:?}", self.timestamp().to_ne_bytes());
         cursor.write_i64::<LittleEndian>(self.timestamp())
     }
 }
@@ -77,7 +76,7 @@ pub struct EstablishSessionRequest {
     pub lease_id: LeaseId,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u8)]
 pub enum EstablishSessionStatus {
     Success = 0x00,
@@ -109,32 +108,30 @@ impl MessageComponent for EstablishSessionStatus {
     }
 }
 
+pub type SessionId = [u8; 16];
+pub type PeerId = [u8; 16];
+pub type PeerKey = [u8; 16];
+
+#[derive(MessageComponent)]
+pub struct SessionData {
+    pub session_id: SessionId,
+    pub peer_id: PeerId,
+    pub peer_key: PeerKey,
+}
+
 #[derive(MessageComponent)]
 #[message_id(6)]
 pub struct EstablishSessionResponse {
     pub lease_id: u32,
     pub status: EstablishSessionStatus,
     #[parse(condition = "status == EstablishSessionStatus::Success")]
-    pub response_data: Option<EstablishSessionResponseData>,
-}
-
-pub type SessionId = [u8; 16];
-pub type PeerId = [u8; 16];
-pub type PeerKey = [u8; 16];
-
-#[derive(MessageComponent)]
-pub struct EstablishSessionResponseData {
-    pub session_id: SessionId,
-    pub peer_id: PeerId,
-    pub peer_key: PeerKey,
+    pub response_data: Option<SessionData>,
 }
 
 #[derive(MessageComponent)]
 #[message_id(7)]
 pub struct EstablishSessionNotification {
-    pub session_id: SessionId,
-    pub peer_id: PeerId,
-    pub peer_key: PeerKey,
+    pub session_data: SessionData
 }
 
 #[derive(MessageComponent)]
