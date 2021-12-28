@@ -204,7 +204,7 @@ impl ArrayType {
         match self {
             Self::Vec(_) => {
                 quote! {
-                    for __ele in &#field_ref {
+                   for __ele in #field_ref.iter() {
                         crate::messages::MessageComponent::write(__ele, __cursor)?;
                     }
                 }
