@@ -3,27 +3,27 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{DeriveInput, Error, LitInt};
 
-pub fn gen_struct_impl(input: &DeriveInput, fields: &[Field]) -> TokenStream {
+pub fn gen_struct_impl(crate_common: &TokenStream, input: &DeriveInput, fields: &[Field]) -> TokenStream {
     let name = &input.ident;
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
-    let read = gen_struct_deserialize_impl(fields);
-    let write = gen_struct_serialize_impl(fields);
+    let read = gen_struct_deserialize_impl(crate_common, fields);
+    let write = gen_struct_serialize_impl(crate_common, fields);
 
     quote! {
-        impl #impl_generics crate::messages::MessageComponent for #name #ty_generics #where_clause {
-            fn read(__cursor: &mut ::std::io::Cursor<&[u8]>) -> Result<Self, crate::messages::Error> {
+        impl #impl_generics #crate_common::messages::MessageComponent for #name #ty_generics #where_clause {
+            fn read(__cursor: &mut ::std::io::Cursor<&[u8]>) -> Result<Self, #crate_common::messages::Error> {
                 #read
             }
 
-            fn write(&self, __cursor: &mut ::std::io::Cursor<::std::vec::Vec<u8>>) -> ::std::io::Result<()> {
+            fn write(&self, __cursor: &mut ::std::io::Cursor<::std::vec::Vec<u8>>) -> Result<(), #crate_common::messages::Error> {
                 #write
             }
         }
     }
 }
 
-fn gen_struct_serialize_impl(fields: &[Field]) -> TokenStream {
-    let serialize_fields = fields.iter().map(|field| gen_serialize_struct_field(field));
+fn gen_struct_serialize_impl(crate_common: &TokenStream, fields: &[Field]) -> TokenStream {
+    let serialize_fields = fields.iter().map(|field| gen_serialize_struct_field(crate_common, field));
 
     quote! {
         #( #serialize_fields )*
@@ -31,10 +31,10 @@ fn gen_struct_serialize_impl(fields: &[Field]) -> TokenStream {
     }
 }
 
-fn gen_struct_deserialize_impl(fields: &[Field]) -> TokenStream {
+fn gen_struct_deserialize_impl(crate_common: &TokenStream, fields: &[Field]) -> TokenStream {
     let deserialize_fields = fields
         .iter()
-        .map(|field| gen_deserialize_struct_field(field));
+        .map(|field| gen_deserialize_struct_field(crate_common, field));
     let field_names = fields.iter().map(|field| &field.ident);
 
     quote! {
@@ -45,7 +45,7 @@ fn gen_struct_deserialize_impl(fields: &[Field]) -> TokenStream {
     }
 }
 
-fn gen_serialize_struct_field(field: &Field) -> TokenStream {
+fn gen_serialize_struct_field(crate_common: &TokenStream, field: &Field) -> TokenStream {
     let name = &field.ident;
 
     match &field.type_info {
@@ -58,7 +58,7 @@ fn gen_serialize_struct_field(field: &Field) -> TokenStream {
             let field_ref = quote! { __value };
             let condition = condition.gen_write_condition(&quote! { self.#name });
             let length = length.gen_write_length(&field_ref);
-            let write = inner.gen_write_impl(&field_ref);
+            let write = inner.gen_write_impl(crate_common, &field_ref);
 
             quote! {
                 #condition
@@ -75,14 +75,14 @@ fn gen_serialize_struct_field(field: &Field) -> TokenStream {
             quote! {
                 #condition
                 if let ::core::option::Option::Some(#field_ref) = &self.#name {
-                    crate::messages::MessageComponent::write(#field_ref, __cursor)?;
+                    #crate_common::messages::MessageComponent::write(#field_ref, __cursor)?;
                 }
             }
         }
         TypeInfo::Array { length, inner, .. } => {
             let field_ref = quote! { self.#name };
             let length = length.gen_write_length(&field_ref);
-            let write = inner.gen_write_impl(&field_ref);
+            let write = inner.gen_write_impl(crate_common, &field_ref);
 
             quote! {
                 #length
@@ -91,13 +91,13 @@ fn gen_serialize_struct_field(field: &Field) -> TokenStream {
         }
         TypeInfo::Regular(_) => {
             quote! {
-                crate::messages::MessageComponent::write(&self.#name, __cursor)?;
+                #crate_common::messages::MessageComponent::write(&self.#name, __cursor)?;
             }
         }
     }
 }
 
-fn gen_deserialize_struct_field(field: &Field) -> TokenStream {
+fn gen_deserialize_struct_field(crate_common: &TokenStream, field: &Field) -> TokenStream {
     let name = &field.ident;
 
     match &field.type_info {
@@ -107,9 +107,9 @@ fn gen_deserialize_struct_field(field: &Field) -> TokenStream {
             outer,
             inner,
         } => {
-            let present = condition.gen_read_condition();
+            let present = condition.gen_read_condition(crate_common);
             let len = length.gen_read_length();
-            let read = inner.gen_read_impl();
+            let read = inner.gen_read_impl(crate_common);
 
             quote! {
                 let #name: #outer = if #present {
@@ -124,11 +124,11 @@ fn gen_deserialize_struct_field(field: &Field) -> TokenStream {
         TypeInfo::Option {
             condition, outer, ..
         } => {
-            let present = condition.gen_read_condition();
+            let present = condition.gen_read_condition(crate_common);
 
             quote! {
                 let #name: #outer = if #present {
-                    Some(crate::messages::MessageComponent::read(__cursor)?)
+                    Some(#crate_common::messages::MessageComponent::read(__cursor)?)
                 } else {
                     None
                 };
@@ -140,7 +140,7 @@ fn gen_deserialize_struct_field(field: &Field) -> TokenStream {
             inner,
         } => {
             let len = length.gen_read_length();
-            let read = inner.gen_read_impl();
+            let read = inner.gen_read_impl(crate_common);
 
             quote! {
                 let #name: #outer = {
@@ -152,7 +152,7 @@ fn gen_deserialize_struct_field(field: &Field) -> TokenStream {
         }
         TypeInfo::Regular(ty) => {
             quote! {
-                let #name: #ty = crate::messages::MessageComponent::read(__cursor)?;
+                let #name: #ty = #crate_common::messages::MessageComponent::read(__cursor)?;
             }
         }
     }
@@ -170,7 +170,7 @@ impl ArrayLength {
         match self {
             Self::Expr(expr) => quote! { let __len = #expr; },
             Self::Greedy(_) => {
-                quote! { let __len = __cursor.get_ref().len().saturating_sub(usize::from(__cursor.position())); }
+                quote! { let __len = __cursor.get_ref().len().saturating_sub(usize::try_from(__cursor.position())?); }
             }
             Self::Fixed(len) => quote! { let __len = #len; },
             Self::Prefixed(_, bytes) => {
@@ -186,26 +186,26 @@ impl Condition {
         match self {
             Self::Expr(_) => None,
             Self::Prefixed(_) => Some(quote! {
-                ::byteorder::WriteBytesExt::write_u8(__cursor, #field_ref.is_some() as u8)?;
+                ::byteorder::WriteBytesExt::write_u8(__cursor, u8::from(#field_ref.is_some()))?;
             }),
         }
     }
 
-    fn gen_read_condition(&self) -> TokenStream {
+    fn gen_read_condition(&self, crate_common: &TokenStream) -> TokenStream {
         match self {
             Self::Expr(expr) => quote! { #expr },
-            Self::Prefixed(_) => quote! { ::byteorder::ReadBytesExt::read_u8(__cursor)? == 1 },
+            Self::Prefixed(_) => quote! { <bool as #crate_common::messages::MessageComponent>::read(__cursor)? },
         }
     }
 }
 
 impl ArrayType {
-    fn gen_write_impl(&self, field_ref: &TokenStream) -> TokenStream {
+    fn gen_write_impl(&self, crate_common: &TokenStream, field_ref: &TokenStream) -> TokenStream {
         match self {
             Self::Vec(_) => {
                 quote! {
                    for __ele in #field_ref.iter() {
-                        crate::messages::MessageComponent::write(__ele, __cursor)?;
+                        #crate_common::messages::MessageComponent::write(__ele, __cursor)?;
                     }
                 }
             }
@@ -217,13 +217,13 @@ impl ArrayType {
         }
     }
 
-    fn gen_read_impl(&self) -> TokenStream {
+    fn gen_read_impl(&self, crate_common: &TokenStream) -> TokenStream {
         match self {
             Self::Vec(_) => {
                 quote! {
                     let mut __dest = Vec::with_capacity(__len);
                     for _ in 0..__len {
-                        __dest.push(crate::messages::MessageComponent::read(__cursor)?);
+                        __dest.push(#crate_common::messages::MessageComponent::read(__cursor)?);
                     }
                 }
             }
@@ -241,19 +241,19 @@ impl ArrayType {
 fn gen_int_write_fn(expr: &TokenStream, bytes: &LitInt) -> TokenStream {
     match bytes.base10_parse::<u8>() {
         Ok(1) => quote! {
-            ::byteorder::WriteBytesExt::write_u8(__cursor, (#expr) as u8)?;
+            ::byteorder::WriteBytesExt::write_u8(__cursor, u8::try_from(#expr)?)?;
         },
         Ok(2) => quote! {
-            ::byteorder::WriteBytesExt::write_u16::<::byteorder::LittleEndian>(__cursor, (#expr) as u16)?;
+            ::byteorder::WriteBytesExt::write_u16::<::byteorder::LittleEndian>(__cursor, u16::try_from(#expr)?)?;
         },
         Ok(3) => quote! {
-            ::byteorder::WriteBytesExt::write_u24::<::byteorder::LittleEndian>(__cursor, (#expr) as u32)?;
+            ::byteorder::WriteBytesExt::write_u24::<::byteorder::LittleEndian>(__cursor, u32::try_from(#expr)?)?;
         },
         Ok(4) => quote! {
-            ::byteorder::WriteBytesExt::write_u32::<::byteorder::LittleEndian>(__cursor, (#expr) as u32)?;
+            ::byteorder::WriteBytesExt::write_u32::<::byteorder::LittleEndian>(__cursor, u32::try_from(#expr)?)?;
         },
         Ok(8) => quote! {
-            ::byteorder::WriteBytesExt::write_u64::<::byteorder::LittleEndian>(__cursor, (#expr) as u64)?;
+            ::byteorder::WriteBytesExt::write_u64::<::byteorder::LittleEndian>(__cursor, u64::try_from(#expr)?)?;
         },
         Ok(_) => Error::new_spanned(bytes, "invalid integer byte size").to_compile_error(),
         Err(e) => Error::new_spanned(bytes, &format!("failed to parse integer byte size: {}", e))

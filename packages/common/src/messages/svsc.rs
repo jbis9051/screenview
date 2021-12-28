@@ -3,7 +3,7 @@ use super::MessageComponent;
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use chrono::{DateTime, LocalResult, TimeZone, Utc};
 use parser::{message_id, MessageComponent};
-use std::io::{self, Cursor};
+use std::io::Cursor;
 
 #[derive(MessageComponent)]
 pub struct ProtocolVersion {
@@ -43,8 +43,8 @@ impl MessageComponent for ExpirationTime {
         }
     }
 
-    fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> io::Result<()> {
-        cursor.write_i64::<LittleEndian>(self.timestamp())
+    fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> Result<(), Error> {
+        cursor.write_i64::<LittleEndian>(self.timestamp()).map_err(Into::into)
     }
 }
 
@@ -103,8 +103,8 @@ impl MessageComponent for EstablishSessionStatus {
         }
     }
 
-    fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> io::Result<()> {
-        cursor.write_u8(*self as u8)
+    fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> Result<(), Error> {
+        cursor.write_u8(*self as u8).map_err(Into::into)
     }
 }
 

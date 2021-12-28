@@ -1,10 +1,12 @@
 extern crate proc_macro;
 
+use proc_macro2::{TokenStream, Span};
 use quote::quote;
 use syn::{
     parse_macro_input, Data, DeriveInput, Error, GenericArgument, LitInt, PathArguments, Result,
-    Type,
+    Type, Ident
 };
+use proc_macro_crate::{crate_name, FoundCrate};
 
 mod gen;
 mod parse;
@@ -12,13 +14,15 @@ mod parse;
 #[proc_macro_derive(MessageComponent, attributes(parse))]
 pub fn derive_message_component(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(item as DeriveInput);
+    let crate_common = common();
+
     match &input.data {
         Data::Struct(data_struct) => {
             let fields = match parse::parse_fields(data_struct) {
                 Ok(fields) => fields,
                 Err(e) => return e.into_compile_error().into(),
             };
-            gen::gen_struct_impl(&input, &fields).into()
+            gen::gen_struct_impl(&crate_common, &input, &fields).into()
         }
         _ => Error::new_spanned(&input, "ADT not supported")
             .into_compile_error()
@@ -43,11 +47,12 @@ pub fn message_id(
     let input = parse_macro_input!(item as DeriveInput);
     let name = &input.ident;
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+    let crate_common = common();
 
     (quote! {
         #input
 
-        impl #impl_generics crate::messages::MessageID for #name #ty_generics #where_clause {
+        impl #impl_generics #crate_common::messages::MessageID for #name #ty_generics #where_clause {
             const ID: u8 = #id;
         }
     })
@@ -83,5 +88,16 @@ pub(crate) fn extract_type_from_container(ty: &Type) -> Result<Type> {
             }
         }
         ty => Err(Error::new_spanned(ty, "Expected path type")),
+    }
+}
+
+pub(crate) fn common() -> TokenStream {
+    match crate_name("common") {
+        Ok(FoundCrate::Itself) => quote! { crate },
+        Ok(FoundCrate::Name(name)) => {
+            let name = Ident::new(&name, Span::call_site());
+            quote! { ::#name }
+        }
+        Err(e) => Error::new(Span::call_site(), format!("{}", e)).to_compile_error(),
     }
 }

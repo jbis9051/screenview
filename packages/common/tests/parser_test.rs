@@ -1,4 +1,5 @@
 use std::io::Cursor;
+use common::messages::MessageComponent;
 use parser::{MessageComponent};
 
 

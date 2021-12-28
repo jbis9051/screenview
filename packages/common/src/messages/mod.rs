@@ -18,7 +18,7 @@ pub trait MessageID {
 pub trait MessageComponent: Sized {
     fn read(cursor: &mut Cursor<&[u8]>) -> Result<Self, Error>;
 
-    fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> io::Result<()>;
+    fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> Result<(), Error>;
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -33,6 +33,8 @@ pub enum Error {
     LengthTooLong(#[from] TryFromIntError),
     #[error("invalid date: {0}")]
     InvalidDate(i64),
+    #[error("encountered bad boolean with value {0}")]
+    BadBool(u8)
 }
 
 impl From<Infallible> for Error {
@@ -43,11 +45,15 @@ impl From<Infallible> for Error {
 
 impl MessageComponent for bool {
     fn read(cursor: &mut Cursor<&[u8]>) -> Result<Self, Error> {
-        Ok(cursor.read_u8()? == 1)
+        match cursor.read_u8()? {
+            0 => Ok(false),
+            1 => Ok(true),
+            by => Err(Error::BadBool(by))
+        }
     }
 
-    fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> io::Result<()> {
-        cursor.write_u8(*self as u8)
+    fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> Result<(), Error> {
+        cursor.write_u8(*self as u8).map_err(Into::into)
     }
 }
 
@@ -56,8 +62,8 @@ impl MessageComponent for u8 {
         cursor.read_u8().map_err(Into::into)
     }
 
-    fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> io::Result<()> {
-        cursor.write_u8(*self)
+    fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> Result<(), Error> {
+        cursor.write_u8(*self).map_err(Into::into)
     }
 }
 
@@ -66,8 +72,8 @@ impl MessageComponent for u16 {
         cursor.read_u16::<LittleEndian>().map_err(Into::into)
     }
 
-    fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> io::Result<()> {
-        cursor.write_u16::<LittleEndian>(*self)
+    fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> Result<(), Error> {
+        cursor.write_u16::<LittleEndian>(*self).map_err(Into::into)
     }
 }
 
@@ -78,8 +84,8 @@ impl<const N: usize> MessageComponent for [u8; N] {
         Ok(dest)
     }
 
-    fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> io::Result<()> {
-        cursor.write_all(self.as_slice())
+    fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> Result<(), Error> {
+        cursor.write_all(self.as_slice()).map_err(Into::into)
     }
 }
 
@@ -88,8 +94,8 @@ impl MessageComponent for u32 {
         cursor.read_u32::<LittleEndian>().map_err(Into::into)
     }
 
-    fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> io::Result<()> {
-        cursor.write_u32::<LittleEndian>(*self)
+    fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> Result<(), Error> {
+        cursor.write_u32::<LittleEndian>(*self).map_err(Into::into)
     }
 }
 
@@ -98,7 +104,7 @@ impl MessageComponent for u64 {
         cursor.read_u64::<LittleEndian>().map_err(Into::into)
     }
 
-    fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> io::Result<()> {
-        cursor.write_u64::<LittleEndian>(*self)
+    fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> Result<(), Error> {
+        cursor.write_u64::<LittleEndian>(*self).map_err(Into::into)
     }
 }

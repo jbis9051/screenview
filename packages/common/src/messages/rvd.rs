@@ -54,8 +54,8 @@ impl MessageComponent for AccessMask {
             .map_err(Into::into)
     }
 
-    fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> io::Result<()> {
-        cursor.write_u8(self.bits)
+    fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> Result<(), Error> {
+        cursor.write_u8(self.bits).map_err(Into::into)
     }
 }
 
@@ -160,10 +160,10 @@ impl MessageComponent for ClipboarMetaInter {
         })
     }
 
-    fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> io::Result<()> {
+    fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> Result<(), Error> {
         if self.custom_name.is_some() != self.clipboard_type.contains(ClipboardTypeMask::CUSTOM) {
             // enforce precondition
-            return Err(io::Error::from(io::ErrorKind::InvalidData));
+            return Err(io::Error::from(io::ErrorKind::InvalidData).into());
         }
         cursor.write_u8(self.clipboard_type.bits)?;
         if let Some(name) = &self.custom_name {
@@ -233,7 +233,7 @@ impl MessageComponent for ClipboardMeta {
         ClipboarMetaInter::read(cursor)?.try_into()
     }
 
-    fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> io::Result<()> {
+    fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> Result<(), Error> {
         let inter: ClipboarMetaInter = self.into();
         inter.write(cursor)
     }
