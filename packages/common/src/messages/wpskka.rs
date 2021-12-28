@@ -13,7 +13,6 @@ pub struct HostHello {
 #[derive(MessageComponent)]
 #[message_id(2)]
 pub struct ClientHello {
-    pub username: [u8; 16],
     pub a_pub: [u8; 256],
     pub public_key: [u8; 16],
     pub mac: [u8; 32],
