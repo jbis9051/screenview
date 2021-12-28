@@ -1,9 +1,9 @@
 use super::Error;
 use super::MessageComponent;
-use byteorder::{BigEndian, LittleEndian, ReadBytesExt, WriteBytesExt};
-use parser::{message_id, MessageComponent};
-use std::io::{self, Cursor, Read};
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use chrono::{DateTime, LocalResult, TimeZone, Utc};
+use parser::{message_id, MessageComponent};
+use std::io::{self, Cursor};
 
 #[derive(MessageComponent)]
 pub struct ProtocolVersion {
@@ -34,7 +34,7 @@ pub struct LeaseResponse {
 
 pub type ExpirationTime = DateTime<Utc>;
 
-impl MessageComponent for  ExpirationTime {
+impl MessageComponent for ExpirationTime {
     fn read(cursor: &mut Cursor<&[u8]>) -> Result<Self, Error> {
         let date = cursor.read_i64::<LittleEndian>()?;
         match Utc.timestamp_opt(date, 0) {
@@ -44,7 +44,7 @@ impl MessageComponent for  ExpirationTime {
     }
 
     fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> io::Result<()> {
-        println!("{:?}",self.timestamp().to_ne_bytes());
+        println!("{:?}", self.timestamp().to_ne_bytes());
         cursor.write_i64::<LittleEndian>(self.timestamp())
     }
 }

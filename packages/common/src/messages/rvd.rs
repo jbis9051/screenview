@@ -1,10 +1,10 @@
 use super::{Error, MessageComponent};
+use crate::messages::Error::{InvalidEnumValue, InvalidString, StdIo};
 use bitflags::bitflags;
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use parser::{message_id, MessageComponent};
 use std::io::{self, Cursor, Read, Write};
 use std::ops::BitAnd;
-use crate::messages::Error::{InvalidEnumValue, InvalidString, StdIo};
 
 #[derive(MessageComponent)]
 pub struct ProtocolVersion {
@@ -116,9 +116,7 @@ impl TryFrom<u8> for ClipboardType {
             2 => Ok(Self::Rtf),
             3 => Ok(Self::Html),
             4 => Ok(Self::FilePointer),
-            _ => {
-                Err(())
-            }
+            _ => Err(()),
         }
     }
 }
@@ -130,7 +128,7 @@ impl From<&ClipboardType> for u8 {
             ClipboardType::Text => 1,
             ClipboardType::Rtf => 2,
             ClipboardType::Html => 3,
-            ClipboardType::FilePointer => 4
+            ClipboardType::FilePointer => 4,
         }
     }
 }
@@ -142,7 +140,10 @@ struct ClipboarMetaInter {
 
 impl MessageComponent for ClipboarMetaInter {
     fn read(cursor: &mut Cursor<&[u8]>) -> Result<Self, Error> {
-        let clipboard_type = cursor.read_u8().map(|u| unsafe { ClipboardTypeMask::from_bits_unchecked(u) }).unwrap();
+        let clipboard_type = cursor
+            .read_u8()
+            .map(|u| unsafe { ClipboardTypeMask::from_bits_unchecked(u) })
+            .unwrap();
         if clipboard_type.contains(ClipboardTypeMask::CUSTOM) {
             let length = cursor.read_u8().unwrap();
             let mut name = vec![0u8; length as usize];
@@ -160,12 +161,16 @@ impl MessageComponent for ClipboarMetaInter {
     }
 
     fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> io::Result<()> {
-        if self.custom_name.is_some() != self.clipboard_type.contains(ClipboardTypeMask::CUSTOM) { // enforce precondition
+        if self.custom_name.is_some() != self.clipboard_type.contains(ClipboardTypeMask::CUSTOM) {
+            // enforce precondition
             return Err(io::Error::from(io::ErrorKind::InvalidData));
         }
         cursor.write_u8(self.clipboard_type.bits)?;
         if let Some(name) = &self.custom_name {
-            let length: u8 = name.len().try_into().map_err(|_| io::Error::from(io::ErrorKind::InvalidData))?;
+            let length: u8 = name
+                .len()
+                .try_into()
+                .map_err(|_| io::Error::from(io::ErrorKind::InvalidData))?;
             cursor.write_u8(length)?;
             cursor.write_all(name.as_bytes())?;
         }
@@ -175,18 +180,19 @@ impl MessageComponent for ClipboarMetaInter {
 
 impl From<&ClipboardMeta> for ClipboarMetaInter {
     fn from(data: &ClipboardMeta) -> Self {
-        let mut mask =  unsafe { ClipboardTypeMask::from_bits_unchecked( (&data.clipboard_type).into()) };
+        let mut mask =
+            unsafe { ClipboardTypeMask::from_bits_unchecked((&data.clipboard_type).into()) };
         mask.set(ClipboardTypeMask::CONTENT, data.content_request);
         let name = match &data.clipboard_type {
             ClipboardType::Custom(name) => {
                 mask.set(ClipboardTypeMask::CUSTOM, true);
                 Some(name.clone())
-            },
-            _ => None
+            }
+            _ => None,
         };
         Self {
             clipboard_type: mask,
-            custom_name: name
+            custom_name: name,
         }
     }
 }
@@ -207,9 +213,14 @@ impl TryFrom<ClipboarMetaInter> for ClipboardMeta {
                 content_request,
             },
             None => {
-                let clipboard_type = data.clipboard_type.bitand(!ClipboardTypeMask::CUSTOM).bitand(!ClipboardTypeMask::CONTENT).bits;
+                let clipboard_type = data
+                    .clipboard_type
+                    .bitand(!ClipboardTypeMask::CUSTOM)
+                    .bitand(!ClipboardTypeMask::CONTENT)
+                    .bits;
                 Self {
-                    clipboard_type: ClipboardType::try_from(clipboard_type).map_err(|_| InvalidEnumValue { name: "", value: 0 })?,
+                    clipboard_type: ClipboardType::try_from(clipboard_type)
+                        .map_err(|_| InvalidEnumValue { name: "", value: 0 })?,
                     content_request,
                 }
             }
@@ -231,9 +242,8 @@ impl MessageComponent for ClipboardMeta {
 #[derive(MessageComponent)]
 #[message_id(6)]
 pub struct ClipboardRequest {
-    info: ClipboardMeta
+    info: ClipboardMeta,
 }
-
 
 #[derive(MessageComponent)]
 #[message_id(7)]
