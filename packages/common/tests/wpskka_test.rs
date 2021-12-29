@@ -1,9 +1,8 @@
 mod helper;
+use crate::helper::test_write;
 use common::messages::wpskka::*;
 use common::messages::MessageComponent;
 use std::io::Cursor;
-use crate::helper::test_write;
-
 
 #[test]
 fn test_host_hello() {
@@ -37,7 +36,8 @@ fn test_host_verify() {
 #[test]
 fn test_transport_data() {
     let bytes = include_bytes!("binary/wpskka/transport_data.bin");
-    let message: TransportDataMessage = TransportDataMessage::read(&mut Cursor::new(bytes)).unwrap();
+    let message: TransportDataMessage =
+        TransportDataMessage::read(&mut Cursor::new(bytes)).unwrap();
     assert_eq!(&message.counter, b"COUNTERC");
     assert_eq!(&message.data, b"YELLOW SUBMARINE");
     test_write(&message, bytes);

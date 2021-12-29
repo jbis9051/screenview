@@ -5,8 +5,7 @@ use parser::{message_id, MessageComponent};
 pub struct HostHello {
     pub username: [u8; 16],
     pub salt: [u8; 16],
-    #[parse(fixed_len(256))]
-    pub b_pub: Vec<u8>,
+    pub b_pub: [u8; 256],
     pub public_key: [u8; 16],
 }
 

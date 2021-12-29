@@ -44,7 +44,9 @@ impl MessageComponent for ExpirationTime {
     }
 
     fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> Result<(), Error> {
-        cursor.write_i64::<LittleEndian>(self.timestamp()).map_err(Into::into)
+        cursor
+            .write_i64::<LittleEndian>(self.timestamp())
+            .map_err(Into::into)
     }
 }
 
@@ -98,7 +100,7 @@ impl MessageComponent for EstablishSessionStatus {
             5 => Ok(Self::OtherError),
             n => Err(Error::InvalidEnumValue {
                 name: "EstablishSessionStatus",
-                value: n as _,
+                value: u16::from(n),
             }),
         }
     }
@@ -131,7 +133,7 @@ pub struct EstablishSessionResponse {
 #[derive(MessageComponent)]
 #[message_id(7)]
 pub struct EstablishSessionNotification {
-    pub session_data: SessionData
+    pub session_data: SessionData,
 }
 
 #[derive(MessageComponent)]

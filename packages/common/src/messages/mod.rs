@@ -34,7 +34,7 @@ pub enum Error {
     #[error("invalid date: {0}")]
     InvalidDate(i64),
     #[error("encountered bad boolean with value {0}")]
-    BadBool(u8)
+    BadBool(u8),
 }
 
 impl From<Infallible> for Error {
@@ -48,7 +48,7 @@ impl MessageComponent for bool {
         match cursor.read_u8()? {
             0 => Ok(false),
             1 => Ok(true),
-            by => Err(Error::BadBool(by))
+            by => Err(Error::BadBool(by)),
         }
     }
 
@@ -108,3 +108,22 @@ impl MessageComponent for u64 {
         cursor.write_u64::<LittleEndian>(*self).map_err(Into::into)
     }
 }
+
+macro_rules! impl_bitflags_message_component {
+    ($name:ident) => {
+        impl MessageComponent for $name {
+            fn read(cursor: &mut Cursor<&[u8]>) -> Result<Self, Error> {
+                cursor
+                    .read_u8()
+                    .map(Self::from_bits_truncate)
+                    .map_err(Into::into)
+            }
+
+            fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> Result<(), Error> {
+                cursor.write_u8(self.bits()).map_err(Into::into)
+            }
+        }
+    };
+}
+
+pub(crate) use impl_bitflags_message_component;

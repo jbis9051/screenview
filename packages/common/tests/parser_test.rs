@@ -1,13 +1,11 @@
-use std::io::Cursor;
 use common::messages::MessageComponent;
-use parser::{MessageComponent};
-
+use parser::MessageComponent;
+use std::io::Cursor;
 
 #[derive(MessageComponent)]
 struct BadBool {
     val: bool,
 }
-
 
 #[test]
 #[should_panic]

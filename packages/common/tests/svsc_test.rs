@@ -1,9 +1,9 @@
 mod helper;
+use crate::helper::test_write;
 use byteorder::{LittleEndian, ReadBytesExt};
 use common::messages::svsc::*;
 use common::messages::MessageComponent;
 use std::io::Cursor;
-use crate::helper::test_write;
 
 #[test]
 fn test_version() {
@@ -16,7 +16,8 @@ fn test_version() {
 #[test]
 fn test_version_response() {
     let bytes = include_bytes!("binary/svsc/protocol_version_response.bin");
-    let message: ProtocolVersionResponse = ProtocolVersionResponse::read(&mut Cursor::new(bytes)).unwrap();
+    let message: ProtocolVersionResponse =
+        ProtocolVersionResponse::read(&mut Cursor::new(bytes)).unwrap();
     assert!(message.ok);
     test_write(&message, bytes);
 }
@@ -67,15 +68,17 @@ fn test_lease_response_rejected() {
 #[test]
 fn test_lease_extend_request() {
     let bytes = include_bytes!("binary/svsc/lease_extend_request.bin");
-    let message: LeaseExtensionRequest = LeaseExtensionRequest::read(&mut Cursor::new(bytes)).unwrap();
-    assert_eq!(&message.cookie, b"cookiecookiecookiecookie", );
+    let message: LeaseExtensionRequest =
+        LeaseExtensionRequest::read(&mut Cursor::new(bytes)).unwrap();
+    assert_eq!(&message.cookie, b"cookiecookiecookiecookie",);
     test_write(&message, bytes);
 }
 
 #[test]
 fn test_lease_extend_response_extended() {
     let bytes = include_bytes!("binary/svsc/lease_extend_response_extended.bin");
-    let message: LeaseExtensionResponse = LeaseExtensionResponse::read(&mut Cursor::new(bytes)).unwrap();
+    let message: LeaseExtensionResponse =
+        LeaseExtensionResponse::read(&mut Cursor::new(bytes)).unwrap();
     assert!(&message.new_expiration.is_some());
     test_write(&message, bytes);
 }
@@ -83,7 +86,8 @@ fn test_lease_extend_response_extended() {
 #[test]
 fn test_lease_extend_response_rejected() {
     let bytes = include_bytes!("binary/svsc/lease_response_rejected.bin");
-    let message: LeaseExtensionResponse = LeaseExtensionResponse::read(&mut Cursor::new(bytes)).unwrap();
+    let message: LeaseExtensionResponse =
+        LeaseExtensionResponse::read(&mut Cursor::new(bytes)).unwrap();
     assert!(&message.new_expiration.is_none());
     test_write(&message, bytes);
 }
@@ -91,22 +95,38 @@ fn test_lease_extend_response_rejected() {
 #[test]
 fn test_establish_session_request() {
     let bytes = include_bytes!("binary/svsc/establish_session_request.bin");
-    let message: EstablishSessionRequest = EstablishSessionRequest::read(&mut Cursor::new(bytes)).unwrap();
-    assert_eq!(&message.lease_id, &b"idid".as_slice().read_u32::<LittleEndian>().unwrap());
+    let message: EstablishSessionRequest =
+        EstablishSessionRequest::read(&mut Cursor::new(bytes)).unwrap();
+    assert_eq!(
+        &message.lease_id,
+        &b"idid".as_slice().read_u32::<LittleEndian>().unwrap()
+    );
     test_write(&message, bytes);
 }
-
 
 #[test]
 fn test_establish_session_response_success() {
     let bytes = include_bytes!("binary/svsc/establish_session_response_success.bin");
-    let message: EstablishSessionResponse = EstablishSessionResponse::read(&mut Cursor::new(bytes)).unwrap();
-    assert_eq!(&message.lease_id, &b"idid".as_slice().read_u32::<LittleEndian>().unwrap());
+    let message: EstablishSessionResponse =
+        EstablishSessionResponse::read(&mut Cursor::new(bytes)).unwrap();
+    assert_eq!(
+        &message.lease_id,
+        &b"idid".as_slice().read_u32::<LittleEndian>().unwrap()
+    );
     assert_eq!(&message.status, &EstablishSessionStatus::Success);
     assert!(&message.response_data.is_some());
-    assert_eq!(&message.response_data.as_ref().unwrap().session_id, b"SESSIONIDSESSION");
-    assert_eq!(&message.response_data.as_ref().unwrap().peer_id, b"PEERIDPEERIDPEER");
-    assert_eq!(&message.response_data.as_ref().unwrap().peer_key, b"PEERKEYPEERKEYPE");
+    assert_eq!(
+        &message.response_data.as_ref().unwrap().session_id,
+        b"SESSIONIDSESSION"
+    );
+    assert_eq!(
+        &message.response_data.as_ref().unwrap().peer_id,
+        b"PEERIDPEERIDPEER"
+    );
+    assert_eq!(
+        &message.response_data.as_ref().unwrap().peer_key,
+        b"PEERKEYPEERKEYPE"
+    );
     test_write(&message, bytes);
 }
 
@@ -120,8 +140,12 @@ fn test_establish_session_response_success_no_data() {
 #[test]
 fn test_establish_session_response_error() {
     let bytes = include_bytes!("binary/svsc/establish_session_response_error.bin");
-    let message: EstablishSessionResponse = EstablishSessionResponse::read(&mut Cursor::new(bytes)).unwrap();
-    assert_eq!(&message.lease_id, &b"idid".as_slice().read_u32::<LittleEndian>().unwrap());
+    let message: EstablishSessionResponse =
+        EstablishSessionResponse::read(&mut Cursor::new(bytes)).unwrap();
+    assert_eq!(
+        &message.lease_id,
+        &b"idid".as_slice().read_u32::<LittleEndian>().unwrap()
+    );
     assert_eq!(&message.status, &EstablishSessionStatus::IDNotFound);
     assert!(&message.response_data.is_none());
     test_write(&message, bytes);
@@ -130,7 +154,8 @@ fn test_establish_session_response_error() {
 #[test]
 fn test_establish_session_notification() {
     let bytes = include_bytes!("binary/svsc/establish_session_notification.bin");
-    let message: EstablishSessionNotification = EstablishSessionNotification::read(&mut Cursor::new(bytes)).unwrap();
+    let message: EstablishSessionNotification =
+        EstablishSessionNotification::read(&mut Cursor::new(bytes)).unwrap();
     assert_eq!(&message.session_data.session_id, b"SESSIONIDSESSION");
     assert_eq!(&message.session_data.peer_id, b"PEERIDPEERIDPEER");
     assert_eq!(&message.session_data.peer_key, b"PEERKEYPEERKEYPE");
@@ -147,7 +172,8 @@ fn test_establish_session_end() {
 #[test]
 fn test_establish_session_end_notification() {
     let bytes = &[0u8; 0];
-    let message: SessionEndNotification = SessionEndNotification::read(&mut Cursor::new(bytes)).unwrap();
+    let message: SessionEndNotification =
+        SessionEndNotification::read(&mut Cursor::new(bytes)).unwrap();
     test_write(&message, bytes);
 }
 
@@ -166,7 +192,6 @@ fn test_session_data_receive() {
     assert_eq!(message.data, b"YELLOW SUBMARINE");
     test_write(&message, bytes);
 }
-
 
 #[test]
 fn test_keepalive() {

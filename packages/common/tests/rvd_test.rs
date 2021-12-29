@@ -1,9 +1,9 @@
 mod helper;
-use std::io::Cursor;
+use crate::helper::test_write;
 use byteorder::{LittleEndian, ReadBytesExt};
 use common::messages::rvd::*;
 use common::messages::MessageComponent;
-use crate::helper::test_write;
+use std::io::Cursor;
 
 #[test]
 fn test_version() {
@@ -16,7 +16,8 @@ fn test_version() {
 #[test]
 fn test_version_response() {
     let bytes = include_bytes!("binary/rvd/protocol_version_response.bin");
-    let message: ProtocolVersionResponse = ProtocolVersionResponse::read(&mut Cursor::new(bytes)).unwrap();
+    let message: ProtocolVersionResponse =
+        ProtocolVersionResponse::read(&mut Cursor::new(bytes)).unwrap();
     assert!(!message.ok);
     test_write(&message, bytes);
 }
@@ -45,7 +46,8 @@ fn test_display_change() {
 #[test]
 fn test_display_change_received() {
     let bytes = &[0u8; 0];
-    let message: DisplayChangeReceived = DisplayChangeReceived::read(&mut Cursor::new(bytes)).unwrap();
+    let message: DisplayChangeReceived =
+        DisplayChangeReceived::read(&mut Cursor::new(bytes)).unwrap();
     test_write(&message, bytes);
 }
 
@@ -75,7 +77,10 @@ fn test_key_input() {
     let bytes = include_bytes!("binary/rvd/key_input.bin");
     let message: KeyInput = KeyInput::read(&mut Cursor::new(bytes)).unwrap();
     assert!(message.down);
-    assert_eq!(message.key, b"1234".as_slice().read_u32::<LittleEndian>().unwrap());
+    assert_eq!(
+        message.key,
+        b"1234".as_slice().read_u32::<LittleEndian>().unwrap()
+    );
     test_write(&message, bytes);
 }
 
@@ -92,7 +97,10 @@ fn test_clipboard_request_default() {
 fn test_clipboard_request_custom() {
     let bytes = include_bytes!("binary/rvd/clipboard_request_custom.bin");
     let message: ClipboardRequest = ClipboardRequest::read(&mut Cursor::new(bytes)).unwrap();
-    assert_eq!(message.info.clipboard_type, ClipboardType::Custom("test".to_owned()));
+    assert_eq!(
+        message.info.clipboard_type,
+        ClipboardType::Custom("test".to_owned())
+    );
     assert!(!message.info.content_request);
     test_write(&message, bytes);
 }
@@ -107,7 +115,8 @@ fn test_clipboard_request_bad() {
 #[test]
 fn clipboard_notification_default_content() {
     let bytes = include_bytes!("binary/rvd/clipboard_notification_default_content.bin");
-    let message: ClipboardNotification = ClipboardNotification::read(&mut Cursor::new(bytes)).unwrap();
+    let message: ClipboardNotification =
+        ClipboardNotification::read(&mut Cursor::new(bytes)).unwrap();
     assert_eq!(message.info.clipboard_type, ClipboardType::Text);
     assert!(message.info.content_request);
     assert!(message.content.is_some());
@@ -118,8 +127,12 @@ fn clipboard_notification_default_content() {
 #[test]
 fn clipboard_notification_custom_content() {
     let bytes = include_bytes!("binary/rvd/clipboard_notification_custom_content.bin");
-    let message: ClipboardNotification = ClipboardNotification::read(&mut Cursor::new(bytes)).unwrap();
-    assert_eq!(message.info.clipboard_type, ClipboardType::Custom("test".to_owned()));
+    let message: ClipboardNotification =
+        ClipboardNotification::read(&mut Cursor::new(bytes)).unwrap();
+    assert_eq!(
+        message.info.clipboard_type,
+        ClipboardType::Custom("test".to_owned())
+    );
     assert!(message.info.content_request);
     assert!(message.content.is_some());
     assert_eq!(message.content.as_ref().unwrap(), b"abcd");

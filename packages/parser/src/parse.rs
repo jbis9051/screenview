@@ -44,15 +44,19 @@ pub fn parse_fields(data: &DataStruct) -> Result<Vec<Field>> {
         if matches_ident(&inner_ty, "Vec") {
             is_array = true;
             inner_ty = extract_type_from_container(&inner_ty)?;
-            inner_ty_info = Some(ArrayType::Vec(inner_ty.clone()));
+
+            let is_vec_u8 = matches_ident(&inner_ty, "u8");
+            if is_vec_u8 {
+                inner_ty_info = Some(ArrayType::Vecu8);
+            } else {
+                inner_ty_info = Some(ArrayType::Vec(inner_ty.clone()));
+            }
 
             if params.len.is_none() {
                 return Err(Error::new_spanned(attr, "missing length parameter"));
             }
 
-            if matches!(&params.len, Some(ArrayLength::Greedy(_)))
-                && !matches_ident(&inner_ty, "u8")
-            {
+            if matches!(&params.len, Some(ArrayLength::Greedy(_))) && !is_vec_u8 {
                 return Err(Error::new_spanned(
                     field,
                     "Greedy arrays must be byte arrays",
@@ -205,6 +209,10 @@ impl Parse for ParseParams {
             };
 
             params.merge(new_param)?;
+
+            if !content.is_empty() {
+                content.parse::<Token![,]>()?;
+            }
         }
 
         Ok(params)
@@ -273,5 +281,6 @@ pub enum TypeInfo {
 
 pub enum ArrayType {
     Vec(Type),
+    Vecu8,
     String,
 }

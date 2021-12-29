@@ -204,9 +204,14 @@ impl ArrayType {
         match self {
             Self::Vec(_) => {
                 quote! {
-                   for __ele in #field_ref.iter() {
+                    for __ele in #field_ref.iter() {
                         #crate_common::messages::MessageComponent::write(__ele, __cursor)?;
                     }
+                }
+            }
+            Self::Vecu8 => {
+                quote! {
+                    ::std::io::Write::write_all(__cursor, #field_ref.as_slice())?;
                 }
             }
             Self::String => {
@@ -221,10 +226,16 @@ impl ArrayType {
         match self {
             Self::Vec(_) => {
                 quote! {
-                    let mut __dest = Vec::with_capacity(__len);
+                    let mut __dest = ::std::vec::Vec::with_capacity(__len);
                     for _ in 0..__len {
                         __dest.push(#crate_common::messages::MessageComponent::read(__cursor)?);
                     }
+                }
+            }
+            Self::Vecu8 => {
+                quote! {
+                    let mut __dest = ::std::vec![0u8; __len];
+                    ::std::io::Read::read_exact(__cursor, &mut __dest)?;
                 }
             }
             Self::String => {
