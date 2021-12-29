@@ -4,7 +4,6 @@ use bitflags::bitflags;
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use parser::{message_id, MessageComponent};
 use std::io::{self, Cursor, Read, Write};
-use std::ops::BitAnd;
 
 #[derive(MessageComponent)]
 pub struct ProtocolVersion {
@@ -12,12 +11,12 @@ pub struct ProtocolVersion {
     pub version: String, // fixed 11 bytes
 }
 
-#[derive(MessageComponent)]
+#[derive(MessageComponent, Debug)]
 pub struct ProtocolVersionResponse {
     pub ok: bool,
 }
 
-#[derive(MessageComponent)]
+#[derive(MessageComponent, Debug)]
 #[message_id(1)]
 pub struct DisplayChange {
     pub clipboard_readable: bool,
@@ -27,7 +26,7 @@ pub struct DisplayChange {
 
 type DisplayId = u8;
 
-#[derive(MessageComponent)]
+#[derive(MessageComponent, Debug)]
 pub struct DisplayInformation {
     pub display_id: DisplayId,
     pub width: u16,
@@ -79,26 +78,40 @@ pub struct MouseInput {
     pub y_location: u16,
     pub buttons: ButtonsMask,
 }
+bitflags! {
+    pub struct ButtonsMask: u8 {
+        // TODO
+    }
+}
 
-#[derive(MessageComponent)]
-pub struct ButtonsMask {
-    // TODO
+impl MessageComponent for ButtonsMask {
+    fn read(cursor: &mut Cursor<&[u8]>) -> Result<Self, Error> {
+        cursor
+            .read_u8()
+            .map(Self::from_bits_truncate)
+            .map_err(Into::into)
+    }
+
+    fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> Result<(), Error> {
+        cursor.write_u8(self.bits).map_err(Into::into)
+    }
 }
 
 #[derive(MessageComponent)]
 #[message_id(5)]
 pub struct KeyInput {
     pub down: bool,
-    pub key: u16, // keysym
+    pub key: u32, // keysym
 }
 
 bitflags! {
     struct ClipboardTypeMask: u8 {
-        const CUSTOM = 0b1;
-        const CONTENT = 0b01;
+        const CUSTOM = 0b10000000;
+        const CONTENT = 0b01000000;
     }
 }
 
+#[derive(PartialEq, Debug)]
 pub enum ClipboardType {
     Text,
     Rtf,
@@ -133,12 +146,12 @@ impl From<&ClipboardType> for u8 {
     }
 }
 
-struct ClipboarMetaInter {
+struct ClipboardMetaInter {
     clipboard_type: ClipboardTypeMask,
     custom_name: Option<String>,
 }
 
-impl MessageComponent for ClipboarMetaInter {
+impl MessageComponent for ClipboardMetaInter {
     fn read(cursor: &mut Cursor<&[u8]>) -> Result<Self, Error> {
         let clipboard_type = cursor
             .read_u8()
@@ -149,12 +162,12 @@ impl MessageComponent for ClipboarMetaInter {
             let mut name = vec![0u8; length as usize];
             cursor.read_exact(&mut name).map_err(StdIo)?;
             let name = String::from_utf8(name).map_err(InvalidString)?;
-            return Ok(ClipboarMetaInter {
+            return Ok(ClipboardMetaInter {
                 clipboard_type,
                 custom_name: Some(name),
             });
         }
-        Ok(ClipboarMetaInter {
+        Ok(ClipboardMetaInter {
             clipboard_type,
             custom_name: None,
         })
@@ -178,7 +191,7 @@ impl MessageComponent for ClipboarMetaInter {
     }
 }
 
-impl From<&ClipboardMeta> for ClipboarMetaInter {
+impl From<&ClipboardMeta> for ClipboardMetaInter {
     fn from(data: &ClipboardMeta) -> Self {
         let mut mask =
             unsafe { ClipboardTypeMask::from_bits_unchecked((&data.clipboard_type).into()) };
@@ -198,29 +211,35 @@ impl From<&ClipboardMeta> for ClipboarMetaInter {
 }
 
 pub struct ClipboardMeta {
-    clipboard_type: ClipboardType,
-    content_request: bool,
+    pub clipboard_type: ClipboardType,
+    pub content_request: bool,
 }
 
-impl TryFrom<ClipboarMetaInter> for ClipboardMeta {
+impl TryFrom<ClipboardMetaInter> for ClipboardMeta {
     type Error = Error;
 
-    fn try_from(data: ClipboarMetaInter) -> Result<Self, Self::Error> {
+    fn try_from(data: ClipboardMetaInter) -> Result<Self, Self::Error> {
         let content_request = data.clipboard_type.contains(ClipboardTypeMask::CONTENT);
+        let clipboard_type = {
+            let mut clip_type = data.clipboard_type;
+            clip_type.set(ClipboardTypeMask::CUSTOM, false);
+            clip_type.set(ClipboardTypeMask::CONTENT, false);
+            clip_type.bits
+        };
         Ok(match data.custom_name {
-            Some(name) => Self {
-                clipboard_type: ClipboardType::Custom(name),
-                content_request,
-            },
+            Some(name) => {
+                if clipboard_type != 0 {
+                    return Err(Error::InvalidEnumValue { name: "ClipboardType", value: clipboard_type as u16 });
+                }
+                Self {
+                    clipboard_type: ClipboardType::Custom(name),
+                    content_request,
+                }
+            }
             None => {
-                let clipboard_type = data
-                    .clipboard_type
-                    .bitand(!ClipboardTypeMask::CUSTOM)
-                    .bitand(!ClipboardTypeMask::CONTENT)
-                    .bits;
                 Self {
                     clipboard_type: ClipboardType::try_from(clipboard_type)
-                        .map_err(|_| InvalidEnumValue { name: "", value: 0 })?,
+                        .map_err(|_| InvalidEnumValue { name: "ClipboardType", value: clipboard_type as u16 })?,
                     content_request,
                 }
             }
@@ -230,11 +249,11 @@ impl TryFrom<ClipboarMetaInter> for ClipboardMeta {
 
 impl MessageComponent for ClipboardMeta {
     fn read(cursor: &mut Cursor<&[u8]>) -> Result<Self, Error> {
-        ClipboarMetaInter::read(cursor)?.try_into()
+        ClipboardMetaInter::read(cursor)?.try_into()
     }
 
     fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> Result<(), Error> {
-        let inter: ClipboarMetaInter = self.into();
+        let inter: ClipboardMetaInter = self.into();
         inter.write(cursor)
     }
 }
@@ -242,15 +261,15 @@ impl MessageComponent for ClipboardMeta {
 #[derive(MessageComponent)]
 #[message_id(6)]
 pub struct ClipboardRequest {
-    info: ClipboardMeta,
+    pub info: ClipboardMeta,
 }
 
 #[derive(MessageComponent)]
 #[message_id(7)]
-pub struct ClipboardResponse {
-    info: ClipboardMeta,
+pub struct ClipboardNotification {
+    pub info: ClipboardMeta,
     #[parse(condition = "info.content_request" len_prefixed(3))]
-    content: Option<Vec<u8>>,
+    pub content: Option<Vec<u8>>,
 }
 
 #[derive(MessageComponent)]

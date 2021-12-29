@@ -14,6 +14,14 @@ fn test_version() {
 }
 
 #[test]
+fn test_version_response() {
+    let bytes = include_bytes!("binary/svsc/protocol_version_response.bin");
+    let message: ProtocolVersionResponse = ProtocolVersionResponse::read(&mut Cursor::new(bytes)).unwrap();
+    assert!(message.ok);
+    test_write(&message, bytes);
+}
+
+#[test]
 fn test_lease_request_cookie() {
     let bytes = include_bytes!("binary/svsc/lease_request_cookie.bin");
     let message: LeaseRequest = LeaseRequest::read(&mut Cursor::new(bytes)).unwrap();
