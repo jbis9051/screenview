@@ -45,6 +45,8 @@ signature. These ephemeral keys ensure perfect forward secrecy.
         \hline
         1                          & type                & 2              \\
         \hline
+        4                          & length              &                \\
+        \hline
         3                          & certificates-length &                \\
         \hline
         \emph{certificates-length} & certificate\_list   &                \\
@@ -55,6 +57,9 @@ signature. These ephemeral keys ensure perfect forward secrecy.
         \hline
     \end{tabular}
 \end{center}
+
+length is the size of the entire message not including the type. While not technically neccessary, it makes this
+message easier to parse.\\
 
 certificate\_list is defined in \href{https://datatracker.ietf.org/doc/html/rfc8446#section-4.4.2}{RFC8446
 Section-4.4.2}.

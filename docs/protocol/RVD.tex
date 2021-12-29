@@ -361,8 +361,8 @@ Used to check if a clipboard type exists on the Host.
     \end{tabular}
 \end{center}
 
-clipboard-type's is in little endian. It's first bit indicates whether this request is for a default type (\texttt{0}) or a custom type
-(\texttt{1}). clipboard-type's second bit indicates whether this request is a exists request (\texttt{0}) or a
+clipboard-type first bit (MSB) indicates whether this request is for a default type (\texttt{0}) or a custom type
+(\texttt{1}). clipboard-type's second bit (second MSB) indicates whether this request is a exists request (\texttt{0}) or a
 content request(\texttt{1}). An exists request is for checking whether the type exists but does not return content. A
 content request returns content if it exists. The remaining bits indicate the default type if the request is for a
 default type. Otherwise they MUST be 0.\\
