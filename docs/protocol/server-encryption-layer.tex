@@ -1,0 +1,189 @@
+\section{Server Encryption Layer}
+
+The Server Encryption Layer provides security for communication between Peers and the Server. TCP and UDP have
+different security methods. UDP encryption depends on secrets established in the SVSC protocol and therefore can only
+be begin after TCP encryption is already established.
+
+\subsection{TCP}
+
+The TCP Server Encryption Layer is heavily based on a simplification of TLS 1.3 as defined in
+\href{https://datatracker.ietf.org/doc/html/rfc8446}{RFC8446}.
+
+\subsubsection{PeerHello}
+
+The Peer begins by sending a PeerHello message with their ephemeral public key.
+
+\begin{center}
+    Peer \textrightarrow\ Server\\
+    \begin{tabular}{|c|c|c|}
+        \hline
+        \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
+        \hline
+        1              & type          & 1              \\
+        \hline
+        16             & public-key    &                \\
+        \hline
+    \end{tabular}
+\end{center}
+
+\begin{align*}
+    &(E_{peer}^{pub},\,E_{peer}^{priv}) := \text{DH-Generate()}\\
+    &\text{public-key} := E_{peer}^{pub}
+\end{align*}
+
+\subsubsection{ServerHello}
+
+The Server replies with their certificate list. Like TLS, the is a certificate chain. This ensures that a MITM attack
+between the Peer and the Server cannot occur. Additionally, the Server sends their ephemeral public key and a
+signature. These ephemeral keys ensure perfect forward secrecy.
+
+\begin{center}
+    Server \textrightarrow\ Peer\\
+    \begin{tabular}{|c|c|c|}
+        \hline
+        \textbf{Bytes}             & \textbf{Name}       & \textbf{Value} \\
+        \hline
+        1                          & type                & 2              \\
+        \hline
+        4                          & length              &                \\
+        \hline
+        3                          & certificates-length &                \\
+        \hline
+        \emph{certificates-length} & certificate\_list   &                \\
+        \hline
+        16                         & public-key          &                \\
+        \hline
+        variable                   & certificate-verify  &                \\
+        \hline
+    \end{tabular}
+\end{center}
+
+length is the size of the entire message not including the type. While not technically neccessary, it makes this
+message easier to parse.\\
+
+certificate\_list is defined in \href{https://datatracker.ietf.org/doc/html/rfc8446#section-4.4.2}{RFC8446
+Section-4.4.2}.
+
+\begin{align*}
+    & (E_{serv}^{pub},\, E_{serv}^{priv}) := \text{DH-Generate()}\\
+    & \text{public-key} := E_{serv}^{pub}
+\end{align*}
+
+certificate-verify is defined in \href{https://datatracker.ietf.org/doc/html/rfc8446#section-4.4
+.3}{RFC8446 Section-4.4.3} with the following modification. The content that is signed is:\\
+
+\begin{align*}
+    \text{content} := \text{``SreenViewServerVerify''}\ ||\ 0\ ||\ E_{serv}^{pub}
+\end{align*}
+
+The Client MUST validate all signatures in accordance with the TLS spec.
+
+\subsubsection{Transport Data Key Derivation}
+
+The Server and Client derive their keys and initialize their nonces.
+
+\begin{align*}
+    & C_{peer} = \text{DH}(E_{serv}^{pub},\ E_{peer}^{priv})\\
+    & C_{serv} = \text{DH}(E_{peer}^{pub},\ E_{serv}^{priv})\\
+    & (T_{peer}^{send} = T_{serv}^{recv},\ T_{peer}^{recv} = T_{serv}^{send}) := \text{KDF}_2(C_{peer} = C_{serv},
+    \ \epsilon) \\
+    & N_{peer}^{send} = N_{serv}^{recv} = N_{peer}^{recv} = N_{serv}^{send} := 0
+\end{align*}
+
+\subsubsection{Subsequent Messages: Transport Data Messages}
+
+All subsequent messages are encrypted and authenticated. On receiving a message, if authentication fails the message
+MUST be dropped.
+
+\begin{center}
+    Peer $\leftrightarrow$ Server\\
+    \begin{tabular}{|c|c|c|}
+        \hline
+        \textbf{Bytes}     & \textbf{Name} & \textbf{Value} \\
+        \hline
+        1                  & type          & 3              \\
+        \hline
+        2                  & data-length   &                \\
+        \hline
+        \emph{data-length} & data          &                \\
+        \hline
+    \end{tabular}
+\end{center}
+
+\begin{align*}
+    & \text{data} := \text{AEAD}(T_{m}^{send}, N_{m}^{send}, P, \epsilon) \\
+    & N_{m}^{send} := N_{m}^{send} + 1
+\end{align*}
+
+Where $P$ is the payload to be transported\\
+
+$N_{m}$ is an 64 bit counter that MUST NOT wrap. After a transport message is sent, if $N_{m}$ equals
+($2^{64}-1$) the TCP connection MUST be dropped. Subsequent TCP messages MUST NOT be sent. \\
+
+\subsection{UDP}
+
+UDP encryption and authentication rely on the \emph{session-id}, \emph{peer-id} and \emph{peer-key} values
+established in a session
+(described in \hyperlink{subsection.4.4}{4.4}). The Server (nor the Peer) MUST NOT
+process or reply to any messages that don't pass authentication. This prevents an amplification attack.\\
+
+\subsubsection{Transport Data Key Derivation}
+
+The Server and Peer derive keys.
+
+\begin{align*}
+    &  G:= \text{session-id}                                                               \\
+    &  H := \text{peer-id}                                                                \\
+    &  J := \text{peer-key}                                                              \\
+    &  (V_{peer}^{send} = V_{serv}^{recv}, V_{peer}^{recv} = V_{serv}^{send}) := \text{KDF}_2(\text{HASH}(G\,
+    ||\, H\,||\, J), \epsilon)                                        \\
+    &   M_{peer}^{send} = M_{serv}^{recv} = M_{peer}^{recv} = M_{serv}^{send} := 0
+\end{align*}
+
+\subsubsection{Transport Data Messages}
+
+\begin{center}
+    Peer \textrightarrow Server\\
+    \begin{tabular}{|c|c|c|}
+        \hline
+        \textbf{Bytes}                & \textbf{Name}  & \textbf{Value} \\
+        \hline
+        1                             & type           & 4              \\
+        \hline
+        16                            & \emph{peer-id} &                \\
+        \hline
+        8                             & counter        &                \\
+        \hline
+        $\text{UDP length} - 8$ bytes & data           &                \\
+        \hline
+    \end{tabular}
+\end{center}
+
+\begin{center}
+    Server \textrightarrow Peer\\
+    \begin{tabular}{|c|c|c|}
+        \hline
+        \textbf{Bytes}                & \textbf{Name} & \textbf{Value} \\
+        \hline
+        1                             & type          & 5              \\
+        \hline
+        8                             & counter       &                \\
+        \hline
+        $\text{UDP length} - 8$ bytes & data          &                \\
+        \hline
+    \end{tabular}
+\end{center}
+
+
+\begin{align*}
+    & \text{data} := \text{AEAD}(V_{m}^{send}, M_{m}^{send}, P, \epsilon)\\
+    & \text{counter} := M_{m}^{send}\\
+    & M_{m}^{send} := M_{m}^{send} + 1
+\end{align*}
+
+
+Where $P$ is the payload to be transported\\
+
+$M_{m}$ is an 64 bit counter that MUST NOT wrap. After a transport message is sent, if $M_{m}$ equals
+($2^{64}-1$) the TCP connection MUST be dropped. Subsequent UDP messages MUST NOT be sent. \\
+
