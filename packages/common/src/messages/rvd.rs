@@ -146,33 +146,46 @@ impl<'a> MessageComponent for ClipboardCustomName<'a> {
 #[derive(MessageComponent)]
 struct ClipboardMetaInter<'a> {
     clipboard_type: u8,
-    #[parse(condition = "(clipboard_type & 0x80) != 0")]
+    #[parse(condition = "(clipboard_type & Self::CUSTOM_FLAG) != 0")]
     custom_name: Option<ClipboardCustomName<'a>>,
+}
+
+#[rustfmt::skip]
+impl ClipboardMetaInter<'_> {
+    const CUSTOM_FLAG: u8          = 0b10000000;
+    const CONTENT_REQUEST_FLAG: u8 = 0b01000000;
+    const DISCRIMINANT_MASK: u8    = 0b00111111;
+
+    fn type_to_parts(&self) -> (bool, bool, u8) {
+        let custom = (self.clipboard_type & Self::CUSTOM_FLAG) != 0;
+        let content_request = (self.clipboard_type & Self::CONTENT_REQUEST_FLAG) != 0;
+        let discriminant = self.clipboard_type & Self::DISCRIMINANT_MASK;
+
+        (custom, content_request, discriminant)
+    }
 }
 
 impl<'a> From<&'a ClipboardMeta> for ClipboardMetaInter<'a> {
     fn from(data: &'a ClipboardMeta) -> Self {
         let mut clipboard_type = 0u8;
 
+        let custom_name = match &data.clipboard_type {
+            ClipboardType::Custom(name) => {
+                clipboard_type |= Self::CUSTOM_FLAG;
+                Some(ClipboardCustomName(Cow::Borrowed(name.as_str())))
+            }
+            _ => None,
+        };
+
         if data.content_request {
-            clipboard_type |= 0x40;
+            clipboard_type |= Self::CONTENT_REQUEST_FLAG;
         }
 
-        match &data.clipboard_type {
-            ClipboardType::Custom(name) => {
-                clipboard_type |= 0x80;
-                Self {
-                    clipboard_type,
-                    custom_name: Some(ClipboardCustomName(Cow::Borrowed(&**name))),
-                }
-            }
-            enum_ty => {
-                clipboard_type |= u8::from(enum_ty);
-                Self {
-                    clipboard_type,
-                    custom_name: None,
-                }
-            }
+        clipboard_type |= u8::from(&data.clipboard_type);
+
+        Self {
+            clipboard_type,
+            custom_name,
         }
     }
 }
@@ -181,35 +194,25 @@ impl TryFrom<ClipboardMetaInter<'_>> for ClipboardMeta {
     type Error = Error;
 
     fn try_from(data: ClipboardMetaInter<'_>) -> Result<Self, Self::Error> {
-        // This assertion should be guaranteed by how ClipboardMetaInter is parsed, so this check
-        // is here out of an abundance of caution and need not be present in a release build.
-        debug_assert!(
-            data.custom_name.is_none() == ((data.clipboard_type & 0x80) == 0),
-            "ClipboardMetaInter clipboard_type custom flag does not agree with custom_name field"
-        );
+        let (custom, content_request, discriminant) = data.type_to_parts();
 
-        let content_request = (data.clipboard_type & 0x40) != 0;
-        let discriminant = data.clipboard_type & 0x3F;
+        if custom != (discriminant == 0) || custom != data.custom_name.is_some() {
+            return Err(Error::InvalidEnumValue {
+                name: "ClipboardType + Flags",
+                value: u16::from(data.clipboard_type),
+            });
+        }
 
-        match data.custom_name {
-            Some(name) => {
-                if discriminant != 0 {
-                    return Err(Error::InvalidEnumValue {
-                        name: "ClipboardType::Custom + Flags",
-                        value: u16::from(data.clipboard_type),
-                    });
-                }
-
-                Ok(Self {
-                    clipboard_type: ClipboardType::Custom(name.0.into_owned()),
-                    content_request,
-                })
-            }
-            None => Ok(Self {
+        Ok(match data.custom_name {
+            Some(name) => Self {
+                clipboard_type: ClipboardType::Custom(name.0.into_owned()),
+                content_request,
+            },
+            None => Self {
                 clipboard_type: ClipboardType::try_from(discriminant)?,
                 content_request,
-            }),
-        }
+            },
+        })
     }
 }
 
