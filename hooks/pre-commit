@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
+set -e
 cd packages/rust || exit 1
 echo "$ cargo +nightly fmt --check"
-cargo +nightly fmt --check
+cargo +nightly fmt -- --check
 echo "$ cargo clippy"
 cargo clippy

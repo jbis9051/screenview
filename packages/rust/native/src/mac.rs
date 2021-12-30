@@ -1,4 +1,4 @@
-use std::{ffi::CStr, ops::Deref, os::raw::c_uchar, ptr, slice::from_raw_parts, str::Utf8Error};
+use std::{ffi::CStr, ops::Deref, os::raw::c_uchar, slice::from_raw_parts};
 
 use cocoa::{
     appkit::{NSColorSpace, NSPasteboard, NSPasteboardTypeString, NSScreen},
@@ -7,44 +7,46 @@ use cocoa::{
 };
 use core_foundation::{
     base::FromVoid,
-    number::{kCFNumberIntType, CFNumber, CFNumberGetValue, CFNumberRef, CFNumberType},
+    number::{kCFNumberIntType, CFNumberGetValue, CFNumberRef},
     string::{kCFStringEncodingUTF8, CFStringGetCStringPtr, CFStringRef},
 };
 use core_graphics::{
     display::{
-        kCGNullWindowID, kCGWindowImageBoundsIgnoreFraming, kCGWindowListExcludeDesktopElements,
-        kCGWindowListOptionIncludingWindow, kCGWindowListOptionOnScreenOnly, CFArrayGetCount,
-        CFArrayGetValueAtIndex, CFDictionary, CFDictionaryGetValueIfPresent, CFDictionaryRef,
-        CGDisplay, CGDisplayCreateImage, CGMainDisplayID, CGRect, CGRectNull,
+        kCGNullWindowID,
+        kCGWindowImageBoundsIgnoreFraming,
+        kCGWindowListExcludeDesktopElements,
+        kCGWindowListOptionIncludingWindow,
+        kCGWindowListOptionOnScreenOnly,
+        CFArrayGetCount,
+        CFArrayGetValueAtIndex,
+        CFDictionary,
+        CFDictionaryGetValueIfPresent,
+        CFDictionaryRef,
+        CGDisplay,
+        CGRect,
+        CGRectNull,
     },
     event::{
-        CGEvent, CGEventFlags, CGEventTapLocation, CGEventType, CGKeyCode, CGMouseButton,
+        CGEvent,
+        CGEventFlags,
+        CGEventTapLocation,
+        CGEventType,
+        CGKeyCode,
+        CGMouseButton,
         ScrollEventUnit,
     },
     event_source::{CGEventSource, CGEventSourceStateID},
-    image::{CGImage, CGImageRef},
-    window::{
-        kCGWindowBounds, kCGWindowName, kCGWindowNumber, CGWindowListCopyWindowInfo,
-        CGWindowListCreateImage,
-    },
+    image::CGImage,
+    window::{kCGWindowBounds, kCGWindowName, kCGWindowNumber, CGWindowListCopyWindowInfo},
 };
-use core_graphics_types::{
-    base::CGFloat,
-    geometry::{CGPoint, CGSize},
-};
-use image::{
-    Bgra, DynamicImage,
-    DynamicImage::ImageRgba8,
-    ImageBuffer, ImageFormat,
-    ImageFormat::{Bmp, Png},
-    RgbImage, Rgba, RgbaImage,
-};
-use libc::{c_void, intptr_t};
+use core_graphics_types::{base::CGFloat, geometry::CGPoint};
+use image::RgbImage;
+use libc::c_void;
 use neon::prelude::Finalize;
 
 use crate::{
     api::*,
-    keymaps::{keycode_mac::KeyCodeMac, keysym::*, keysym_to_mac::*},
+    keymaps::{keysym::*, keysym_to_mac::*},
     mac::Error::*,
 };
 
@@ -75,34 +77,30 @@ impl MacApi {
     #[allow(non_upper_case_globals)]
     fn handle_modifier(&mut self, key_sym: Key, down: bool) -> bool {
         match key_sym {
-            XK_Shift_L | XK_Shift_R => {
+            XK_Shift_L | XK_Shift_R =>
                 if down {
                     self.modifier_keys |= CGEventFlags::CGEventFlagShift;
                 } else {
                     self.modifier_keys &= !CGEventFlags::CGEventFlagShift;
-                }
-            }
-            XK_Control_L | XK_Control_R => {
+                },
+            XK_Control_L | XK_Control_R =>
                 if down {
                     self.modifier_keys |= CGEventFlags::CGEventFlagControl;
                 } else {
                     self.modifier_keys &= !CGEventFlags::CGEventFlagControl;
-                }
-            }
-            XK_Meta_L | XK_Meta_R => {
+                },
+            XK_Meta_L | XK_Meta_R =>
                 if down {
                     self.modifier_keys |= CGEventFlags::CGEventFlagAlternate;
                 } else {
                     self.modifier_keys &= !CGEventFlags::CGEventFlagAlternate;
-                }
-            }
-            XK_Alt_L | XK_Alt_R => {
+                },
+            XK_Alt_L | XK_Alt_R =>
                 if down {
                     self.modifier_keys |= CGEventFlags::CGEventFlagCommand;
                 } else {
                     self.modifier_keys &= !CGEventFlags::CGEventFlagCommand;
-                }
-            }
+                },
             _ => {
                 return false;
             }
@@ -127,7 +125,7 @@ impl MacApi {
     }
 
     fn cgimage_to_frame(image: &CGImage) -> Result<Frame, ()> {
-        let bytes_per_pixel = (image.bits_per_pixel() / 8);
+        let bytes_per_pixel = image.bits_per_pixel() / 8;
         if bytes_per_pixel != 4 {
             // TODO error
         }
@@ -141,7 +139,7 @@ impl MacApi {
             image.bytes_per_row() - (image.width() * (image.bits_per_pixel() / 8));
         let width = image.width();
         unsafe {
-            for i in 0..num_pixels {
+            for i in 0 .. num_pixels {
                 let [b, g, r] = *(rgba_ptr as *const [u8; 3]);
                 *(rgb_ptr as *mut [u8; 3]) = [r, g, b];
                 rgba_ptr = rgba_ptr.add(bytes_per_pixel);
@@ -169,7 +167,7 @@ impl NativeApiTemplate for MacApi {
 
     fn key_toggle(&mut self, key: Key, down: bool) -> Result<(), Self::Error> {
         self.handle_modifier(key, down);
-        let key_code = KEYSYM_MAC.get(&key).ok_or_else(|| KeyNotFoundError(key))?;
+        let key_code = KEYSYM_MAC.get(&key).ok_or(KeyNotFoundError(key))?;
         let source = CGEventSource::new(CGEventSourceStateID::CombinedSessionState)
             .map_err(|_| UnableToCreateCGSource)?;
         let key_event = CGEvent::new_keyboard_event(source, *key_code as CGKeyCode, down)
@@ -258,27 +256,24 @@ impl NativeApiTemplate for MacApi {
                 let mouse_position =
                     CGPoint::new(mouse_position.x as CGFloat, mouse_position.y as CGFloat);
                 let mouse_type = match button {
-                    MouseButton::Left => {
+                    MouseButton::Left =>
                         if down {
                             CGEventType::LeftMouseDown
                         } else {
                             CGEventType::LeftMouseUp
-                        }
-                    }
-                    MouseButton::Right => {
+                        },
+                    MouseButton::Right =>
                         if down {
                             CGEventType::RightMouseDown
                         } else {
                             CGEventType::RightMouseUp
-                        }
-                    }
-                    _ => {
+                        },
+                    _ =>
                         if down {
                             CGEventType::OtherMouseDown
                         } else {
                             CGEventType::OtherMouseUp
-                        }
-                    }
+                        },
                 };
                 let moose_button = match button {
                     MouseButton::Left => CGMouseButton::Left,
@@ -324,9 +319,8 @@ impl NativeApiTemplate for MacApi {
         let type_name = unsafe {
             match type_name {
                 ClipboardType::Text => NSPasteboardTypeString,
-                ClipboardType::Custom(type_name) => unsafe {
-                    NSString::alloc(nil).init_str(type_name.as_str())
-                },
+                ClipboardType::Custom(type_name) =>
+                    NSString::alloc(nil).init_str(type_name.as_str()),
             }
         };
         MacApi::set_clipboard_content_mac(type_name, content)
@@ -336,7 +330,7 @@ impl NativeApiTemplate for MacApi {
         let display = unsafe { NSScreen::screens(nil) };
         let count = unsafe { NSArray::count(display) };
         let mut monitors = Vec::with_capacity(count as usize);
-        for i in 0..count {
+        for i in 0 .. count {
             let nsscreen = unsafe { NSArray::objectAtIndex(display, i) };
             let nsrect = unsafe { NSScreen::frame(nsscreen) };
             let nsdictionary = unsafe { NSScreen::deviceDescription(nsscreen) };
@@ -384,7 +378,7 @@ impl NativeApiTemplate for MacApi {
         }
         let count = unsafe { CFArrayGetCount(windows_array) };
         let mut windows = Vec::with_capacity(count as usize);
-        for i in 0..count {
+        for i in 0 .. count {
             let window = unsafe { CFArrayGetValueAtIndex(windows_array, i) as CFDictionaryRef };
             if window.is_null() {
                 continue;
@@ -403,7 +397,7 @@ impl NativeApiTemplate for MacApi {
             if window_id.is_null() {
                 continue;
             }
-            let window_id = unsafe {
+            let window_id = {
                 let mut number: u32 = 0u32;
                 if !unsafe {
                     CFNumberGetValue(
@@ -479,8 +473,7 @@ impl NativeApiTemplate for MacApi {
             kCGWindowImageBoundsIgnoreFraming,
         )
         .ok_or_else(|| CaptureDisplayError(window.name.clone()))?;
-        Ok(MacApi::cgimage_to_frame(&image)
-            .map_err(|_| CaptureDisplayError(window.name.clone()))?)
+        MacApi::cgimage_to_frame(&image).map_err(|_| CaptureDisplayError(window.name.clone()))
     }
 }
 

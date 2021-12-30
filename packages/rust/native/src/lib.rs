@@ -58,7 +58,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
     cx.export_function("capture", |mut cx| {
         use image::ImageFormat;
         use std::time::Instant;
-        for i in 0..20 {
+        for i in 0 .. 20 {
             let handle = cx.argument::<JsBox<RefCell<NativeApi>>>(0)?;
             let mut h = handle.borrow_mut();
             let m = h.monitors().unwrap();
@@ -91,7 +91,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
 
     cx.export_function("pointer_position", |mut cx| {
         let handle = cx.argument::<JsBox<RefCell<NativeApi>>>(0)?;
-        for _ in 0..20 {
+        for _ in 0 .. 20 {
             let start = Instant::now();
             let position = handle.borrow_mut().pointer_position().unwrap();
             println!("{:?}", position);
@@ -118,7 +118,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
 
     cx.export_function("set_pointer_position", |mut cx| {
         let handle = cx.argument::<JsBox<RefCell<NativeApi>>>(0)?;
-        for i in 0..20 {
+        for i in 0 .. 20 {
             let start = Instant::now(); //
             handle
                 .borrow_mut()
@@ -137,7 +137,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
 
     cx.export_function("toggle_mouse", |mut cx| {
         let handle = cx.argument::<JsBox<RefCell<NativeApi>>>(0)?;
-        for _i in 0..20 {
+        for _i in 0 .. 20 {
             let start = Instant::now(); //
             let h = handle.borrow_mut();
             h.toggle_mouse(MouseButton::ScrollUp, true).unwrap();
@@ -184,7 +184,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
     cx.export_function("capture_window", |mut cx| {
         use image::ImageFormat;
         use std::time::Instant;
-        for i in 0..20 {
+        for i in 0 .. 20 {
             let handle = cx.argument::<JsBox<RefCell<NativeApi>>>(0)?;
             let mut h = handle.borrow_mut();
             let w = h.windows().unwrap();
