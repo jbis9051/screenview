@@ -5,8 +5,7 @@ use neon::prelude::Finalize;
 use std::{
     error::Error as StdError,
     fmt::{self, Debug, Formatter},
-    ptr,
-    str,
+    ptr, str,
     time::Duration,
 };
 use x11::{
@@ -18,24 +17,10 @@ use xcb::{
     randr::GetMonitors,
     shm::{Attach, Detach, GetImage, Seg},
     x::{
-        Drawable,
-        GetAtomName,
-        GetGeometry,
-        GetProperty,
-        GetWindowAttributes,
-        MapState,
-        QueryPointer,
-        QueryTree,
-        WarpPointer,
-        Window,
-        ATOM_STRING,
-        ATOM_WM_NAME,
+        Drawable, GetAtomName, GetGeometry, GetProperty, GetWindowAttributes, MapState,
+        QueryPointer, QueryTree, WarpPointer, Window, ATOM_STRING, ATOM_WM_NAME,
     },
-    ConnError,
-    Connection,
-    ProtocolError,
-    Xid,
-    XidNew,
+    ConnError, Connection, ProtocolError, Xid, XidNew,
 };
 
 use crate::api::{self, *};
@@ -542,7 +527,7 @@ impl X11Api {
 
     #[inline]
     unsafe fn copy_rgb(mut src: *const u32, mut dst: *mut u8, len: usize) {
-        for _ in 0 .. len {
+        for _ in 0..len {
             let [b, g, r, _a] = (*src).to_le_bytes();
             *(dst as *mut [u8; 3]) = [r, g, b];
             src = src.add(1);

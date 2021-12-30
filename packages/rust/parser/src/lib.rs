@@ -1,12 +1,12 @@
 extern crate proc_macro;
 
-use proc_macro2::{TokenStream, Span};
+use proc_macro2::{Span, TokenStream};
+use proc_macro_crate::{crate_name, FoundCrate};
 use quote::quote;
 use syn::{
-    parse_macro_input, Data, DeriveInput, Error, GenericArgument, LitInt, PathArguments, Result,
-    Type, Ident
+    parse_macro_input, Data, DeriveInput, Error, GenericArgument, Ident, LitInt, PathArguments,
+    Result, Type,
 };
-use proc_macro_crate::{crate_name, FoundCrate};
 
 mod gen;
 mod parse;

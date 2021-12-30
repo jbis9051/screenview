@@ -3,7 +3,11 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{DeriveInput, Error, LitInt};
 
-pub fn gen_struct_impl(crate_common: &TokenStream, input: &DeriveInput, fields: &[Field]) -> TokenStream {
+pub fn gen_struct_impl(
+    crate_common: &TokenStream,
+    input: &DeriveInput,
+    fields: &[Field],
+) -> TokenStream {
     let name = &input.ident;
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
     let read = gen_struct_deserialize_impl(crate_common, fields);
@@ -23,7 +27,9 @@ pub fn gen_struct_impl(crate_common: &TokenStream, input: &DeriveInput, fields: 
 }
 
 fn gen_struct_serialize_impl(crate_common: &TokenStream, fields: &[Field]) -> TokenStream {
-    let serialize_fields = fields.iter().map(|field| gen_serialize_struct_field(crate_common, field));
+    let serialize_fields = fields
+        .iter()
+        .map(|field| gen_serialize_struct_field(crate_common, field));
 
     quote! {
         #( #serialize_fields )*
@@ -194,7 +200,9 @@ impl Condition {
     fn gen_read_condition(&self, crate_common: &TokenStream) -> TokenStream {
         match self {
             Self::Expr(expr) => quote! { #expr },
-            Self::Prefixed(_) => quote! { <bool as #crate_common::messages::MessageComponent>::read(__cursor)? },
+            Self::Prefixed(_) => {
+                quote! { <bool as #crate_common::messages::MessageComponent>::read(__cursor)? }
+            }
         }
     }
 }

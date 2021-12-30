@@ -12,38 +12,19 @@ use core_foundation::{
 };
 use core_graphics::{
     display::{
-        kCGNullWindowID,
-        kCGWindowImageBoundsIgnoreFraming,
-        kCGWindowListExcludeDesktopElements,
-        kCGWindowListOptionIncludingWindow,
-        kCGWindowListOptionOnScreenOnly,
-        CFArrayGetCount,
-        CFArrayGetValueAtIndex,
-        CFDictionary,
-        CFDictionaryGetValueIfPresent,
-        CFDictionaryRef,
-        CGDisplay,
-        CGDisplayCreateImage,
-        CGMainDisplayID,
-        CGRect,
-        CGRectNull,
+        kCGNullWindowID, kCGWindowImageBoundsIgnoreFraming, kCGWindowListExcludeDesktopElements,
+        kCGWindowListOptionIncludingWindow, kCGWindowListOptionOnScreenOnly, CFArrayGetCount,
+        CFArrayGetValueAtIndex, CFDictionary, CFDictionaryGetValueIfPresent, CFDictionaryRef,
+        CGDisplay, CGDisplayCreateImage, CGMainDisplayID, CGRect, CGRectNull,
     },
     event::{
-        CGEvent,
-        CGEventFlags,
-        CGEventTapLocation,
-        CGEventType,
-        CGKeyCode,
-        CGMouseButton,
+        CGEvent, CGEventFlags, CGEventTapLocation, CGEventType, CGKeyCode, CGMouseButton,
         ScrollEventUnit,
     },
     event_source::{CGEventSource, CGEventSourceStateID},
     image::{CGImage, CGImageRef},
     window::{
-        kCGWindowBounds,
-        kCGWindowName,
-        kCGWindowNumber,
-        CGWindowListCopyWindowInfo,
+        kCGWindowBounds, kCGWindowName, kCGWindowNumber, CGWindowListCopyWindowInfo,
         CGWindowListCreateImage,
     },
 };
@@ -52,15 +33,11 @@ use core_graphics_types::{
     geometry::{CGPoint, CGSize},
 };
 use image::{
-    Bgra,
-    DynamicImage,
+    Bgra, DynamicImage,
     DynamicImage::ImageRgba8,
-    ImageBuffer,
-    ImageFormat,
+    ImageBuffer, ImageFormat,
     ImageFormat::{Bmp, Png},
-    RgbImage,
-    Rgba,
-    RgbaImage,
+    RgbImage, Rgba, RgbaImage,
 };
 use libc::{c_void, intptr_t};
 use neon::prelude::Finalize;
@@ -98,30 +75,34 @@ impl MacApi {
     #[allow(non_upper_case_globals)]
     fn handle_modifier(&mut self, key_sym: Key, down: bool) -> bool {
         match key_sym {
-            XK_Shift_L | XK_Shift_R =>
+            XK_Shift_L | XK_Shift_R => {
                 if down {
                     self.modifier_keys |= CGEventFlags::CGEventFlagShift;
                 } else {
                     self.modifier_keys &= !CGEventFlags::CGEventFlagShift;
-                },
-            XK_Control_L | XK_Control_R =>
+                }
+            }
+            XK_Control_L | XK_Control_R => {
                 if down {
                     self.modifier_keys |= CGEventFlags::CGEventFlagControl;
                 } else {
                     self.modifier_keys &= !CGEventFlags::CGEventFlagControl;
-                },
-            XK_Meta_L | XK_Meta_R =>
+                }
+            }
+            XK_Meta_L | XK_Meta_R => {
                 if down {
                     self.modifier_keys |= CGEventFlags::CGEventFlagAlternate;
                 } else {
                     self.modifier_keys &= !CGEventFlags::CGEventFlagAlternate;
-                },
-            XK_Alt_L | XK_Alt_R =>
+                }
+            }
+            XK_Alt_L | XK_Alt_R => {
                 if down {
                     self.modifier_keys |= CGEventFlags::CGEventFlagCommand;
                 } else {
                     self.modifier_keys &= !CGEventFlags::CGEventFlagCommand;
-                },
+                }
+            }
             _ => {
                 return false;
             }
@@ -212,14 +193,14 @@ impl NativeApiTemplate for MacApi {
 
     fn set_pointer_position(&self, pos: MousePosition) -> Result<(), Self::Error> {
         let source = CGEventSource::new(CGEventSourceStateID::CombinedSessionState)
-            .map_err(|_|UnableToCreateCGSource)?;
+            .map_err(|_| UnableToCreateCGSource)?;
         let event = CGEvent::new_mouse_event(
             source,
             CGEventType::MouseMoved,
             CGPoint::new(pos.x as CGFloat, pos.y as CGFloat),
             CGMouseButton::Left,
         )
-            .map_err(|_|CGEventError)?;
+        .map_err(|_| CGEventError)?;
         event.post(CGEventTapLocation::Session);
         Ok(())
     }
@@ -269,7 +250,7 @@ impl NativeApiTemplate for MacApi {
                     ),
                     _ => Err(()),
                 }
-                    .map_err(|_|CGEventError)?;
+                .map_err(|_| CGEventError)?;
                 scroll_event.post(CGEventTapLocation::Session);
             }
             _ => {
@@ -277,24 +258,27 @@ impl NativeApiTemplate for MacApi {
                 let mouse_position =
                     CGPoint::new(mouse_position.x as CGFloat, mouse_position.y as CGFloat);
                 let mouse_type = match button {
-                    MouseButton::Left =>
+                    MouseButton::Left => {
                         if down {
                             CGEventType::LeftMouseDown
                         } else {
                             CGEventType::LeftMouseUp
-                        },
-                    MouseButton::Right =>
+                        }
+                    }
+                    MouseButton::Right => {
                         if down {
                             CGEventType::RightMouseDown
                         } else {
                             CGEventType::RightMouseUp
-                        },
-                    _ =>
+                        }
+                    }
+                    _ => {
                         if down {
                             CGEventType::OtherMouseDown
                         } else {
                             CGEventType::OtherMouseUp
-                        },
+                        }
+                    }
                 };
                 let moose_button = match button {
                     MouseButton::Left => CGMouseButton::Left,
@@ -303,7 +287,7 @@ impl NativeApiTemplate for MacApi {
                 };
                 let event =
                     CGEvent::new_mouse_event(source, mouse_type, mouse_position, moose_button)
-                        .map_err(|_|CGEventError)?;
+                        .map_err(|_| CGEventError)?;
                 event.post(CGEventTapLocation::Session);
             }
         }
@@ -316,12 +300,15 @@ impl NativeApiTemplate for MacApi {
             return Err(NSPasteboardError);
         }
         let data = match type_name {
-            ClipboardType::Text => {
-                unsafe { NSPasteboard::dataForType(paste_board, NSPasteboardTypeString) }
-            }
-            ClipboardType::Custom(type_name) => {
-                unsafe { NSPasteboard::dataForType(paste_board, NSString::alloc(nil).init_str(type_name.as_str())) }
-            }
+            ClipboardType::Text => unsafe {
+                NSPasteboard::dataForType(paste_board, NSPasteboardTypeString)
+            },
+            ClipboardType::Custom(type_name) => unsafe {
+                NSPasteboard::dataForType(
+                    paste_board,
+                    NSString::alloc(nil).init_str(type_name.as_str()),
+                )
+            },
         };
         if data == nil {
             return Err(ClipboardNotFound(type_name.to_string()));
@@ -337,9 +324,9 @@ impl NativeApiTemplate for MacApi {
         let type_name = unsafe {
             match type_name {
                 ClipboardType::Text => NSPasteboardTypeString,
-                ClipboardType::Custom(type_name) => {
-                    unsafe { NSString::alloc(nil).init_str(type_name.as_str()) }
-                }
+                ClipboardType::Custom(type_name) => unsafe {
+                    NSString::alloc(nil).init_str(type_name.as_str())
+                },
             }
         };
         MacApi::set_clipboard_content_mac(type_name, content)
@@ -491,8 +478,9 @@ impl NativeApiTemplate for MacApi {
             window.id,
             kCGWindowImageBoundsIgnoreFraming,
         )
-            .ok_or_else(|| CaptureDisplayError(window.name.clone()))?;
-        Ok(MacApi::cgimage_to_frame(&image).map_err(|_| CaptureDisplayError(window.name.clone()))?)
+        .ok_or_else(|| CaptureDisplayError(window.name.clone()))?;
+        Ok(MacApi::cgimage_to_frame(&image)
+            .map_err(|_| CaptureDisplayError(window.name.clone()))?)
     }
 }
 
