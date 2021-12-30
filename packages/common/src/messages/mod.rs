@@ -35,6 +35,8 @@ pub enum Error {
     InvalidDate(i64),
     #[error("encountered bad boolean with value {0}")]
     BadBool(u8),
+    #[error("encountered bad flags for {name} with value {value}")]
+    BadFlags { name: &'static str, value: u8 },
 }
 
 impl From<Infallible> for Error {
@@ -113,10 +115,11 @@ macro_rules! impl_bitflags_message_component {
     ($name:ident) => {
         impl MessageComponent for $name {
             fn read(cursor: &mut Cursor<&[u8]>) -> Result<Self, Error> {
-                cursor
-                    .read_u8()
-                    .map(Self::from_bits_truncate)
-                    .map_err(Into::into)
+                let flags = cursor.read_u8()?;
+                Self::from_bits(flags).ok_or(Error::BadFlags {
+                    name: stringify!($name),
+                    value: flags,
+                })
             }
 
             fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> Result<(), Error> {

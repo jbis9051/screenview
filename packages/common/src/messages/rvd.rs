@@ -73,7 +73,13 @@ pub struct MouseInput {
 
 bitflags! {
     pub struct ButtonsMask: u8 {
-        // TODO
+        const LEFT          = 0b00000001;
+        const MIDDLE        = 0b00000010;
+        const RIGHT         = 0b00000100;
+        const SCROLL_UP     = 0b00001000;
+        const SCROLL_DOWN   = 0b00010000;
+        const SCROLL_LEFT   = 0b00100000;
+        const SCROLL_RIGHT  = 0b01000000;
     }
 }
 
