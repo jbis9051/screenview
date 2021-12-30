@@ -1,6 +1,8 @@
 /.idea/
 **/node_modules/
 **/build/
-**/target
+**/target/
+**/.DS_Store
+**/index.node
 **/out/*
 !/docs/out/*.pdf
