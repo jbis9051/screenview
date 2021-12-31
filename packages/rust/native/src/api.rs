@@ -1,6 +1,6 @@
 use std::{
     error::Error,
-    fmt::{Display, Formatter}, convert::Infallible,
+    fmt::{Display, Formatter},
 };
 
 use image::RgbImage;
@@ -104,6 +104,7 @@ pub(crate) trait NativeApiTemplate: Sized {
 #[cfg(dummy_api)]
 pub(crate) mod dummy {
     use super::*;
+    use std::convert::Infallible;
 
     pub enum DummyApi {}
 

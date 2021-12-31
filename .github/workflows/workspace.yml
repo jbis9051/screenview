@@ -15,7 +15,7 @@ defaults:
 
 env:
   CARGO_INCREMENTAL: 0
-  RUSTFLAGS: "-Dwarnings"
+  RUSTFLAGS: "--cfg dummy_api"
 
 jobs:
   rustfmt:
@@ -39,7 +39,7 @@ jobs:
           components: clippy
           override: true
           profile: minimal
-      - run: RUSTFLAGS='--cfg dummy_api' cargo clippy --all --all-features -- -D warnings
+      - run: cargo clippy --all --all-features
 #  build:
 #    runs-on: ubuntu-latest
 #    steps:
@@ -59,4 +59,4 @@ jobs:
           toolchain: stable
           override: true
           profile: minimal
-      - run: RUSTFLAGS='--cfg dummy_api' cargo test
+      - run: cargo test

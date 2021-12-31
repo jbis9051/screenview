@@ -2,7 +2,7 @@
 
 set -e
 cd packages/rust || exit 1
-echo "$ cargo +nightly fmt --check"
+echo "$ cargo +nightly fmt --all -- --check"
 cargo +nightly fmt -- --check
 echo "$ cargo clippy"
-cargo clippy
+cargo clippy --all --all-features
