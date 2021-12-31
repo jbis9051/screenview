@@ -10,7 +10,9 @@ use crate::keymaps::keysym::{XK_Shift_L, XK_a};
 mod api;
 mod keymaps;
 cfg_if! {
-    if #[cfg(target_os="linux")] {
+    if #[cfg(dummy_api)] {
+        pub use api::dummy::DummyApi as NativeApi;
+    } else if #[cfg(target_os="linux")] {
         mod unix;
         pub use unix::X11Api as NativeApi;
     } else if #[cfg(windows)] {

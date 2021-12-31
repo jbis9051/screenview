@@ -508,7 +508,7 @@ impl X11Api {
             )
         }) {
             monitor_list.push(X11MonitorInfo {
-                name: reply?.name().unwrap_or("unknown").to_owned(),
+                name: reply?.name().to_string(),
                 x: monitor_info.x() as u32,
                 y: monitor_info.y() as u32,
                 width: monitor_info.width() as u32,

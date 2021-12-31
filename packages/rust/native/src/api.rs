@@ -1,6 +1,6 @@
 use std::{
     error::Error,
-    fmt::{Display, Formatter},
+    fmt::{Display, Formatter}, convert::Infallible,
 };
 
 use image::RgbImage;
@@ -98,5 +98,66 @@ pub(crate) trait NativeApiTemplate: Sized {
     fn update_window_frame(&self, window: &Window, cap: &mut Frame) -> Result<(), Self::Error> {
         *cap = self.capture_window_frame(window)?;
         Ok(())
+    }
+}
+
+#[cfg(dummy_api)]
+pub(crate) mod dummy {
+    use super::*;
+
+    pub enum DummyApi {}
+
+    impl neon::prelude::Finalize for DummyApi {}
+
+    impl NativeApiTemplate for DummyApi {
+        type Error = Infallible;
+
+        fn new() -> Result<Self, Self::Error> {
+            unimplemented!()
+        }
+
+        fn key_toggle(&mut self, _key: Key, _down: bool) -> Result<(), Self::Error> {
+            unimplemented!()
+        }
+
+        fn pointer_position(&self) -> Result<MousePosition, Self::Error> {
+            unimplemented!()
+        }
+
+        fn set_pointer_position(&self, _pos: MousePosition) -> Result<(), Self::Error> {
+            unimplemented!()
+        }
+
+        fn toggle_mouse(&self, _button: MouseButton, _down: bool) -> Result<(), Self::Error> {
+            unimplemented!()
+        }
+
+        fn clipboard_content(&self, _type_name: &ClipboardType) -> Result<Vec<u8>, Self::Error> {
+            unimplemented!()
+        }
+
+        fn set_clipboard_content(
+            &mut self,
+            _type_name: &ClipboardType,
+            _content: &[u8],
+        ) -> Result<(), Self::Error> {
+            unimplemented!()
+        }
+
+        fn monitors(&mut self) -> Result<Vec<Monitor>, Self::Error> {
+            unimplemented!()
+        }
+
+        fn windows(&mut self) -> Result<Vec<Window>, Self::Error> {
+            unimplemented!()
+        }
+
+        fn capture_display_frame(&self, _display: &Monitor) -> Result<Frame, Self::Error> {
+            unimplemented!()
+        }
+
+        fn capture_window_frame(&self, _display: &Window) -> Result<Frame, Self::Error> {
+            unimplemented!()
+        }
     }
 }

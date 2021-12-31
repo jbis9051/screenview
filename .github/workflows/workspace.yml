@@ -39,7 +39,7 @@ jobs:
           components: clippy
           override: true
           profile: minimal
-      - run: cargo clippy --all --all-features -- -D warnings
+      - run: RUSTFLAGS='--cfg dummy_api' cargo clippy --all --all-features -- -D warnings
 #  build:
 #    runs-on: ubuntu-latest
 #    steps:
@@ -59,4 +59,4 @@ jobs:
           toolchain: stable
           override: true
           profile: minimal
-      - run: cargo test
+      - run: RUSTFLAGS='--cfg dummy_api' cargo test

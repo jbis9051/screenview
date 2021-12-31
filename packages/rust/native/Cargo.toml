@@ -28,12 +28,12 @@ default-features = false
 features = ["napi-6"]
 
 
-[target.'cfg(target_os="linux")'.dependencies]
+[target.'cfg(all(target_os="linux", not(dummy_api)))'.dependencies]
 x11 = { version = "2.19.1", features = ["xtest"] }
 x11-clipboard = "0.5.3"
 xcb = { version = "1.0.0-beta.0", features = ["shm", "xlib_xcb", "randr"] }
 
-[target.'cfg(target_os="macos")'.dependencies]
+[target.'cfg(all(target_os="macos", not(dummy_api)))'.dependencies]
 cocoa = "0.20.1"
 cocoa-foundation = "0.1.0"
 core-graphics = { version = "0.22.3", features = ["highsierra"] }
