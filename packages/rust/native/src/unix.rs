@@ -1,6 +1,6 @@
 use errno::{errno, Errno};
 use image::RgbImage;
-use libc::{c_int, c_void, shmat, shmctl, shmdt, shmget, size_t, IPC_CREAT, IPC_PRIVATE, IPC_RMID};
+use libc::{c_int, shmat, shmctl, shmdt, shmget, size_t, IPC_CREAT, IPC_PRIVATE, IPC_RMID};
 use neon::prelude::Finalize;
 use std::{
     error::Error as StdError,
@@ -255,7 +255,7 @@ impl NativeApiTemplate for X11Api {
 
             let name = str::from_utf8(reply.value())
                 .map(|string| string.to_owned())
-                .unwrap_or(String::from("unknown"));
+                .unwrap_or_else(|_| String::from("unknown"));
 
             let geometry = self
                 .conn
@@ -359,7 +359,7 @@ impl X11Api {
         };
 
         // if shmaddr == (void*)-1
-        if shmaddr as *mut c_void == usize::MAX as *mut c_void {
+        if ptr::eq(shmaddr, usize::MAX as *mut _) {
             let err = Error::ShmAttach(errno());
 
             // Make a best effort to release the resource. If this fails there's not much we can do
@@ -564,7 +564,7 @@ pub enum Error {
     #[error("Failed to open display")]
     DisplayOpenFailed,
     #[error("internal xcb error: {0}")]
-    XcbError(#[from] XcbError),
+    Xcb(#[from] XcbError),
     #[error("failed to initialize shared memory object: error code {0}")]
     ShmInit(Errno),
     #[error("failed to attach to shared memory object: error code {0}")]
@@ -576,7 +576,7 @@ pub enum Error {
     #[error("unknown monitor")]
     UnknownMonitor,
     #[error("clipboard error: {0}")]
-    ClipboardError(#[from] X11ClipboardError),
+    Clipboard(#[from] X11ClipboardError),
     #[error("clipboard type {0:?} not supported")]
     UnsupportedClipboardType(ClipboardType),
 }
@@ -586,19 +586,19 @@ unsafe impl Send for Error {}
 
 impl From<xcb::Error> for Error {
     fn from(error: xcb::Error) -> Self {
-        Self::XcbError(XcbError(error))
+        Self::Xcb(XcbError(error))
     }
 }
 
 impl From<ConnError> for Error {
     fn from(error: ConnError) -> Self {
-        Self::XcbError(XcbError(xcb::Error::Connection(error)))
+        Self::Xcb(XcbError(xcb::Error::Connection(error)))
     }
 }
 
 impl From<ProtocolError> for Error {
     fn from(error: ProtocolError) -> Self {
-        Self::XcbError(XcbError(xcb::Error::Protocol(error)))
+        Self::Xcb(XcbError(xcb::Error::Protocol(error)))
     }
 }
 

@@ -22,7 +22,7 @@ pub fn parse_fields(data: &DataStruct) -> Result<Vec<Field>> {
             .transpose()?
             .unwrap_or_default();
 
-        let outer_ty = field.ty.clone();
+        let outer_ty = Box::new(field.ty.clone());
         let mut is_option = false;
         let mut is_array = false;
         let mut inner_ty = outer_ty.clone();
@@ -30,7 +30,7 @@ pub fn parse_fields(data: &DataStruct) -> Result<Vec<Field>> {
 
         if matches_ident(&inner_ty, "Option") {
             is_option = true;
-            inner_ty = extract_type_from_container(&inner_ty)?;
+            inner_ty = Box::new(extract_type_from_container(&inner_ty)?);
             if params.condition.is_none() {
                 return Err(Error::new_spanned(attr, "missing condition parameter"));
             }
@@ -43,7 +43,7 @@ pub fn parse_fields(data: &DataStruct) -> Result<Vec<Field>> {
 
         if matches_ident(&inner_ty, "Vec") {
             is_array = true;
-            inner_ty = extract_type_from_container(&inner_ty)?;
+            inner_ty = Box::new(extract_type_from_container(&inner_ty)?);
 
             let is_vec_u8 = matches_ident(&inner_ty, "u8");
             if is_vec_u8 {
@@ -105,18 +105,10 @@ pub fn parse_fields(data: &DataStruct) -> Result<Vec<Field>> {
     Ok(dest)
 }
 
+#[derive(Default)]
 struct ParseParams {
     len: Option<ArrayLength>,
     condition: Option<Condition>,
-}
-
-impl Default for ParseParams {
-    fn default() -> Self {
-        Self {
-            len: None,
-            condition: None,
-        }
-    }
 }
 
 impl ParseParams {
@@ -225,7 +217,7 @@ pub struct Field {
 }
 
 pub enum Condition {
-    Expr(Expr),
+    Expr(Box<Expr>),
     Prefixed(Ident),
 }
 
@@ -239,7 +231,7 @@ impl ToTokens for Condition {
 }
 
 pub enum ArrayLength {
-    Expr(Expr),
+    Expr(Box<Expr>),
     Fixed(LitInt),
     Prefixed(Ident, LitInt),
     Greedy(Ident),
@@ -260,27 +252,27 @@ impl ToTokens for ArrayLength {
 }
 
 pub enum TypeInfo {
-    Regular(Type),
+    Regular(Box<Type>),
     Option {
         condition: Condition,
-        outer: Type,
-        inner: Type,
+        outer: Box<Type>,
+        inner: Box<Type>,
     },
     Array {
         length: ArrayLength,
-        outer: Type,
+        outer: Box<Type>,
         inner: ArrayType,
     },
     OptionArray {
         condition: Condition,
         length: ArrayLength,
-        outer: Type,
+        outer: Box<Type>,
         inner: ArrayType,
     },
 }
 
 pub enum ArrayType {
-    Vec(Type),
+    Vec(Box<Type>),
     Vecu8,
     String,
 }

@@ -1,7 +1,93 @@
 use crate::parse::{ArrayLength, ArrayType, Condition, Field, TypeInfo};
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{DeriveInput, Error, LitInt};
+use syn::{DataEnum, DeriveInput, Error, Fields, Ident, LitInt, Type};
+
+pub fn gen_enum_impl(
+    crate_common: &TokenStream,
+    input: &DeriveInput,
+    data_enum: &DataEnum,
+) -> TokenStream {
+    let mut variants = Vec::with_capacity(data_enum.variants.len());
+    for variant in &data_enum.variants {
+        match &variant.fields {
+            Fields::Unnamed(unnamed) => {
+                if unnamed.unnamed.len() != 1 {
+                    return Error::new_spanned(unnamed, "Variant can contain only one field")
+                        .to_compile_error();
+                }
+
+                let variant_name = &variant.ident;
+                let field_ty = &unnamed.unnamed.first().unwrap().ty;
+                variants.push((variant_name, field_ty));
+            }
+            fields => {
+                return Error::new_spanned(fields, "Variant must contain a single, unnamed field")
+                    .to_compile_error();
+            }
+        }
+    }
+
+    let name = &input.ident;
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+    let read = gen_enum_deserialize_impl(crate_common, &variants);
+    let write = gen_enum_serialize_impl(crate_common, &variants);
+
+    quote! {
+        impl #impl_generics #crate_common::messages::MessageComponent for #name #ty_generics #where_clause {
+            fn read(__cursor: &mut ::std::io::Cursor<&[u8]>) -> Result<Self, #crate_common::messages::Error> {
+                #read
+            }
+
+            fn write(&self, __cursor: &mut ::std::io::Cursor<::std::vec::Vec<u8>>) -> Result<(), #crate_common::messages::Error> {
+                #write
+            }
+        }
+    }
+}
+
+fn gen_enum_deserialize_impl(
+    crate_common: &TokenStream,
+    variants: &[(&Ident, &Type)],
+) -> TokenStream {
+    let match_arms = variants.iter().map(|&(name, ty)| {
+        quote! {
+            <#ty as #crate_common::messages::MessageID>::ID =>
+                Self::#name(#crate_common::messages::MessageComponent::read(__cursor)?)
+        }
+    });
+
+    quote! {
+        let __id = ::byteorder::ReadBytesExt::read_u8(__cursor)?;
+        Ok(match __id {
+            #( #match_arms, )*
+            _ => return Err(#crate_common::messages::Error::BadMessageID(__id))
+        })
+    }
+}
+
+fn gen_enum_serialize_impl(
+    crate_common: &TokenStream,
+    variants: &[(&Ident, &Type)],
+) -> TokenStream {
+    let match_arms = variants.iter().map(|&(name, ty)| {
+        quote! {
+            Self::#name(__message) => {
+                ::byteorder::WriteBytesExt::write_u8(
+                    __cursor,
+                    <#ty as #crate_common::messages::MessageID>::ID
+                )?;
+                #crate_common::messages::MessageComponent::write(__message, __cursor)
+            }
+        }
+    });
+
+    quote! {
+        match self {
+            #( #match_arms ),*
+        }
+    }
+}
 
 pub fn gen_struct_impl(
     crate_common: &TokenStream,

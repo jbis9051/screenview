@@ -24,6 +24,7 @@ pub fn derive_message_component(item: proc_macro::TokenStream) -> proc_macro::To
             };
             gen::gen_struct_impl(&crate_common, &input, &fields).into()
         }
+        Data::Enum(data_enum) => gen::gen_enum_impl(&crate_common, &input, data_enum).into(),
         _ => Error::new_spanned(&input, "ADT not supported")
             .into_compile_error()
             .into(),

@@ -37,6 +37,8 @@ pub enum Error {
     BadBool(u8),
     #[error("encountered bad flags for {name} with value {value}")]
     BadFlags { name: &'static str, value: u8 },
+    #[error("encountered invalid message id {0}")]
+    BadMessageID(u8),
 }
 
 impl From<Infallible> for Error {
