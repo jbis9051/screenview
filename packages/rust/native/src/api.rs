@@ -108,8 +108,6 @@ pub(crate) mod dummy {
 
     pub enum DummyApi {}
 
-    impl neon::prelude::Finalize for DummyApi {}
-
     impl NativeApiTemplate for DummyApi {
         type Error = Infallible;
 

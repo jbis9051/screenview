@@ -3,7 +3,6 @@ name = "native"
 version = "0.0.0"
 description = "Native library including bindings to screen, keyboard, and mouse APIs"
 edition = "2018"
-exclude = ["index.node"]
 
 [lib]
 crate-type = ["cdylib"]
@@ -21,11 +20,6 @@ cfg-if = "1.0.0"
 version = "0.23.14"
 default-features = false
 features = ["png"]
-
-[dependencies.neon]
-version = "0.9"
-default-features = false
-features = ["napi-6"]
 
 
 [target.'cfg(all(target_os="linux", not(dummy_api)))'.dependencies]

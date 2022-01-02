@@ -1,7 +1,6 @@
 use errno::{errno, Errno};
 use image::RgbImage;
 use libc::{c_int, shmat, shmctl, shmdt, shmget, size_t, IPC_CREAT, IPC_PRIVATE, IPC_RMID};
-use neon::prelude::Finalize;
 use std::{
     error::Error as StdError,
     fmt::{self, Debug, Formatter},
@@ -550,8 +549,6 @@ impl X11Api {
         }
     }
 }
-
-impl Finalize for X11Api {}
 
 impl Drop for X11Api {
     fn drop(&mut self) {

@@ -42,7 +42,6 @@ use core_graphics::{
 use core_graphics_types::{base::CGFloat, geometry::CGPoint};
 use image::RgbImage;
 use libc::c_void;
-use neon::prelude::Finalize;
 
 use crate::{
     api::*,
@@ -53,9 +52,6 @@ use crate::{
 pub struct MacApi {
     modifier_keys: CGEventFlags,
 }
-
-impl Finalize for MacApi {}
-
 impl MacApi {
     fn cgstring_to_string(cf_ref: CFStringRef) -> Option<String> {
         let c_ptr = unsafe { CFStringGetCStringPtr(cf_ref, kCFStringEncodingUTF8) };
