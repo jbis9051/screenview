@@ -7,8 +7,8 @@ use std::{
 };
 
 pub mod rvd;
-pub mod server_encryption_layer;
 pub mod svsc;
+pub mod tel;
 pub mod wpskka;
 
 pub trait MessageID {

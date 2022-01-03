@@ -1,6 +1,6 @@
 mod helper;
 use crate::helper::test_write;
-use common::messages::server_encryption_layer::*;
+use common::messages::tel::*;
 use common::messages::MessageComponent;
 use std::io::Cursor;
 
