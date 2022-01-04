@@ -6,7 +6,7 @@ use std::io::Cursor;
 
 #[test]
 fn test_peer_hello() {
-    let bytes = include_bytes!("binary/server_encryption_layer/peer_hello.bin");
+    let bytes = include_bytes!("binary/tel/peer_hello.bin");
     let message: PeerHello = PeerHello::read(&mut Cursor::new(bytes)).unwrap();
     assert_eq!(&message.public_key, b"PUBLICKEYPUBLICK");
     test_write(&message, bytes);
@@ -14,7 +14,7 @@ fn test_peer_hello() {
 
 #[test]
 fn test_server_hello() {
-    let bytes = include_bytes!("binary/server_encryption_layer/server_hello.bin");
+    let bytes = include_bytes!("binary/tel/server_hello.bin");
     let message: ServerHello = ServerHello::read(&mut Cursor::new(bytes)).unwrap();
     assert_eq!(&message.certificate_list, b"cert_list");
     assert_eq!(&message.public_key, b"PUBLICKEYPUBLICK");
@@ -24,8 +24,7 @@ fn test_server_hello() {
 
 #[test]
 fn test_transport_data_message_reliable() {
-    let bytes =
-        include_bytes!("binary/server_encryption_layer/transport_data_message_reliable.bin");
+    let bytes = include_bytes!("binary/tel/transport_data_message_reliable.bin");
     let message: TransportDataMessageReliable =
         TransportDataMessageReliable::read(&mut Cursor::new(bytes)).unwrap();
     assert_eq!(message.data, b"test");
@@ -34,8 +33,7 @@ fn test_transport_data_message_reliable() {
 
 #[test]
 fn test_transport_data_peer_message_unreliable() {
-    let bytes =
-        include_bytes!("binary/server_encryption_layer/transport_data_peer_message_unreliable.bin");
+    let bytes = include_bytes!("binary/tel/transport_data_peer_message_unreliable.bin");
     let message: TransportDataPeerMessageUnreliable =
         TransportDataPeerMessageUnreliable::read(&mut Cursor::new(bytes)).unwrap();
     assert_eq!(&message.peer_id, b"PEERIDPEERIDPEER");
@@ -46,9 +44,7 @@ fn test_transport_data_peer_message_unreliable() {
 
 #[test]
 fn test_transport_data_server_message_unreliable() {
-    let bytes = include_bytes!(
-        "binary/server_encryption_layer/transport_data_server_message_unreliable.bin"
-    );
+    let bytes = include_bytes!("binary/tel/transport_data_server_message_unreliable.bin");
     let message: TransportDataServerMessageUnreliable =
         TransportDataServerMessageUnreliable::read(&mut Cursor::new(bytes)).unwrap();
     assert_eq!(&message.counter, b"COUNTERC");
