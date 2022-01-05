@@ -95,7 +95,7 @@ impl SvscHandler {
         }
         let expiration = msg
             .new_expiration
-            .ok_or_else(|| SvscError::LeaseExtensionRequestRejected)?;
+            .ok_or(SvscError::LeaseExtensionRequestRejected)?;
         self.lease.unwrap().expiration = expiration;
         self.awaiting_extension_response = false;
         Ok((None, SvscInform::None))

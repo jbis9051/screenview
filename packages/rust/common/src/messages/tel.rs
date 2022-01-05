@@ -27,7 +27,7 @@ pub struct TransportDataMessageReliable {
 #[message_id(4)]
 pub struct TransportDataPeerMessageUnreliable {
     pub peer_id: [u8; 16],
-    pub counter: [u8; 8],
+    pub counter: u64,
     #[parse(greedy)]
     pub data: Vec<u8>,
 }
@@ -35,7 +35,7 @@ pub struct TransportDataPeerMessageUnreliable {
 #[derive(Debug, MessageComponent)]
 #[message_id(5)]
 pub struct TransportDataServerMessageUnreliable {
-    pub counter: [u8; 8],
+    pub counter: u64,
     #[parse(greedy)]
     pub data: Vec<u8>,
 }
