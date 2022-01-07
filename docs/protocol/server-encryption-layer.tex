@@ -85,9 +85,9 @@ The Server and Client derive their keys and initialize their nonces.
 \begin{align*}
     & C_{peer} = \text{DH}(E_{serv}^{pub},\ E_{peer}^{priv})\\
     & C_{serv} = \text{DH}(E_{peer}^{pub},\ E_{serv}^{priv})\\
-    & (T_{peer}^{send} = T_{serv}^{recv},\ T_{peer}^{recv} = T_{serv}^{send}) := \text{KDF}_2(C_{peer} = C_{serv},
+    & (\mathit{ST}_{peer}^{send} = \mathit{ST}_{serv}^{recv},\ \mathit{ST}_{peer}^{recv} = \mathit{ST}_{serv}^{send}) := \text{KDF}_2(C_{peer} = C_{serv},
     \ \epsilon) \\
-    & N_{peer}^{send} = N_{serv}^{recv} = N_{peer}^{recv} = N_{serv}^{send} := 0
+    & \mathit{NT}_{peer}^{send} = \mathit{NT}_{serv}^{recv} = \mathit{NT}_{peer}^{recv} = \mathit{NT}_{serv}^{send} := 0
 \end{align*}
 
 \subsubsection{Subsequent Messages: Transport Data Messages}
@@ -111,13 +111,13 @@ MUST be dropped.
 \end{center}
 
 \begin{align*}
-    & \text{data} := \text{AEAD}(T_{m}^{send}, N_{m}^{send}, P, \epsilon) \\
-    & N_{m}^{send} := N_{m}^{send} + 1
+    & \text{data} := \text{AEAD}(\mathit{ST}_{m}^{send}, \mathit{NT}_{m}^{send}, P, \epsilon) \\
+    & \mathit{NT}_{m}^{send} := \mathit{NT}_{m}^{send} + 1
 \end{align*}
 
 Where $P$ is the payload to be transported\\
 
-$N_{m}$ is an 64 bit counter that MUST NOT wrap. After a transport message is sent, if $N_{m}$ equals
+$\mathit{NT}_{m}$ is an 64 bit counter that MUST NOT wrap. After a transport message is sent, if $\mathit{NT}_{m}$ equals
 ($2^{64}-1$) the TCP connection MUST be dropped. Subsequent TCP messages MUST NOT be sent. \\
 
 \subsection{UDP}
@@ -135,9 +135,9 @@ The Server and Peer derive keys.
     &  G:= \text{session-id}                                                               \\
     &  H := \text{peer-id}                                                                \\
     &  J := \text{peer-key}                                                              \\
-    &  (V_{peer}^{send} = V_{serv}^{recv}, V_{peer}^{recv} = V_{serv}^{send}) := \text{KDF}_2(\text{HASH}(G\,
+    &  (\mathit{SU}_{peer}^{send} = \mathit{SU}_{serv}^{recv}, \mathit{SU}_{peer}^{recv} = \mathit{SU}_{serv}^{send}) := \text{KDF}_2(\text{HASH}(G\,
     ||\, H\,||\, J), \epsilon)                                        \\
-    &   M_{peer}^{send} = M_{serv}^{recv} = M_{peer}^{recv} = M_{serv}^{send} := 0
+    &   \mathit{NU}_{peer}^{send} = \mathit{NU}_{serv}^{recv} = \mathit{NU}_{peer}^{recv} = \mathit{NU}_{serv}^{send} := 0
 \end{align*}
 
 \subsubsection{Transport Data Messages}
@@ -176,14 +176,14 @@ The Server and Peer derive keys.
 
 
 \begin{align*}
-    & \text{data} := \text{AEAD}(V_{m}^{send}, M_{m}^{send}, P, \epsilon)\\
-    & \text{counter} := M_{m}^{send}\\
-    & M_{m}^{send} := M_{m}^{send} + 1
+    & \text{data} := \text{AEAD}(\mathit{SU}_{m}^{send}, \mathit{NU}_{m}^{send}, P, \epsilon)\\
+    & \text{counter} := \mathit{NU}_{m}^{send}\\
+    & \mathit{NU}_{m}^{send} := \mathit{NU}_{m}^{send} + 1
 \end{align*}
 
 
 Where $P$ is the payload to be transported\\
 
-$M_{m}$ is an 64 bit counter that MUST NOT wrap. After a transport message is sent, if $M_{m}$ equals
+$\mathit{NU}_{m}$ is an 64 bit counter that MUST NOT wrap. After a transport message is sent, if $\mathit{NU}_{m}$ equals
 ($2^{64}-1$) the TCP connection MUST be dropped. Subsequent UDP messages MUST NOT be sent. \\
 
