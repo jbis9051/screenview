@@ -1,6 +1,6 @@
 use parser::{message_id, MessageComponent};
 
-#[derive(MessageComponent)]
+#[derive(Debug, MessageComponent)]
 #[message_id(1)]
 pub struct HostHello {
     pub username: [u8; 16],
@@ -9,7 +9,7 @@ pub struct HostHello {
     pub public_key: [u8; 16],
 }
 
-#[derive(MessageComponent)]
+#[derive(Debug, MessageComponent)]
 #[message_id(2)]
 pub struct ClientHello {
     pub a_pub: [u8; 256],
@@ -17,16 +17,32 @@ pub struct ClientHello {
     pub mac: [u8; 32],
 }
 
-#[derive(MessageComponent)]
+#[derive(Debug, MessageComponent)]
 #[message_id(3)]
 pub struct HostVerify {
     pub mac: [u8; 32],
 }
 
-#[derive(MessageComponent)]
+#[derive(Debug, MessageComponent)]
 #[message_id(4)]
-pub struct TransportDataMessage {
-    pub counter: [u8; 8],
+pub struct TransportDataMessageReliable {
     #[parse(len_prefixed(2))]
     pub data: Vec<u8>,
+}
+
+#[derive(Debug, MessageComponent)]
+#[message_id(5)]
+pub struct TransportDataMessageUnreliable {
+    pub counter: u64,
+    #[parse(len_prefixed(2))]
+    pub data: Vec<u8>,
+}
+
+#[derive(Debug)]
+pub enum WpskkaMessage {
+    HostHello(HostHello),
+    ClientHello(ClientHello),
+    HostVerify(HostVerify),
+    TransportDataMessageReliable(TransportDataMessageReliable),
+    TransportDataMessageUnreliable(TransportDataMessageUnreliable),
 }

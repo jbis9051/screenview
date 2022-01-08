@@ -1,20 +1,20 @@
 use crate::services::helpers::cipher_reliable_peer::{CipherError, CipherReliablePeer};
 use crate::services::helpers::cipher_unreliable_peer::CipherUnreliablePeer;
-use common::messages::tel::TelMessage;
+use common::messages::wpskka::WpskkaMessage;
 
 #[derive(Copy, Clone, Debug)]
-pub enum State {
+enum State {
     Handshake,
     Data,
 }
 
-pub struct TelHandler {
+pub struct WpskkaHostHandler {
     state: State,
     reliable: Option<CipherReliablePeer>,
     unreliable: Option<CipherUnreliablePeer>,
 }
 
-impl TelHandler {
+impl WpskkaHostHandler {
     pub fn new() -> Self {
         Self {
             state: State::Handshake,
@@ -23,41 +23,45 @@ impl TelHandler {
         }
     }
 
-    pub fn handle(&mut self, msg: TelMessage) -> Result<Option<Vec<u8>>, TelError> {
+    pub fn handle(&mut self, msg: WpskkaMessage) -> Result<Option<Vec<u8>>, WpskkaHostError> {
         match self.state {
             State::Handshake => match msg {
-                TelMessage::ServerHello(msg) => {
-                    // TODO tls validation
+                WpskkaMessage::ClientHello(msg) => {
+                    // TODO srp key derivation
                     self.state = State::Data;
                     Ok(None)
                 }
-                _ => Err(TelError::WrongMessageForState(msg, self.state)),
+                _ => Err(WpskkaHostError::WrongMessageForState(msg, self.state)),
             },
             State::Data => match msg {
-                TelMessage::TransportDataMessageReliable(msg) => {
+                WpskkaMessage::TransportDataMessageReliable(msg) => {
                     let reliable = self.reliable.as_mut().unwrap();
                     Ok(Some(
-                        reliable.decrypt(msg.data).map_err(TelError::CipherError)?,
+                        reliable
+                            .decrypt(msg.data)
+                            .map_err(WpskkaHostError::CipherError)?,
                     ))
                 }
-                TelMessage::TransportDataPeerMessageUnreliable(msg) => {
+                WpskkaMessage::TransportDataMessageUnreliable(msg) => {
                     let unreliable = self.unreliable.as_mut().unwrap();
                     Ok(Some(
                         unreliable
                             .decrypt(msg.data, msg.counter)
-                            .map_err(TelError::CipherError)?,
+                            .map_err(WpskkaHostError::CipherError)?,
                     ))
                 }
-                _ => Err(TelError::WrongMessageForState(msg, self.state)),
+                _ => Err(WpskkaHostError::WrongMessageForState(msg, self.state)),
             },
         }
     }
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum TelError {
+pub enum WpskkaHostError {
     #[error("{0}")]
     CipherError(CipherError),
+    #[error("{0}")]
+    SrpError(String), // TODO
     #[error("invalid message {0:?} for state {1:?}")]
-    WrongMessageForState(TelMessage, State),
+    WrongMessageForState(WpskkaMessage, State),
 }
