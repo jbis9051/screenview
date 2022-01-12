@@ -1,12 +1,12 @@
-\section{Server Encryption Layer}
+\section{Server Encryption Layer (SEL)}
 
-The Server Encryption Layer provides security for communication between Peers and the Server. TCP and UDP have
+SEL provides security for communication between Peers and the Server. TCP and UDP have
 different security methods. UDP encryption depends on secrets established in the SVSC protocol and therefore can only
 be begin after TCP encryption is already established.
 
 \subsection{TCP}
 
-The TCP Server Encryption Layer is heavily based on a simplification of TLS 1.3 as defined in
+The TCP SEL is heavily based on a simplification of TLS 1.3 as defined in
 \href{https://datatracker.ietf.org/doc/html/rfc8446}{RFC8446}.
 
 \subsubsection{PeerHello}

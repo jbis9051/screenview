@@ -4,7 +4,7 @@ A zero config remote screenshare and control. Open source alternative to TeamVie
 
 ## Abstract
 
-ScreenView is a suite of cryptographical and application level networking protocols culminating to create a
+ScreenView is a suite of cryptographical and application level networking protocols culminating in a
 zero configuration end to end encrypted remote screen viewing and controlling software. ScreenView aims to
 replace TeamViewer, RDP, and VNC for many use cases while being more performant and more secure. ScreenView
 requires little set up and is just as easy or easier to set up than other solutions. ScreenView defines four different
