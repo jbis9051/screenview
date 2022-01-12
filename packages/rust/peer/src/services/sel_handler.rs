@@ -1,6 +1,6 @@
 use crate::services::helpers::cipher_reliable_peer::{CipherError, CipherReliablePeer};
 use crate::services::helpers::cipher_unreliable_peer::CipherUnreliablePeer;
-use common::messages::tel::TelMessage;
+use common::messages::sel::SelMessage;
 
 #[derive(Copy, Clone, Debug)]
 pub enum State {
@@ -8,13 +8,13 @@ pub enum State {
     Data,
 }
 
-pub struct TelHandler {
+pub struct SelHandler {
     state: State,
     reliable: Option<CipherReliablePeer>,
     unreliable: Option<CipherUnreliablePeer>,
 }
 
-impl TelHandler {
+impl SelHandler {
     pub fn new() -> Self {
         Self {
             state: State::Handshake,
@@ -23,41 +23,39 @@ impl TelHandler {
         }
     }
 
-    pub fn handle(&mut self, msg: TelMessage) -> Result<Option<Vec<u8>>, TelError> {
+    pub fn handle(&mut self, msg: SelMessage) -> Result<Option<Vec<u8>>, Sel> {
         match self.state {
             State::Handshake => match msg {
-                TelMessage::ServerHello(msg) => {
+                SelMessage::ServerHello(msg) => {
                     // TODO tls validation
                     self.state = State::Data;
                     Ok(None)
                 }
-                _ => Err(TelError::WrongMessageForState(msg, self.state)),
+                _ => Err(Sel::WrongMessageForState(msg, self.state)),
             },
             State::Data => match msg {
-                TelMessage::TransportDataMessageReliable(msg) => {
+                SelMessage::TransportDataMessageReliable(msg) => {
                     let reliable = self.reliable.as_mut().unwrap();
-                    Ok(Some(
-                        reliable.decrypt(msg.data).map_err(TelError::CipherError)?,
-                    ))
+                    Ok(Some(reliable.decrypt(msg.data).map_err(Sel::CipherError)?))
                 }
-                TelMessage::TransportDataPeerMessageUnreliable(msg) => {
+                SelMessage::TransportDataPeerMessageUnreliable(msg) => {
                     let unreliable = self.unreliable.as_mut().unwrap();
                     Ok(Some(
                         unreliable
                             .decrypt(msg.data, msg.counter)
-                            .map_err(TelError::CipherError)?,
+                            .map_err(Sel::CipherError)?,
                     ))
                 }
-                _ => Err(TelError::WrongMessageForState(msg, self.state)),
+                _ => Err(Sel::WrongMessageForState(msg, self.state)),
             },
         }
     }
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum TelError {
+pub enum Sel {
     #[error("{0}")]
     CipherError(CipherError),
     #[error("invalid message {0:?} for state {1:?}")]
-    WrongMessageForState(TelMessage, State),
+    WrongMessageForState(SelMessage, State),
 }

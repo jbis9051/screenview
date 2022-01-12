@@ -41,7 +41,7 @@ pub struct TransportDataServerMessageUnreliable {
 }
 
 #[derive(Debug)]
-pub enum TelMessage {
+pub enum SelMessage {
     PeerHello(PeerHello),
     ServerHello(ServerHello),
     TransportDataMessageReliable(TransportDataMessageReliable),

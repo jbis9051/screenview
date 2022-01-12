@@ -1,2 +1,2 @@
 pub mod messages;
-pub mod tel_cipher;
+pub mod sel_cipher;

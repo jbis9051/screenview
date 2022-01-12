@@ -1,5 +1,6 @@
+#[macro_use]
 mod helper;
-use crate::helper::test_write;
+use crate::helper::*;
 use common::messages::wpskka::*;
 use common::messages::MessageComponent;
 use std::io::Cursor;
@@ -34,11 +35,20 @@ fn test_host_verify() {
 }
 
 #[test]
-fn test_transport_data() {
-    let bytes = include_bytes!("binary/wpskka/transport_data.bin");
-    let message: TransportDataMessage =
-        TransportDataMessage::read(&mut Cursor::new(bytes)).unwrap();
-    assert_eq!(&message.counter, b"COUNTERC");
+fn test_transport_data_unreliable() {
+    let bytes = include_bytes!("binary/wpskka/transport_data_unreliable.bin");
+    let message: TransportDataMessageUnreliable =
+        TransportDataMessageUnreliable::read(&mut Cursor::new(bytes)).unwrap();
+    assert_eq!(&message.counter, b_to_u64!(b"COUNTERC"));
+    assert_eq!(&message.data, b"YELLOW SUBMARINE");
+    test_write(&message, bytes);
+}
+
+#[test]
+fn test_transport_data_reliable() {
+    let bytes = include_bytes!("binary/wpskka/transport_data_reliable.bin");
+    let message: TransportDataMessageReliable =
+        TransportDataMessageReliable::read(&mut Cursor::new(bytes)).unwrap();
     assert_eq!(&message.data, b"YELLOW SUBMARINE");
     test_write(&message, bytes);
 }

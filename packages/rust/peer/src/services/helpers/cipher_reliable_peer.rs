@@ -1,4 +1,4 @@
-use common::tel_cipher;
+use common::sel_cipher;
 
 pub struct CipherReliablePeer {
     send_key: Vec<u8>,
@@ -18,7 +18,7 @@ impl CipherReliablePeer {
     }
 
     pub fn encrypt(&mut self, plainbytes: Vec<u8>) -> Result<Vec<u8>, CipherError> {
-        let cipherbytes = tel_cipher::encrypt(plainbytes, &self.send_key, self.send_nonce)
+        let cipherbytes = sel_cipher::encrypt(plainbytes, &self.send_key, self.send_nonce)
             .map_err(|_| CipherError::CipherError)?;
         self.send_nonce = self
             .send_nonce
@@ -28,7 +28,7 @@ impl CipherReliablePeer {
     }
 
     pub fn decrypt(&mut self, cipherbytes: Vec<u8>) -> Result<Vec<u8>, CipherError> {
-        let plainbytes = tel_cipher::decrypt(cipherbytes, &self.receive_key, self.receive_nonce)
+        let plainbytes = sel_cipher::decrypt(cipherbytes, &self.receive_key, self.receive_nonce)
             .map_err(|_| CipherError::CipherError)?;
         self.receive_nonce = self
             .receive_nonce
