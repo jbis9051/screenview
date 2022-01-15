@@ -1,6 +1,6 @@
 use cfg_if::cfg_if;
 
-mod api;
+pub mod api;
 mod keymaps;
 
 cfg_if! {

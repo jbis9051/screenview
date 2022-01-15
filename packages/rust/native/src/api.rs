@@ -25,7 +25,7 @@ pub struct Window {
 pub struct MousePosition {
     pub x: u32,
     pub y: u32,
-    pub monitor_id: u32,
+    pub monitor_id: u8,
 }
 
 #[derive(Clone, Copy)]
@@ -61,7 +61,7 @@ impl Display for ClipboardType {
 
 pub type Frame = RgbImage;
 
-pub(crate) trait NativeApiTemplate: Sized {
+pub trait NativeApiTemplate: Sized {
     type Error: Error;
 
     fn new() -> Result<Self, Self::Error>;

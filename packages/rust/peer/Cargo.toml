@@ -5,4 +5,5 @@ edition = "2021"
 
 [dependencies]
 common = { path = "../common" }
+native = { path = "../native" }
 thiserror = "1.0.30"

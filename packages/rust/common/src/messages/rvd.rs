@@ -8,7 +8,7 @@ use std::{
     io::{Cursor, Read, Write},
 };
 
-#[derive(MessageComponent)]
+#[derive(MessageComponent, Debug)]
 pub struct ProtocolVersion {
     #[parse(fixed_len(11))]
     pub version: String, // fixed 11 bytes
@@ -19,7 +19,7 @@ pub struct ProtocolVersionResponse {
     pub ok: bool,
 }
 
-#[derive(MessageComponent, Debug)]
+#[derive(MessageComponent, Debug, Default)]
 #[message_id(1)]
 pub struct DisplayChange {
     pub clipboard_readable: bool,
@@ -50,11 +50,11 @@ bitflags! {
 
 impl_bitflags_message_component!(AccessMask);
 
-#[derive(MessageComponent)]
+#[derive(MessageComponent, Debug)]
 #[message_id(2)]
 pub struct DisplayChangeReceived {}
 
-#[derive(MessageComponent)]
+#[derive(MessageComponent, Debug)]
 #[message_id(3)]
 pub struct MouseLocation {
     pub display_id: DisplayId,
@@ -62,7 +62,7 @@ pub struct MouseLocation {
     pub y_location: u16,
 }
 
-#[derive(MessageComponent)]
+#[derive(MessageComponent, Debug)]
 #[message_id(4)]
 pub struct MouseInput {
     pub display_id: DisplayId,
@@ -85,14 +85,14 @@ bitflags! {
 
 impl_bitflags_message_component!(ButtonsMask);
 
-#[derive(MessageComponent)]
+#[derive(MessageComponent, Debug)]
 #[message_id(5)]
 pub struct KeyInput {
     pub down: bool,
     pub key: u32, // keysym
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum ClipboardType {
     Text,
     Rtf,
@@ -130,6 +130,7 @@ impl From<&ClipboardType> for u8 {
     }
 }
 
+#[derive(Debug)]
 struct ClipboardCustomName<'a>(pub Cow<'a, str>);
 
 impl<'a> MessageComponent for ClipboardCustomName<'a> {
@@ -149,7 +150,7 @@ impl<'a> MessageComponent for ClipboardCustomName<'a> {
     }
 }
 
-#[derive(MessageComponent)]
+#[derive(MessageComponent, Debug)]
 struct ClipboardMetaInter<'a> {
     clipboard_type: u8,
     #[parse(condition = "(clipboard_type & Self::CUSTOM_FLAG) != 0")]
@@ -222,6 +223,7 @@ impl TryFrom<ClipboardMetaInter<'_>> for ClipboardMeta {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct ClipboardMeta {
     pub clipboard_type: ClipboardType,
     pub content_request: bool,
@@ -237,13 +239,13 @@ impl MessageComponent for ClipboardMeta {
     }
 }
 
-#[derive(MessageComponent)]
+#[derive(MessageComponent, Debug)]
 #[message_id(6)]
 pub struct ClipboardRequest {
     pub info: ClipboardMeta,
 }
 
-#[derive(MessageComponent)]
+#[derive(MessageComponent, Debug)]
 #[message_id(7)]
 pub struct ClipboardNotification {
     pub info: ClipboardMeta,
@@ -251,7 +253,7 @@ pub struct ClipboardNotification {
     pub content: Option<Vec<u8>>,
 }
 
-#[derive(MessageComponent)]
+#[derive(MessageComponent, Debug)]
 #[message_id(8)]
 pub struct FrameData {
     pub frame_number: u32,
@@ -259,4 +261,18 @@ pub struct FrameData {
     pub cell_number: u16,
     #[parse(len_prefixed(2))]
     pub data: Vec<u8>,
+}
+
+#[derive(Debug)]
+pub enum RvdMessage {
+    ProtocolVersion(ProtocolVersion),
+    ProtocolVersionResponse(ProtocolVersionResponse),
+    DisplayChange(DisplayChange),
+    DisplayChangeReceived(DisplayChangeReceived),
+    MouseLocation(MouseLocation),
+    MouseInput(MouseInput),
+    KeyInput(KeyInput),
+    ClipboardRequest(ClipboardRequest),
+    ClipboardNotification(ClipboardNotification),
+    FrameData(FrameData),
 }

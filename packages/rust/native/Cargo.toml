@@ -2,10 +2,7 @@
 name = "native"
 version = "0.0.0"
 description = "Native library including bindings to screen, keyboard, and mouse APIs"
-edition = "2018"
-
-[lib]
-crate-type = ["cdylib"]
+edition = "2021"
 
 [dependencies]
 cfg-if = "1.0.0"

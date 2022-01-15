@@ -1,6 +1,8 @@
 use crate::services::helpers::cipher_reliable_peer::{CipherError, CipherReliablePeer};
 use crate::services::helpers::cipher_unreliable_peer::CipherUnreliablePeer;
 use common::messages::wpskka::WpskkaMessage;
+use common::messages::ScreenViewMessage;
+use std::sync::mpsc::Sender;
 
 #[derive(Copy, Clone, Debug)]
 enum State {
@@ -23,7 +25,11 @@ impl WpskkaHostHandler {
         }
     }
 
-    pub fn handle(&mut self, msg: WpskkaMessage) -> Result<Option<Vec<u8>>, WpskkaHostError> {
+    pub fn handle(
+        &mut self,
+        msg: WpskkaMessage,
+        send: &mut Sender<ScreenViewMessage>,
+    ) -> Result<Option<Vec<u8>>, WpskkaHostError> {
         match self.state {
             State::Handshake => match msg {
                 WpskkaMessage::ClientHello(msg) => {
