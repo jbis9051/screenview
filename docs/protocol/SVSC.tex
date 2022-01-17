@@ -4,9 +4,7 @@ The SVSC protocol is the Server Communication Layer protocol used for Peers to i
 Server. Peers can lease an ID as well as begin a session with another Peer. Once a session is established, Peers can
 forward messages to another Peer. Unless otherwise noted, all messages MUST occur over TCP.\\
 
-With the exception of the \hyperlink{subsection.4.2}{Handshake} messages. All SVSC messages' first byte contain a
-number to indicate
-the message type.
+All SVSC messages' first byte contain a number to indicate the message type.
 
 \subsection{Definitions}
 
@@ -30,6 +28,8 @@ characters in the format
         \hline
         \textbf{Bytes} & \textbf{Name} & \textbf{Value}            \\
         \hline
+        1              & type          & 0              \\
+        \hline
         11             & version       & ``\texttt{SVSC 001.000}'' \\
         \hline
     \end{tabular}
@@ -44,6 +44,8 @@ communication MUST cease and the TCP connection MUST be terminated.
     \begin{tabular}{|c|c|c|}
         \hline
         \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
+        \hine
+        1              & type          & 1              \\
         \hline
         1              & ok            & 0 or 1         \\
         \hline
@@ -67,7 +69,7 @@ A \emph{LeaseRequest} message requests a lease of an ID.
         \hline
         \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
         \hline
-        1              & type          & 1              \\
+        1              & type          & 2              \\
         \hline
         1              & has-cookie    & 0 or 1         \\
         \hline
@@ -94,7 +96,7 @@ ignore it.
         \hline
         \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
         \hline
-        1              & type          & 2              \\
+        1              & type          & 3              \\
         \hline
         1              & accepted      & 0 or 1         \\
         \hline
@@ -133,7 +135,7 @@ than as soon as 50 percent of the lease duration has expired.
         \hline
         \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
         \hline
-        1              & type          & 3              \\
+        1              & type          & 4              \\
         \hline
         24             & cookie        &                \\
         \hline
@@ -150,7 +152,7 @@ A LeaseExtensionResponse message is a response to a LeaseExtensionRequest.
         \hline
         \textbf{Bytes} & \textbf{Name}  & \textbf{Value} \\
         \hline
-        1              & type           & 4              \\
+        1              & type           & 5              \\
         \hline
         1              & extended       & 0 or 1         \\
         \hline
@@ -218,7 +220,7 @@ An EstablishSessionRequest message is a Peer request to establish a session with
         \hline
         \textbf{Bytes} & \textbf{Name} & \textbf{Value} & \textbf{Description}                                 \\
         \hline
-        1              & type          & 5              &                                                      \\
+        1              & type          & 6              &                                                      \\
         \hline
         4              & lease-id      &                & The ID of the Peer to establish this connection with \\
         \hline
@@ -235,7 +237,7 @@ An EstablishSessionResponse message is a response to EstablishSessionRequest.
         \hline
         \textbf{Bytes} & \textbf{Name} & \textbf{Value} & \textbf{Description}                       \\
         \hline
-        1              & type          & 6              &                                            \\
+        1              & type          & 7              &                                            \\
         \hline
         4              & lease-id      &                & the ID of the Peer attempted to connect to \\
         \hline
@@ -293,7 +295,7 @@ A EstablishSessionNotification notifies a Peer that a session has been establish
         \hline
         \textbf{Bytes} & \textbf{Name} & \textbf{Value} & \textbf{Description}                                \\
         \hline
-        1              & type          & 7              &                                                     \\
+        1              & type          & 8              &                                                     \\
         \hline
         16             & session-id    &                & described in \hyperlink{subsubsection.4.4.2}{4.4.2} \\
         \hline
@@ -319,7 +321,7 @@ any SessionDataPacket message received after this.
         \hline
         \textbf{Bytes} & \textbf{Name} & \textbf{Value} & \textbf{Description} \\
         \hline
-        1              & type          & 8              &                      \\
+        1              & type          & 9              &                      \\
         \hline
     \end{tabular}
 \end{center}
@@ -336,7 +338,7 @@ any SessionDataPacket message received after this
         \hline
         \textbf{Bytes} & \textbf{Name} & \textbf{Value} & \textbf{Description} \\
         \hline
-        1              & type          & 9              &                      \\
+        1              & type          & 10              &                      \\
         \hline
     \end{tabular}
 \end{center}
@@ -353,7 +355,7 @@ SessionDataReceive message to be sent to the other Peer, the SessionDataSend mes
         \hline
         \textbf{Bytes} & \textbf{Name} & \textbf{Value} & \textbf{Description}           \\
         \hline
-        1              & type          & 10             &                                \\
+        1              & type          & 11             &                                \\
         \hline
         3              & data-length   &                & length of the content in bytes \\
         \hline
@@ -373,7 +375,7 @@ session. The Server SHOULD forward the message along the same transport as it wa
         \hline
         \textbf{Bytes} & \textbf{Name} & \textbf{Value} & \textbf{Description}           \\
         \hline
-        1              & type          & 11             &                                \\
+        1              & type          & 12             &                                \\
         \hline
         3              & data-length   &                & length of the content in bytes \\
         \hline
@@ -400,7 +402,7 @@ an additional half KeepaliveTimeout seconds, the UDP connection is considered dr
         \hline
         \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
         \hline
-        1              & type          & 0              \\
+        1              & type          & 13              \\
         \hline
     \end{tabular}
 \end{center}
