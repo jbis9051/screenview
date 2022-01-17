@@ -6,12 +6,14 @@ use parser::{message_id, MessageComponent};
 use std::io::Cursor;
 
 #[derive(Debug, MessageComponent)]
+#[message_id(0)]
 pub struct ProtocolVersion {
     #[parse(fixed_len(12))]
     pub version: String,
 }
 
 #[derive(Debug, MessageComponent)]
+#[message_id(1)]
 pub struct ProtocolVersionResponse {
     pub ok: bool,
 }
@@ -19,14 +21,14 @@ pub struct ProtocolVersionResponse {
 pub type Cookie = [u8; 24];
 
 #[derive(Debug, MessageComponent)]
-#[message_id(1)]
+#[message_id(2)]
 pub struct LeaseRequest {
     #[parse(bool_prefixed)]
     pub cookie: Option<Cookie>,
 }
 
 #[derive(Debug, MessageComponent)]
-#[message_id(2)]
+#[message_id(3)]
 pub struct LeaseResponse {
     #[parse(bool_prefixed)]
     pub response_data: Option<LeaseResponseData>,
@@ -58,13 +60,13 @@ pub struct LeaseResponseData {
 }
 
 #[derive(Debug, MessageComponent)]
-#[message_id(3)]
+#[message_id(4)]
 pub struct LeaseExtensionRequest {
     pub cookie: Cookie,
 }
 
 #[derive(Debug, MessageComponent)]
-#[message_id(4)]
+#[message_id(5)]
 pub struct LeaseExtensionResponse {
     #[parse(bool_prefixed)]
     pub new_expiration: Option<ExpirationTime>,
@@ -73,7 +75,7 @@ pub struct LeaseExtensionResponse {
 pub type LeaseId = u32;
 
 #[derive(Debug, MessageComponent)]
-#[message_id(5)]
+#[message_id(6)]
 pub struct EstablishSessionRequest {
     pub lease_id: LeaseId,
 }
@@ -122,7 +124,7 @@ pub struct SessionData {
 }
 
 #[derive(Debug, MessageComponent)]
-#[message_id(6)]
+#[message_id(7)]
 pub struct EstablishSessionResponse {
     pub lease_id: u32,
     pub status: EstablishSessionStatus,
@@ -131,35 +133,35 @@ pub struct EstablishSessionResponse {
 }
 
 #[derive(Debug, MessageComponent)]
-#[message_id(7)]
+#[message_id(8)]
 pub struct EstablishSessionNotification {
     pub session_data: SessionData,
 }
 
 #[derive(Debug, MessageComponent)]
-#[message_id(8)]
+#[message_id(9)]
 pub struct SessionEnd {}
 
 #[derive(Debug, MessageComponent)]
-#[message_id(9)]
+#[message_id(10)]
 pub struct SessionEndNotification {}
 
 #[derive(Debug, MessageComponent)]
-#[message_id(10)]
+#[message_id(11)]
 pub struct SessionDataSend {
     #[parse(len_prefixed(3))]
     pub data: Vec<u8>,
 }
 
 #[derive(Debug, MessageComponent)]
-#[message_id(11)]
+#[message_id(12)]
 pub struct SessionDataReceive {
     #[parse(len_prefixed(3))]
     pub data: Vec<u8>,
 }
 
 #[derive(Debug, MessageComponent)]
-#[message_id(0)]
+#[message_id(13)]
 pub struct KeepAlive {}
 
 #[derive(Debug)]

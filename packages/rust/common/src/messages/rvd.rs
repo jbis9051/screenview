@@ -9,18 +9,20 @@ use std::{
 };
 
 #[derive(MessageComponent, Debug)]
+#[message_id(0)]
 pub struct ProtocolVersion {
     #[parse(fixed_len(11))]
     pub version: String, // fixed 11 bytes
 }
 
 #[derive(MessageComponent, Debug)]
+#[message_id(1)]
 pub struct ProtocolVersionResponse {
     pub ok: bool,
 }
 
 #[derive(MessageComponent, Debug, Default)]
-#[message_id(1)]
+#[message_id(2)]
 pub struct DisplayChange {
     pub clipboard_readable: bool,
     #[parse(len_prefixed(1))]
@@ -51,11 +53,11 @@ bitflags! {
 impl_bitflags_message_component!(AccessMask);
 
 #[derive(MessageComponent, Debug)]
-#[message_id(2)]
+#[message_id(3)]
 pub struct DisplayChangeReceived {}
 
 #[derive(MessageComponent, Debug)]
-#[message_id(3)]
+#[message_id(4)]
 pub struct MouseLocation {
     pub display_id: DisplayId,
     pub x_location: u16,
@@ -63,7 +65,7 @@ pub struct MouseLocation {
 }
 
 #[derive(MessageComponent, Debug)]
-#[message_id(4)]
+#[message_id(5)]
 pub struct MouseInput {
     pub display_id: DisplayId,
     pub x_location: u16,
@@ -86,7 +88,7 @@ bitflags! {
 impl_bitflags_message_component!(ButtonsMask);
 
 #[derive(MessageComponent, Debug)]
-#[message_id(5)]
+#[message_id(6)]
 pub struct KeyInput {
     pub down: bool,
     pub key: u32, // keysym
@@ -240,13 +242,13 @@ impl MessageComponent for ClipboardMeta {
 }
 
 #[derive(MessageComponent, Debug)]
-#[message_id(6)]
+#[message_id(7)]
 pub struct ClipboardRequest {
     pub info: ClipboardMeta,
 }
 
 #[derive(MessageComponent, Debug)]
-#[message_id(7)]
+#[message_id(8)]
 pub struct ClipboardNotification {
     pub info: ClipboardMeta,
     #[parse(condition = "info.content_request", len_prefixed(3))]
@@ -254,7 +256,7 @@ pub struct ClipboardNotification {
 }
 
 #[derive(MessageComponent, Debug)]
-#[message_id(8)]
+#[message_id(9)]
 pub struct FrameData {
     pub frame_number: u32,
     pub display_id: u8,
