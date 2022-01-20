@@ -5,7 +5,7 @@ use common::messages::ScreenViewMessage;
 use std::sync::mpsc::Sender;
 
 #[derive(Copy, Clone, Debug)]
-enum State {
+pub enum State {
     Handshake,
     Data,
 }

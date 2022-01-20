@@ -3,7 +3,7 @@ use common::messages::svsc::{
 };
 
 #[derive(Copy, Clone, Debug)]
-enum State {
+pub enum State {
     Handshake,
     PreSession, // limbo land, we shouldn't receive any messages
     AwaitingLeaseResponse,

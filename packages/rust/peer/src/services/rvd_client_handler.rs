@@ -1,4 +1,6 @@
 use crate::services::helpers::clipboard_type_map::get_native_clipboard;
+use crate::services::helpers::rvd_macro::*;
+use common::constants::SVSC_VERSION;
 use common::messages::rvd::{
     ButtonsMask, ClipboardNotification, DisplayChange, DisplayChangeReceived, DisplayInformation,
     ProtocolVersionResponse, RvdMessage,
@@ -8,7 +10,7 @@ use native::api::{MouseButton, MousePosition, NativeApiTemplate};
 use std::sync::mpsc::{SendError, Sender};
 
 #[derive(Copy, Clone, Debug)]
-enum State {
+pub enum State {
     Handshake,
     Data,
 }
@@ -44,13 +46,17 @@ impl<T: NativeApiTemplate> RvdClientHandler<T> {
         match self.state {
             State::Handshake => match msg {
                 RvdMessage::ProtocolVersion(msg) => {
-                    // TODO check version
+                    let ok = msg.version == SVSC_VERSION;
                     send.send(ScreenViewMessage::RvdMessage(
-                        RvdMessage::ProtocolVersionResponse(ProtocolVersionResponse { ok: true }),
+                        RvdMessage::ProtocolVersionResponse(ProtocolVersionResponse { ok }),
                     ))
                     .map_err(RvdClientError::SendError)?;
                     self.state = State::Data;
-                    Ok(())
+                    if ok {
+                        Ok(())
+                    } else {
+                        Err(RvdClientError::VersionBad)
+                    }
                 }
                 _ => Err(RvdClientError::WrongMessageForState(msg, self.state)),
             },
@@ -64,41 +70,10 @@ impl<T: NativeApiTemplate> RvdClientHandler<T> {
                     Ok(())
                 }
                 RvdMessage::ClipboardRequest(msg) => {
-                    if !self.permissions.clipboard_readable {
-                        return Err(RvdClientError::PermissionsError(
-                            "read clipboard".to_owned(),
-                        ));
-                    }
-                    let clip_type = get_native_clipboard(&msg.info.clipboard_type);
-                    let content = self.native.clipboard_content(&clip_type).ok();
-                    send.send(ScreenViewMessage::RvdMessage(
-                        RvdMessage::ClipboardNotification(ClipboardNotification {
-                            info: msg.info.clone(),
-                            content: if msg.info.content_request {
-                                content
-                            } else {
-                                None
-                            },
-                        }),
-                    ))
-                    .map_err(RvdClientError::SendError)?;
-                    Ok(())
+                    clipboard_request_impl!(self, msg, send, RvdClientError<T>)
                 }
                 RvdMessage::ClipboardNotification(msg) => {
-                    if !self.permissions.clipboard_writable {
-                        return Err(RvdClientError::PermissionsError(
-                            "write clipboard".to_owned(),
-                        ));
-                    }
-                    let clip_type = get_native_clipboard(&msg.info.clipboard_type);
-                    if !msg.info.content_request {
-                        // TODO handle
-                        return Ok(());
-                    }
-                    self.native
-                        .set_clipboard_content(&clip_type, &msg.content.unwrap())
-                        .map_err(RvdClientError::NativeError)?;
-                    Ok(())
+                    clipboard_notificaiton_impl!(self, msg, RvdClientError<T>)
                 }
                 _ => Err(RvdClientError::WrongMessageForState(msg, self.state)),
             },
