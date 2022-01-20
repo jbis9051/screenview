@@ -9,7 +9,22 @@ be begin after TCP encryption is already established.
 The TCP SEL is TLS 1.3 as defined in
 \href{https://datatracker.ietf.org/doc/html/rfc8446}{RFC8446}. TLS v1.3 MUST be used. Previous versions of TLS MUST NOT be used.\\
 
-The Client initiates a TLS connection with the Server in accordance with \href{https://datatracker.ietf.org/doc/html/rfc8446}{RFC8446}. All further SEL TCP communications occurs over TLS.
+The Client initiates a TLS connection with the Server in accordance with \href{https://datatracker.ietf.org/doc/html/rfc8446}{RFC8446}. All subsiquent SEL TCP communications occurs over TLS:
+
+\begin{center}
+    Peer $\leftrightarrow$ Server\\
+    \begin{tabular}{|c|c|c|}
+        \hline
+        \textbf{Bytes}     & \textbf{Name} & \textbf{Value} \\
+        \hline
+        1                  & type          & 1              \\
+        \hline
+        2                  & data-length   &                \\
+        \hline
+        \emph{data-length} & data          &                \\
+        \hline
+    \end{tabular}
+\end{center}
 
 \subsection{UDP}
 
@@ -39,7 +54,7 @@ The Server and Peer derive keys.
         \hline
         \textbf{Bytes}                & \textbf{Name}  & \textbf{Value} \\
         \hline
-        1                             & type           & 4              \\
+        1                             & type           & 2              \\
         \hline
         16                            & \emph{peer-id} &                \\
         \hline
@@ -56,7 +71,7 @@ The Server and Peer derive keys.
         \hline
         \textbf{Bytes}                & \textbf{Name} & \textbf{Value} \\
         \hline
-        1                             & type          & 5              \\
+        1                             & type          & 3              \\
         \hline
         8                             & counter       &                \\
         \hline
