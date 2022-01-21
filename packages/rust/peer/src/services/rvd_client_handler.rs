@@ -1,5 +1,5 @@
 use crate::services::helpers::clipboard_type_map::get_native_clipboard;
-use crate::services::helpers::rvd_macro::*;
+use crate::services::helpers::rvd_common::*;
 use common::constants::SVSC_VERSION;
 use common::messages::rvd::{
     ButtonsMask, ClipboardNotification, DisplayChange, DisplayChangeReceived, DisplayInformation,
@@ -38,6 +38,10 @@ impl<T: NativeApiTemplate> RvdClientHandler<T> {
         }
     }
 
+    fn permissions(&self) -> &Permissions {
+        return &self.permissions;
+    }
+
     pub fn handle(
         &mut self,
         msg: RvdMessage,
@@ -61,6 +65,9 @@ impl<T: NativeApiTemplate> RvdClientHandler<T> {
                 _ => Err(RvdClientError::WrongMessageForState(msg, self.state)),
             },
             State::Data => match msg {
+                RvdMessage::FrameData(_) => {
+                    todo!()
+                }
                 RvdMessage::DisplayChange(msg) => {
                     self.current_display_change = msg;
                     send.send(ScreenViewMessage::RvdMessage(

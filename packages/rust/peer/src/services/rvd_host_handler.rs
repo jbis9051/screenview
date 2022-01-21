@@ -1,6 +1,8 @@
 use crate::services::helpers::clipboard_type_map::get_native_clipboard;
-use crate::services::helpers::rvd_macro::*;
-use common::messages::rvd::{ButtonsMask, ClipboardNotification, RvdMessage};
+use crate::services::helpers::rvd_common::*;
+use common::messages::rvd::{
+    AccessMask, ButtonsMask, ClipboardNotification, DisplayChange, DisplayId, RvdMessage,
+};
 use common::messages::ScreenViewMessage;
 use native::api::{MouseButton, MousePosition, NativeApiTemplate};
 use std::sync::mpsc::{SendError, Sender};
@@ -21,7 +23,7 @@ struct Permissions {
 pub struct RvdHostHandler<T: NativeApiTemplate> {
     state: State,
     native: T,
-    permissions: Permissions,
+    current_display_change: DisplayChange, // the displays we are sharing
 }
 
 impl<T: NativeApiTemplate> RvdHostHandler<T> {
@@ -29,8 +31,31 @@ impl<T: NativeApiTemplate> RvdHostHandler<T> {
         Self {
             state: State::Handshake,
             native,
-            permissions: Default::default(),
+            current_display_change: Default::default(),
         }
+    }
+
+    fn permissions(&self) -> Permissions {
+        return Permissions {
+            clipboard_readable: self.current_display_change.clipboard_readable,
+            clipboard_writable: self.current_display_change.clipboard_readable
+                && self
+                    .current_display_change
+                    .display_information
+                    .iter()
+                    .any(|info| info.access.contains(AccessMask::CONTROLLABLE)),
+        };
+    }
+
+    fn display_is_controllable(&self, display_id: DisplayId) -> Result<bool, RvdHostError<T>> {
+        Ok(!self
+            .current_display_change
+            .display_information
+            .iter()
+            .find(|info| info.display_id == display_id)
+            .ok_or(RvdHostError::DisplayNotFound(display_id))?
+            .access
+            .contains(AccessMask::CONTROLLABLE))
     }
 
     pub fn handle(
@@ -59,6 +84,9 @@ impl<T: NativeApiTemplate> RvdHostHandler<T> {
             },
             State::SendData => match msg {
                 RvdMessage::MouseInput(msg) => {
+                    if self.display_is_controllable(msg.display_id)? {
+                        return Err(RvdHostError::PermissionsError("mouse input".to_string()));
+                    }
                     self.native
                         .set_pointer_position(MousePosition {
                             x: msg.x_location as u32,
@@ -105,10 +133,20 @@ impl<T: NativeApiTemplate> RvdHostHandler<T> {
                         .map_err(RvdHostError::NativeError)?;
                     Ok(())
                 }
-                RvdMessage::KeyInput(msg) => Ok(self
-                    .native
-                    .key_toggle(msg.key, msg.down)
-                    .map_err(RvdHostError::NativeError)?),
+                RvdMessage::KeyInput(msg) => {
+                    if self
+                        .current_display_change
+                        .display_information
+                        .iter()
+                        .any(|info| info.access.contains(AccessMask::CONTROLLABLE))
+                    {
+                        return Err(RvdHostError::PermissionsError("key input".to_string()));
+                    }
+                    Ok(self
+                        .native
+                        .key_toggle(msg.key, msg.down)
+                        .map_err(RvdHostError::NativeError)?)
+                }
                 RvdMessage::ClipboardRequest(msg) => {
                     clipboard_request_impl!(self, msg, send, RvdHostError<T>)
                 }
@@ -133,4 +171,6 @@ pub enum RvdHostError<T: NativeApiTemplate> {
     SendError(SendError<ScreenViewMessage>),
     #[error("permission error: cannot {0}")]
     PermissionsError(String),
+    #[error("display not found: id number {0}")]
+    DisplayNotFound(DisplayId),
 }

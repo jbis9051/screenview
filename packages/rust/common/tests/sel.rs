@@ -6,24 +6,6 @@ use common::messages::MessageComponent;
 use std::io::Cursor;
 
 #[test]
-fn test_peer_hello() {
-    let bytes = include_bytes!("binary/sel/peer_hello.bin");
-    let message: PeerHello = PeerHello::read(&mut Cursor::new(bytes)).unwrap();
-    assert_eq!(&message.public_key, b"PUBLICKEYPUBLICK");
-    test_write(&message, bytes);
-}
-
-#[test]
-fn test_server_hello() {
-    let bytes = include_bytes!("binary/sel/server_hello.bin");
-    let message: ServerHello = ServerHello::read(&mut Cursor::new(bytes)).unwrap();
-    assert_eq!(&message.certificate_list, b"cert_list");
-    assert_eq!(&message.public_key, b"PUBLICKEYPUBLICK");
-    assert_eq!(&message.certificate_verify, b"verify");
-    test_write(&message, bytes);
-}
-
-#[test]
 fn test_transport_data_message_reliable() {
     let bytes = include_bytes!("binary/sel/transport_data_message_reliable.bin");
     let message: TransportDataMessageReliable =

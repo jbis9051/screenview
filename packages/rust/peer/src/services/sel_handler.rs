@@ -4,40 +4,27 @@ use common::messages::sel::SelMessage;
 
 #[derive(Copy, Clone, Debug)]
 pub enum State {
-    Handshake,
     Data,
 }
 
 pub struct SelHandler {
     state: State,
-    reliable: Option<CipherReliablePeer>,
     unreliable: Option<CipherUnreliablePeer>,
+    // reliable is TLS and is handled elsewhere
 }
 
 impl SelHandler {
     pub fn new() -> Self {
         Self {
-            state: State::Handshake,
-            reliable: None,
+            state: State::Data,
             unreliable: None,
         }
     }
 
     pub fn handle(&mut self, msg: SelMessage) -> Result<Option<Vec<u8>>, Sel> {
         match self.state {
-            State::Handshake => match msg {
-                SelMessage::ServerHello(msg) => {
-                    // TODO tls validation
-                    self.state = State::Data;
-                    Ok(None)
-                }
-                _ => Err(Sel::WrongMessageForState(msg, self.state)),
-            },
             State::Data => match msg {
-                SelMessage::TransportDataMessageReliable(msg) => {
-                    let reliable = self.reliable.as_mut().unwrap();
-                    Ok(Some(reliable.decrypt(msg.data).map_err(Sel::CipherError)?))
-                }
+                SelMessage::TransportDataMessageReliable(msg) => Ok(Some(msg.data)),
                 SelMessage::TransportDataPeerMessageUnreliable(msg) => {
                     let unreliable = self.unreliable.as_mut().unwrap();
                     Ok(Some(

@@ -1,6 +1,6 @@
 macro_rules! clipboard_request_impl {
     ($self:ident, $msg: ident, $send:ident, $error_type:ty) => {{
-        if !$self.permissions.clipboard_readable {
+        if !$self.permissions().clipboard_readable {
             return Err(<$error_type>::PermissionsError("read clipboard".to_owned()));
         }
         let clip_type = get_native_clipboard(&$msg.info.clipboard_type);
@@ -23,7 +23,7 @@ macro_rules! clipboard_request_impl {
 
 macro_rules! clipboard_notificaiton_impl {
     ($self:ident, $msg: ident, $error_type:ty) => {{
-        if !$self.permissions.clipboard_writable {
+        if !$self.permissions().clipboard_writable {
             return Err(<$error_type>::PermissionsError(
                 "write clipboard".to_owned(),
             ));

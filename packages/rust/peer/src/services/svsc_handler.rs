@@ -1,6 +1,8 @@
+use crate::services::InformEvent;
 use common::messages::svsc::{
     ExpirationTime, LeaseExtensionResponse, LeaseResponseData, SessionData, SvscMessage,
 };
+use std::sync::mpsc::{SendError, Sender};
 
 #[derive(Copy, Clone, Debug)]
 pub enum State {
@@ -29,7 +31,11 @@ impl SvscHandler {
         }
     }
 
-    pub fn handle(&mut self, msg: SvscMessage) -> Result<(Option<Vec<u8>>, SvscInform), SvscError> {
+    pub fn handle(
+        &mut self,
+        msg: SvscMessage,
+        event: Sender<InformEvent>,
+    ) -> Result<Option<Vec<u8>>, SvscError> {
         match self.state {
             State::Handshake => match msg {
                 SvscMessage::ProtocolVersionResponse(msg) => {
@@ -37,7 +43,7 @@ impl SvscHandler {
                         return Err(SvscError::VersionBad);
                     }
                     self.state = State::PreSession;
-                    Ok((None, SvscInform::None))
+                    Ok(None)
                 }
                 _ => Err(SvscError::WrongMessageForState(msg, self.state)),
             },
@@ -47,7 +53,10 @@ impl SvscHandler {
                     let data = msg.response_data.ok_or(SvscError::LeaseRequestRejected)?;
                     self.lease = Some(data);
                     self.state = State::InLease;
-                    Ok((None, SvscInform::LeaseUpdate(data)))
+                    event
+                        .send(InformEvent::SvscInform(SvscInform::LeaseUpdate(data)))
+                        .map_err(SvscError::SendError)?;
+                    Ok(None)
                 }
                 _ => Err(SvscError::WrongMessageForState(msg, self.state)),
             },
@@ -55,7 +64,10 @@ impl SvscHandler {
                 SvscMessage::EstablishSessionResponse(msg) => {
                     let data = msg.response_data.ok_or(SvscError::LeaseRequestRejected)?;
                     self.session = Some(data);
-                    Ok((None, SvscInform::SessionUpdate(data)))
+                    event
+                        .send(InformEvent::SvscInform(SvscInform::SessionUpdate(data)))
+                        .map_err(SvscError::SendError)?;
+                    Ok(None)
                 }
                 _ => Err(SvscError::WrongMessageForState(msg, self.state)),
             },
@@ -65,7 +77,12 @@ impl SvscHandler {
                 }
                 SvscMessage::EstablishSessionNotification(msg) => {
                     self.session = Some(msg.session_data);
-                    Ok((None, SvscInform::SessionUpdate(msg.session_data)))
+                    event
+                        .send(InformEvent::SvscInform(SvscInform::SessionUpdate(
+                            msg.session_data,
+                        )))
+                        .map_err(SvscError::SendError)?;
+                    Ok(None)
                 }
                 _ => Err(SvscError::WrongMessageForState(msg, self.state)),
             },
@@ -78,9 +95,12 @@ impl SvscHandler {
                         self.state = State::InLease;
                     }
                     self.session = None;
-                    Ok((None, SvscInform::SessionEnd))
+                    event
+                        .send(InformEvent::SvscInform(SvscInform::SessionEnd))
+                        .map_err(SvscError::SendError)?;
+                    Ok(None)
                 }
-                SvscMessage::SessionDataReceive(msg) => Ok((Some(msg.data), SvscInform::None)),
+                SvscMessage::SessionDataReceive(msg) => Ok(Some(msg.data)),
                 _ => Err(SvscError::WrongMessageForState(msg, self.state)),
             },
         }
@@ -89,7 +109,7 @@ impl SvscHandler {
     fn handle_lease_extension_response(
         &mut self,
         msg: LeaseExtensionResponse,
-    ) -> Result<(Option<Vec<u8>>, SvscInform), SvscError> {
+    ) -> Result<Option<Vec<u8>>, SvscError> {
         if self.awaiting_extension_response {
             return Err(SvscError::UnexpectedExtension);
         }
@@ -98,7 +118,7 @@ impl SvscHandler {
             .ok_or(SvscError::LeaseExtensionRequestRejected)?;
         self.lease.unwrap().expiration = expiration;
         self.awaiting_extension_response = false;
-        Ok((None, SvscInform::None))
+        Ok(None)
     }
 }
 
@@ -114,10 +134,11 @@ pub enum SvscError {
     LeaseRequestRejected,
     #[error("lease extension request was rejected")]
     LeaseExtensionRequestRejected,
+    #[error("send error")]
+    SendError(SendError<InformEvent>),
 }
 
 pub enum SvscInform {
-    None,
     LeaseUpdate(LeaseResponseData),
     SessionUpdate(SessionData),
     SessionEnd,

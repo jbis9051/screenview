@@ -29,7 +29,7 @@ pub struct DisplayChange {
     pub display_information: Vec<DisplayInformation>,
 }
 
-type DisplayId = u8;
+pub type DisplayId = u8;
 
 #[derive(MessageComponent, Debug)]
 pub struct DisplayInformation {
