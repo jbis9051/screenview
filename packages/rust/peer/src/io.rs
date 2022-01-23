@@ -1,15 +1,18 @@
 use common::messages::{sel::*, Error, MessageComponent, MessageID};
-use crossbeam_channel::{bounded, unbounded, Receiver, Sender, TryRecvError};
+use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
+use futures_executor::block_on;
+use futures_util::{future::FutureExt, pin_mut, select};
 use std::{
     io,
-    io::{Cursor, ErrorKind, Read, Write},
-    net::{Shutdown, TcpStream, ToSocketAddrs, UdpSocket},
+    io::{Cursor, Read, Write},
+    net::{Shutdown, TcpStream, ToSocketAddrs},
     ptr,
     sync::Arc,
     thread,
     thread::JoinHandle,
-    time::Duration,
 };
+use tokio::net::UdpSocket;
+use tokio::sync::oneshot;
 
 const INIT_BUFFER_CAPACITY: usize = 4096;
 const MAX_SERVER_HELLO_LEN: usize = 0x04_00_00_00;
@@ -103,7 +106,8 @@ impl IoHandle {
     /// # Errors
     ///
     /// This function will return an error if it fails to bind a UDP socket to the given remote
-    /// address. It will also return an error if it fails to set the UDP socket read timeout.
+    /// address. It will also return an error if it fails to convert the std UDP socket into an
+    /// async socket.
     pub fn connect_unreliable<A: ToSocketAddrs>(&mut self, addr: A) -> Result<(), io::Error> {
         drop(self.unreliable.take());
 
@@ -196,9 +200,8 @@ impl Drop for ReliableHandle {
 }
 
 struct UnreliableHandle {
-    socket: Arc<UdpSocket>,
     write: Sender<(SelMessage, usize)>,
-    shutdown: Sender<()>,
+    shutdown: Option<oneshot::Sender<()>>,
     _handles: (JoinOnDrop<()>, JoinOnDrop<()>),
 }
 
@@ -207,28 +210,25 @@ impl UnreliableHandle {
         addr: A,
         result_sender: Sender<TransportResult>,
     ) -> Result<Self, io::Error> {
-        let socket = UdpSocket::bind(addr)?;
-        socket.set_read_timeout(Some(Duration::from_millis(100)))?;
-        let socket = Arc::new(socket);
+        let socket = std::net::UdpSocket::bind(addr)?;
+        let socket = Arc::new(UdpSocket::from_std(socket)?);
         let (write_tx, write_rx) = unbounded();
-        let (shutdown_tx, shutdown_rx) = bounded(1);
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
 
         let read_handle = thread::spawn({
             let socket = Arc::clone(&socket);
             let result_sender = result_sender.clone();
-            move || read_unreliable(socket, result_sender, shutdown_rx)
+            move || block_on(read_unreliable(socket, result_sender, shutdown_rx))
         });
 
         let write_handle = thread::spawn({
-            let socket = Arc::clone(&socket);
             let result_sender = result_sender.clone();
-            move || write_unreliable(socket, result_sender, write_rx)
+            move || block_on(write_unreliable(socket, result_sender, write_rx))
         });
 
         Ok(Self {
-            socket,
             write: write_tx,
-            shutdown: shutdown_tx,
+            shutdown: Some(shutdown_tx),
             _handles: (JoinOnDrop::new(read_handle), JoinOnDrop::new(write_handle)),
         })
     }
@@ -240,7 +240,7 @@ impl UnreliableHandle {
 
 impl Drop for UnreliableHandle {
     fn drop(&mut self) {
-        let _ = self.shutdown.send(());
+        let _ = self.shutdown.take().unwrap().send(());
     }
 }
 
@@ -278,7 +278,7 @@ pub enum Source {
     WriteUnreliable,
 }
 
-pub fn read_reliable(stream: Arc<TcpStream>, sender: Sender<TransportResult>) {
+fn read_reliable(stream: Arc<TcpStream>, sender: Sender<TransportResult>) {
     // While reading:
     // - If no data is present, wait for more data
     // - If data is present, collect the message and parse it, otherwise return
@@ -391,7 +391,7 @@ fn collect_reliable(
     Ok(())
 }
 
-pub fn write_reliable(
+fn write_reliable(
     stream: Arc<TcpStream>,
     sender: Sender<TransportResult>,
     receiver: Receiver<SelMessage>,
@@ -427,29 +427,33 @@ pub fn write_reliable(
     }
 }
 
-pub fn read_unreliable(
+async fn read_unreliable(
     socket: Arc<UdpSocket>,
     sender: Sender<TransportResult>,
-    shutdown: Receiver<()>,
+    shutdown: oneshot::Receiver<()>,
 ) {
     let mut buffer = vec![0u8; UDP_READ_SIZE];
+    let shutdown = shutdown.fuse();
+    pin_mut!(shutdown);
 
     loop {
-        let read = match socket.recv(&mut buffer[..]) {
-            Ok(read) => read,
-            Err(error) => match error.kind() {
-                ErrorKind::WouldBlock | ErrorKind::TimedOut => match shutdown.try_recv() {
-                    Ok(()) | Err(TryRecvError::Empty) => continue,
-                    Err(TryRecvError::Disconnected) => return,
+        let read = {
+            let read_fut = socket.recv(&mut buffer[..]).fuse();
+            pin_mut!(read_fut);
+
+            select! {
+                res = read_fut => match res {
+                    Ok(read) => read,
+                    Err(error) => {
+                        let _ = sender.send(TransportResult::Fatal {
+                            source: Source::ReadUnreliable,
+                            error,
+                        });
+                        return;
+                    }
                 },
-                _ => {
-                    let _ = sender.send(TransportResult::Fatal {
-                        source: Source::ReadUnreliable,
-                        error,
-                    });
-                    return;
-                }
-            },
+                _ = shutdown => return
+            }
         };
 
         if read == 0 {
@@ -471,7 +475,7 @@ pub fn read_unreliable(
     }
 }
 
-pub fn write_unreliable(
+async fn write_unreliable(
     socket: Arc<UdpSocket>,
     sender: Sender<TransportResult>,
     receiver: Receiver<(SelMessage, usize)>,
@@ -490,7 +494,7 @@ pub fn write_unreliable(
 
         match res {
             Ok(_) => {
-                if let Err(error) = socket.send(&buffer[..]) {
+                if let Err(error) = socket.send(&buffer[..]).await {
                     let _ = sender.send(TransportResult::Fatal {
                         source: Source::WriteUnreliable,
                         error,

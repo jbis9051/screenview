@@ -6,5 +6,8 @@ edition = "2021"
 [dependencies]
 common = { path = "../common" }
 crossbeam-channel = "0.5.2"
+futures-executor = "0.3.19"
+futures-util = "0.3.19"
 native = { path = "../native" }
 thiserror = "1.0.30"
+tokio = { version = "1.15.0", features=["net", "sync"] }
