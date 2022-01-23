@@ -1,6 +1,6 @@
-pub fn decrypt(data: Vec<u8>, key: &[u8], iv: u64) -> Result<Vec<u8>, ()> {
-    Ok(data)
+pub fn decrypt(_data: Vec<u8>, _key: &[u8], _iv: u64) -> Result<Vec<u8>, ()> {
+    todo!()
 }
-pub fn encrypt(data: Vec<u8>, key: &[u8], iv: u64) -> Result<Vec<u8>, ()> {
-    Ok(data)
+pub fn encrypt(_data: Vec<u8>, _key: &[u8], _iv: u64) -> Result<Vec<u8>, ()> {
+    todo!()
 }

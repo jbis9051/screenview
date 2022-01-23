@@ -9,3 +9,7 @@ byteorder = "1.4.3"
 parser = { path = "../parser" }
 thiserror = "1.0.30"
 chrono = "0.4.19"
+hmac = "0.12.0"
+blake3 = { git = "https://github.com/jbis9051/BLAKE3", features = ["traits-preview"] }
+hkdf = { git = "https://github.com/jbis9051/KDFs" }
+srp = { git = "https://github.com/jbis9051/PAKEs/" }

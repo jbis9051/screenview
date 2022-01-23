@@ -16,7 +16,7 @@ macro_rules! clipboard_request_impl {
                     },
                 }),
             ))
-            .map_err(<$error_type>::SendError)?;
+            .map_err(<$error_type>::WriteError)?;
         Ok(())
     }};
 }

@@ -1,12 +1,13 @@
 use crate::services::helpers::clipboard_type_map::get_native_clipboard;
 use crate::services::helpers::rvd_common::*;
+use crate::services::InformEvent;
 use common::constants::SVSC_VERSION;
 use common::messages::rvd::{
-    ButtonsMask, ClipboardNotification, DisplayChange, DisplayChangeReceived, DisplayInformation,
+    ClipboardNotification, DisplayChange, DisplayChangeReceived, MouseLocation,
     ProtocolVersionResponse, RvdMessage,
 };
 use common::messages::ScreenViewMessage;
-use native::api::{MouseButton, MousePosition, NativeApiTemplate};
+use native::api::NativeApiTemplate;
 use std::sync::mpsc::{SendError, Sender};
 
 #[derive(Copy, Clone, Debug)]
@@ -45,16 +46,18 @@ impl<T: NativeApiTemplate> RvdClientHandler<T> {
     pub fn handle(
         &mut self,
         msg: RvdMessage,
-        send: Sender<ScreenViewMessage>,
+        write: Sender<ScreenViewMessage>,
+        events: Sender<InformEvent>,
     ) -> Result<(), RvdClientError<T>> {
         match self.state {
             State::Handshake => match msg {
                 RvdMessage::ProtocolVersion(msg) => {
                     let ok = msg.version == SVSC_VERSION;
-                    send.send(ScreenViewMessage::RvdMessage(
-                        RvdMessage::ProtocolVersionResponse(ProtocolVersionResponse { ok }),
-                    ))
-                    .map_err(RvdClientError::SendError)?;
+                    write
+                        .send(ScreenViewMessage::RvdMessage(
+                            RvdMessage::ProtocolVersionResponse(ProtocolVersionResponse { ok }),
+                        ))
+                        .map_err(RvdClientError::WriteError)?;
                     self.state = State::Data;
                     if ok {
                         Ok(())
@@ -70,14 +73,18 @@ impl<T: NativeApiTemplate> RvdClientHandler<T> {
                 }
                 RvdMessage::DisplayChange(msg) => {
                     self.current_display_change = msg;
-                    send.send(ScreenViewMessage::RvdMessage(
-                        RvdMessage::DisplayChangeReceived(DisplayChangeReceived {}),
-                    ))
-                    .map_err(RvdClientError::SendError)?;
+                    write
+                        .send(ScreenViewMessage::RvdMessage(
+                            RvdMessage::DisplayChangeReceived(DisplayChangeReceived {}),
+                        ))
+                        .map_err(RvdClientError::WriteError)?;
                     Ok(())
                 }
+                RvdMessage::MouseLocation(msg) => events
+                    .send(InformEvent::RvdInform(RvdInform::MouseLocation(msg)))
+                    .map_err(RvdClientError::InformError),
                 RvdMessage::ClipboardRequest(msg) => {
-                    clipboard_request_impl!(self, msg, send, RvdClientError<T>)
+                    clipboard_request_impl!(self, msg, write, RvdClientError<T>)
                 }
                 RvdMessage::ClipboardNotification(msg) => {
                     clipboard_notificaiton_impl!(self, msg, RvdClientError<T>)
@@ -96,8 +103,14 @@ pub enum RvdClientError<T: NativeApiTemplate> {
     WrongMessageForState(RvdMessage, State),
     #[error("native error: {0}")]
     NativeError(T::Error),
-    #[error("send_error")]
-    SendError(SendError<ScreenViewMessage>),
+    #[error("write error")]
+    WriteError(SendError<ScreenViewMessage>),
+    #[error("inform error")]
+    InformError(SendError<InformEvent>),
     #[error("permission error: cannot {0}")]
     PermissionsError(String),
+}
+
+pub enum RvdInform {
+    MouseLocation(MouseLocation),
 }

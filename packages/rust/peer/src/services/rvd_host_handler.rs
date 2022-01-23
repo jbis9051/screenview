@@ -1,5 +1,6 @@
 use crate::services::helpers::clipboard_type_map::get_native_clipboard;
 use crate::services::helpers::rvd_common::*;
+use crate::services::InformEvent;
 use common::messages::rvd::{
     AccessMask, ButtonsMask, ClipboardNotification, DisplayChange, DisplayId, RvdMessage,
 };
@@ -61,7 +62,7 @@ impl<T: NativeApiTemplate> RvdHostHandler<T> {
     pub fn handle(
         &mut self,
         msg: RvdMessage,
-        send: Sender<ScreenViewMessage>,
+        write: Sender<ScreenViewMessage>,
     ) -> Result<(), RvdHostError<T>> {
         match self.state {
             State::Handshake => match msg {
@@ -148,7 +149,7 @@ impl<T: NativeApiTemplate> RvdHostHandler<T> {
                         .map_err(RvdHostError::NativeError)?)
                 }
                 RvdMessage::ClipboardRequest(msg) => {
-                    clipboard_request_impl!(self, msg, send, RvdHostError<T>)
+                    clipboard_request_impl!(self, msg, write, RvdHostError<T>)
                 }
                 RvdMessage::ClipboardNotification(msg) => {
                     clipboard_notificaiton_impl!(self, msg, RvdHostError<T>)
@@ -168,7 +169,9 @@ pub enum RvdHostError<T: NativeApiTemplate> {
     #[error("native error: {0}")]
     NativeError(T::Error),
     #[error("send_error")]
-    SendError(SendError<ScreenViewMessage>),
+    WriteError(SendError<ScreenViewMessage>),
+    #[error("send_error")]
+    InformError(SendError<InformEvent>),
     #[error("permission error: cannot {0}")]
     PermissionsError(String),
     #[error("display not found: id number {0}")]

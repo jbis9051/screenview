@@ -1,7 +1,5 @@
 use crate::services::InformEvent;
-use common::messages::svsc::{
-    ExpirationTime, LeaseExtensionResponse, LeaseResponseData, SessionData, SvscMessage,
-};
+use common::messages::svsc::{LeaseExtensionResponse, LeaseResponseData, SessionData, SvscMessage};
 use std::sync::mpsc::{SendError, Sender};
 
 #[derive(Copy, Clone, Debug)]
@@ -55,7 +53,7 @@ impl SvscHandler {
                     self.state = State::InLease;
                     event
                         .send(InformEvent::SvscInform(SvscInform::LeaseUpdate(data)))
-                        .map_err(SvscError::SendError)?;
+                        .map_err(SvscError::InformError)?;
                     Ok(None)
                 }
                 _ => Err(SvscError::WrongMessageForState(msg, self.state)),
@@ -66,7 +64,7 @@ impl SvscHandler {
                     self.session = Some(data);
                     event
                         .send(InformEvent::SvscInform(SvscInform::SessionUpdate(data)))
-                        .map_err(SvscError::SendError)?;
+                        .map_err(SvscError::InformError)?;
                     Ok(None)
                 }
                 _ => Err(SvscError::WrongMessageForState(msg, self.state)),
@@ -81,7 +79,7 @@ impl SvscHandler {
                         .send(InformEvent::SvscInform(SvscInform::SessionUpdate(
                             msg.session_data,
                         )))
-                        .map_err(SvscError::SendError)?;
+                        .map_err(SvscError::InformError)?;
                     Ok(None)
                 }
                 _ => Err(SvscError::WrongMessageForState(msg, self.state)),
@@ -97,7 +95,7 @@ impl SvscHandler {
                     self.session = None;
                     event
                         .send(InformEvent::SvscInform(SvscInform::SessionEnd))
-                        .map_err(SvscError::SendError)?;
+                        .map_err(SvscError::InformError)?;
                     Ok(None)
                 }
                 SvscMessage::SessionDataReceive(msg) => Ok(Some(msg.data)),
@@ -135,7 +133,7 @@ pub enum SvscError {
     #[error("lease extension request was rejected")]
     LeaseExtensionRequestRejected,
     #[error("send error")]
-    SendError(SendError<InformEvent>),
+    InformError(SendError<InformEvent>),
 }
 
 pub enum SvscInform {
