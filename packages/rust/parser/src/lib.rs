@@ -4,8 +4,16 @@ use proc_macro2::{Span, TokenStream};
 use proc_macro_crate::{crate_name, FoundCrate};
 use quote::quote;
 use syn::{
-    parse_macro_input, Data, DeriveInput, Error, GenericArgument, Ident, LitInt, PathArguments,
-    Result, Type,
+    parse_macro_input,
+    Data,
+    DeriveInput,
+    Error,
+    GenericArgument,
+    Ident,
+    LitInt,
+    PathArguments,
+    Result,
+    Type,
 };
 
 mod gen;
@@ -38,11 +46,10 @@ pub fn message_id(
 ) -> proc_macro::TokenStream {
     let id: LitInt = match syn::parse(attr) {
         Ok(int) => int,
-        Err(e) => {
+        Err(e) =>
             return Error::new(e.span(), "Expected integer literal")
                 .to_compile_error()
-                .into()
-        }
+                .into(),
     };
 
     let input = parse_macro_input!(item as DeriveInput);
@@ -62,12 +69,11 @@ pub fn message_id(
 
 pub(crate) fn matches_ident(ty: &Type, ident: &str) -> bool {
     match ty {
-        Type::Path(path) => {
+        Type::Path(path) =>
             path.qself.is_none()
                 && path.path.leading_colon.is_none()
                 && !path.path.segments.is_empty()
-                && path.path.segments.last().unwrap().ident == ident
-        }
+                && path.path.segments.last().unwrap().ident == ident,
         _ => false,
     }
 }

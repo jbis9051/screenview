@@ -1,12 +1,21 @@
-use crate::services::helpers::clipboard_type_map::get_native_clipboard;
-use crate::services::helpers::rvd_common::*;
-use crate::services::InformEvent;
-use common::constants::SVSC_VERSION;
-use common::messages::rvd::{
-    ClipboardNotification, DisplayChange, DisplayChangeReceived, MouseLocation,
-    ProtocolVersionResponse, RvdMessage,
+use crate::services::{
+    helpers::{clipboard_type_map::get_native_clipboard, rvd_common::*},
+    InformEvent,
 };
-use common::messages::ScreenViewMessage;
+use common::{
+    constants::SVSC_VERSION,
+    messages::{
+        rvd::{
+            ClipboardNotification,
+            DisplayChange,
+            DisplayChangeReceived,
+            MouseLocation,
+            ProtocolVersionResponse,
+            RvdMessage,
+        },
+        ScreenViewMessage,
+    },
+};
 use native::api::NativeApiTemplate;
 use std::sync::mpsc::{SendError, Sender};
 

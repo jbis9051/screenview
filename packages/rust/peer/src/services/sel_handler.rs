@@ -1,5 +1,7 @@
-use crate::services::helpers::cipher_reliable_peer::CipherError;
-use crate::services::helpers::cipher_unreliable_peer::CipherUnreliablePeer;
+use crate::services::helpers::{
+    cipher_reliable_peer::CipherError,
+    cipher_unreliable_peer::CipherUnreliablePeer,
+};
 use common::messages::sel::SelMessage;
 
 #[derive(Copy, Clone, Debug)]

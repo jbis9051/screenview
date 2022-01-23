@@ -1,7 +1,7 @@
 use common::messages::{sel::*, Error, MessageComponent, MessageID};
 use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
 use futures_executor::block_on;
-use futures_util::{future::FutureExt, pin_mut, select};
+use futures_util::{future::FutureExt, pin_mut, select_biased};
 use std::{
     io,
     io::{Cursor, Read, Write},
@@ -11,8 +11,7 @@ use std::{
     thread,
     thread::JoinHandle,
 };
-use tokio::net::UdpSocket;
-use tokio::sync::oneshot;
+use tokio::{net::UdpSocket, sync::oneshot};
 
 const INIT_BUFFER_CAPACITY: usize = 4096;
 const MAX_SERVER_HELLO_LEN: usize = 0x04_00_00_00;
@@ -353,11 +352,11 @@ fn collect_and_parse_reliable(
         TransportDataMessageReliable::ID => {
             // Similar to ServerHello, if the length gets cut off, then we read the rest of it here
             if *data_end < 3 {
-                Read::read_exact(&mut stream, &mut buffer[*data_end..3])?;
+                Read::read_exact(&mut stream, &mut buffer[*data_end .. 3])?;
             }
 
             let mut length_bytes = [0u8; 2];
-            length_bytes.copy_from_slice(&buffer[1..3]);
+            length_bytes.copy_from_slice(&buffer[1 .. 3]);
             // Add 3 to account for ID byte and length bytes
             let length = match usize::from(u16::from_le_bytes(length_bytes)).checked_add(3) {
                 Some(len) => len,
@@ -365,7 +364,7 @@ fn collect_and_parse_reliable(
             };
 
             collect_reliable(stream, buffer, data_end, length)?;
-            let message = TransportDataMessageReliable::read(&mut Cursor::new(&buffer[3..]))?;
+            let message = TransportDataMessageReliable::read(&mut Cursor::new(&buffer[3 ..]))?;
             Ok((SelMessage::TransportDataMessageReliable(message), length))
         }
         _ => Err(Error::BadMessageID(id)),
@@ -384,7 +383,7 @@ fn collect_reliable(
             buffer.resize(length, 0u8);
         }
 
-        Read::read_exact(&mut stream, &mut buffer[*data_end..length])?;
+        Read::read_exact(&mut stream, &mut buffer[*data_end .. length])?;
         *data_end = length;
     }
 
@@ -405,15 +404,14 @@ fn write_reliable(
         buffer = cursor.into_inner();
 
         match res {
-            Ok(_) => {
+            Ok(_) =>
                 if let Err(error) = (&*stream).write_all(&buffer) {
                     let _ = sender.send(TransportResult::Fatal {
                         source: Source::WriteReliable,
                         error,
                     });
                     return;
-                }
-            }
+                },
             Err(error) => {
                 let res = sender.send(TransportResult::Recoverable {
                     source: Source::WriteReliable,
@@ -441,7 +439,7 @@ async fn read_unreliable(
             let read_fut = socket.recv(&mut buffer[..]).fuse();
             pin_mut!(read_fut);
 
-            select! {
+            select_biased! {
                 res = read_fut => match res {
                     Ok(read) => read,
                     Err(error) => {
@@ -461,7 +459,7 @@ async fn read_unreliable(
             return;
         }
 
-        let mut cursor = Cursor::new(&buffer[..read]);
+        let mut cursor = Cursor::new(&buffer[.. read]);
 
         let transport_result = match SelMessage::read(&mut cursor) {
             Ok(message) => TransportResult::Ok(message),
@@ -493,15 +491,14 @@ async fn write_unreliable(
         }
 
         match res {
-            Ok(_) => {
+            Ok(_) =>
                 if let Err(error) = socket.send(&buffer[..]).await {
                     let _ = sender.send(TransportResult::Fatal {
                         source: Source::WriteUnreliable,
                         error,
                     });
                     return;
-                }
-            }
+                },
             Err(error) => {
                 let res = sender.send(TransportResult::Recoverable {
                     source: Source::WriteUnreliable,

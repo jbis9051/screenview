@@ -70,9 +70,8 @@ impl SvscHandler {
                 _ => Err(SvscError::WrongMessageForState(msg, self.state)),
             },
             State::InLease => match msg {
-                SvscMessage::LeaseExtensionResponse(msg) => {
-                    self.handle_lease_extension_response(msg)
-                }
+                SvscMessage::LeaseExtensionResponse(msg) =>
+                    self.handle_lease_extension_response(msg),
                 SvscMessage::EstablishSessionNotification(msg) => {
                     self.session = Some(msg.session_data);
                     event
@@ -85,9 +84,8 @@ impl SvscHandler {
                 _ => Err(SvscError::WrongMessageForState(msg, self.state)),
             },
             State::InSession => match msg {
-                SvscMessage::LeaseExtensionResponse(msg) => {
-                    self.handle_lease_extension_response(msg)
-                }
+                SvscMessage::LeaseExtensionResponse(msg) =>
+                    self.handle_lease_extension_response(msg),
                 SvscMessage::SessionEndNotification(_) => {
                     if self.lease.is_some() {
                         self.state = State::InLease;

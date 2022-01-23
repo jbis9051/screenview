@@ -1,10 +1,11 @@
-use crate::services::helpers::clipboard_type_map::get_native_clipboard;
-use crate::services::helpers::rvd_common::*;
-use crate::services::InformEvent;
-use common::messages::rvd::{
-    AccessMask, ButtonsMask, ClipboardNotification, DisplayChange, DisplayId, RvdMessage,
+use crate::services::{
+    helpers::{clipboard_type_map::get_native_clipboard, rvd_common::*},
+    InformEvent,
 };
-use common::messages::ScreenViewMessage;
+use common::messages::{
+    rvd::{AccessMask, ButtonsMask, ClipboardNotification, DisplayChange, DisplayId, RvdMessage},
+    ScreenViewMessage,
+};
 use native::api::{MouseButton, MousePosition, NativeApiTemplate};
 use std::sync::mpsc::{SendError, Sender};
 

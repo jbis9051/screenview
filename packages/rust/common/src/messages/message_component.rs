@@ -1,9 +1,9 @@
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
-use std::string::FromUtf8Error;
 use std::{
     convert::Infallible,
     io::{self, Cursor, Read, Write},
     num::TryFromIntError,
+    string::FromUtf8Error,
 };
 
 pub trait MessageID {

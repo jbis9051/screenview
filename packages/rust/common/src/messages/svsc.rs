@@ -1,5 +1,4 @@
-use super::Error;
-use super::MessageComponent;
+use super::{Error, MessageComponent};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use chrono::{DateTime, LocalResult, TimeZone, Utc};
 use parser::{message_id, MessageComponent};

@@ -1,15 +1,20 @@
-use crate::services::helpers::cipher_reliable_peer::{CipherError, CipherReliablePeer};
-use crate::services::helpers::cipher_unreliable_peer::CipherUnreliablePeer;
-use crate::services::helpers::wpskka_common::{
-    hmac, hmac_verify, kdf1, keypair, random_srp_private_value,
+use crate::services::{
+    helpers::{
+        cipher_reliable_peer::{CipherError, CipherReliablePeer},
+        cipher_unreliable_peer::CipherUnreliablePeer,
+        wpskka_common::{hmac, hmac_verify, kdf1, keypair, random_srp_private_value},
+    },
+    InformEvent,
 };
-use crate::services::InformEvent;
-use common::constants::{HashAlgo, Mac, SRP_PARAM};
-use common::messages::wpskka::{ClientHello, HostHello, WpskkaMessage};
-use common::messages::ScreenViewMessage;
+use common::{
+    constants::{HashAlgo, Mac, SRP_PARAM},
+    messages::{
+        wpskka::{ClientHello, HostHello, WpskkaMessage},
+        ScreenViewMessage,
+    },
+};
 use ring::agreement::{EphemeralPrivateKey, PublicKey};
-use srp::client::SrpClient;
-use srp::types::SrpAuthError;
+use srp::{client::SrpClient, types::SrpAuthError};
 use std::sync::mpsc::{SendError, Sender};
 
 #[derive(Copy, Clone, Debug)]

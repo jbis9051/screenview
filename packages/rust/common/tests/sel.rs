@@ -1,8 +1,7 @@
 #[macro_use]
 mod helper;
 use crate::helper::*;
-use common::messages::sel::*;
-use common::messages::MessageComponent;
+use common::messages::{sel::*, MessageComponent};
 use std::io::Cursor;
 
 #[test]

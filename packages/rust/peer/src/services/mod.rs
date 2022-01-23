@@ -1,6 +1,8 @@
-use crate::services::rvd_client_handler::RvdInform;
-use crate::services::svsc_handler::SvscInform;
-use crate::services::wpskka_client_handler::WpskkaClientInform;
+use crate::services::{
+    rvd_client_handler::RvdInform,
+    svsc_handler::SvscInform,
+    wpskka_client_handler::WpskkaClientInform,
+};
 
 mod helpers;
 pub mod rvd_client_handler;

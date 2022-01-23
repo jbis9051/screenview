@@ -1,7 +1,11 @@
 use common::constants::{Hkdf, Hmac, Mac, SRP_PARAM};
-use ring::agreement::{EphemeralPrivateKey, PublicKey};
-use ring::rand::{SecureRandom, SystemRandom};
-use ring::{agreement, error, rand};
+use ring::{
+    agreement,
+    agreement::{EphemeralPrivateKey, PublicKey},
+    error,
+    rand,
+    rand::{SecureRandom, SystemRandom},
+};
 
 pub fn random_bytes(bytes: usize) -> Vec<u8> {
     let mut vec = Vec::with_capacity(bytes);
