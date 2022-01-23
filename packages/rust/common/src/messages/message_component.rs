@@ -34,6 +34,8 @@ pub enum Error {
     BadFlags { name: &'static str, value: u8 },
     #[error("encountered invalid message id {0}")]
     BadMessageID(u8),
+    #[error("encountered bad or malformed SEL message")]
+    BadSelMessage,
 }
 
 impl From<Infallible> for Error {

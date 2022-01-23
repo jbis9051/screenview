@@ -24,7 +24,7 @@ pub struct TransportDataServerMessageUnreliable {
     pub data: Vec<u8>,
 }
 
-#[derive(Debug)]
+#[derive(MessageComponent, Debug)]
 pub enum SelMessage {
     TransportDataMessageReliable(TransportDataMessageReliable),
     TransportDataPeerMessageUnreliable(TransportDataPeerMessageUnreliable),

@@ -149,7 +149,7 @@ impl NativeApiTemplate for X11Api {
                     && (x - info.x) < info.width
                     && (y - info.y) < info.height
             })
-            .unwrap_or(0) as u32;
+            .unwrap_or(0) as u8;
 
         Ok(MousePosition {
             x: reply.root_x() as _,
