@@ -10,8 +10,8 @@ fn test_host_hello() {
     let message: HostHello = HostHello::read(&mut Cursor::new(bytes)).unwrap();
     assert_eq!(message.username, bytes[.. 16]);
     assert_eq!(message.salt, bytes[16 .. 32]);
-    assert_eq!(message.b_pub, bytes[32 .. 288]);
-    assert_eq!(message.public_key, bytes[288 ..]);
+    assert_eq!(message.b_pub, bytes[32 .. 64]);
+    assert_eq!(message.public_key, bytes[64 ..]);
     test_write(&message, bytes);
 }
 
@@ -19,9 +19,9 @@ fn test_host_hello() {
 fn test_client_hello() {
     let bytes = include_bytes!("binary/wpskka/client_hello.bin");
     let message: ClientHello = ClientHello::read(&mut Cursor::new(bytes)).unwrap();
-    assert_eq!(message.a_pub, bytes[.. 256]);
-    assert_eq!(message.public_key, bytes[256 .. 272]);
-    assert_eq!(message.mac, bytes[272 ..]);
+    assert_eq!(message.a_pub, bytes[.. 32]);
+    assert_eq!(message.public_key, bytes[32 .. 48]);
+    assert_eq!(message.mac, bytes[48 ..]);
     test_write(&message, bytes);
 }
 
