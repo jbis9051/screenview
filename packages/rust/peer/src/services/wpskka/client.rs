@@ -54,7 +54,7 @@ impl WpskkaClientHandler {
         write: Sender<ScreenViewMessage>,
     ) -> Result<(), WpskkaClientError> {
         // we've received the password form node we need to do some srp stuff, generate our ephemeral keys, and then send a mac to authenticate our keys
-        let msg = self.host_hello.take().unwrap();
+        let msg = self.host_hello.as_ref().unwrap();
         let a = random_srp_private_value();
         let verifier = self
             .srp_client
