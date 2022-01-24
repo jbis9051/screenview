@@ -1,6 +1,9 @@
-use crate::services::{
-    helpers::{clipboard_type_map::get_native_clipboard, rvd_common::*},
-    InformEvent,
+use crate::{
+    native::{api::NativeApiTemplate, NativeApi, NativeApiError},
+    services::{
+        helpers::{clipboard_type_map::get_native_clipboard, rvd_common::*},
+        InformEvent,
+    },
 };
 use common::{
     constants::SVSC_VERSION,
@@ -16,40 +19,39 @@ use common::{
         ScreenViewMessage,
     },
 };
-use native::api::NativeApiTemplate;
 use std::sync::mpsc::{SendError, Sender};
 
 #[derive(Copy, Clone, Debug)]
-pub enum State {
+pub enum ClientState {
     Handshake,
     Data,
 }
 
 #[derive(Default)]
-struct Permissions {
+struct ClientPermissions {
     pub clipboard_readable: bool,
     pub clipboard_writable: bool,
 }
 
-pub struct RvdClientHandler<T: NativeApiTemplate> {
-    state: State,
-    native: T,
-    permissions: Permissions,
+pub struct RvdClientHandler {
+    state: ClientState,
+    native: NativeApi,
+    permissions: ClientPermissions,
     current_display_change: DisplayChange,
 }
 
-impl<T: NativeApiTemplate> RvdClientHandler<T> {
-    pub fn new(native: T) -> Self {
+impl RvdClientHandler {
+    pub fn new(native: NativeApi) -> Self {
         Self {
-            state: State::Handshake,
+            state: ClientState::Handshake,
             native,
             permissions: Default::default(),
             current_display_change: Default::default(),
         }
     }
 
-    fn permissions(&self) -> &Permissions {
-        return &self.permissions;
+    fn permissions(&self) -> &ClientPermissions {
+        &self.permissions
     }
 
     pub fn handle(
@@ -57,9 +59,9 @@ impl<T: NativeApiTemplate> RvdClientHandler<T> {
         msg: RvdMessage,
         write: Sender<ScreenViewMessage>,
         events: Sender<InformEvent>,
-    ) -> Result<(), RvdClientError<T>> {
+    ) -> Result<(), RvdClientError> {
         match self.state {
-            State::Handshake => match msg {
+            ClientState::Handshake => match msg {
                 RvdMessage::ProtocolVersion(msg) => {
                     let ok = msg.version == SVSC_VERSION;
                     write
@@ -67,7 +69,7 @@ impl<T: NativeApiTemplate> RvdClientHandler<T> {
                             RvdMessage::ProtocolVersionResponse(ProtocolVersionResponse { ok }),
                         ))
                         .map_err(RvdClientError::WriteError)?;
-                    self.state = State::Data;
+                    self.state = ClientState::Data;
                     if ok {
                         Ok(())
                     } else {
@@ -76,7 +78,7 @@ impl<T: NativeApiTemplate> RvdClientHandler<T> {
                 }
                 _ => Err(RvdClientError::WrongMessageForState(msg, self.state)),
             },
-            State::Data => match msg {
+            ClientState::Data => match msg {
                 RvdMessage::FrameData(_) => {
                     todo!()
                 }
@@ -93,10 +95,10 @@ impl<T: NativeApiTemplate> RvdClientHandler<T> {
                     .send(InformEvent::RvdInform(RvdInform::MouseLocation(msg)))
                     .map_err(RvdClientError::InformError),
                 RvdMessage::ClipboardRequest(msg) => {
-                    clipboard_request_impl!(self, msg, write, RvdClientError<T>)
+                    clipboard_request_impl!(self, msg, write, RvdClientError)
                 }
                 RvdMessage::ClipboardNotification(msg) => {
-                    clipboard_notificaiton_impl!(self, msg, RvdClientError<T>)
+                    clipboard_notificaiton_impl!(self, msg, RvdClientError)
                 }
                 _ => Err(RvdClientError::WrongMessageForState(msg, self.state)),
             },
@@ -105,13 +107,13 @@ impl<T: NativeApiTemplate> RvdClientHandler<T> {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum RvdClientError<T: NativeApiTemplate> {
+pub enum RvdClientError {
     #[error("client rejected version")]
     VersionBad,
     #[error("invalid message {0:?} for state {1:?}")]
-    WrongMessageForState(RvdMessage, State),
+    WrongMessageForState(RvdMessage, ClientState),
     #[error("native error: {0}")]
-    NativeError(T::Error),
+    NativeError(#[from] NativeApiError),
     #[error("write error")]
     WriteError(SendError<ScreenViewMessage>),
     #[error("inform error")]

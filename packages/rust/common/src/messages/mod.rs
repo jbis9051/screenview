@@ -25,9 +25,38 @@ macro_rules! impl_bitflags_message_component {
 
 pub(crate) use impl_bitflags_message_component;
 
+use rvd::RvdMessage;
+use sel::SelMessage;
+use svsc::SvscMessage;
+use wpskka::WpskkaMessage;
+
 pub enum ScreenViewMessage {
-    SelMessage(sel::SelMessage),
-    SvscMessage(svsc::SvscMessage),
-    WpskkaMessage(wpskka::WpskkaMessage),
-    RvdMessage(rvd::RvdMessage),
+    SelMessage(SelMessage),
+    SvscMessage(SvscMessage),
+    WpskkaMessage(WpskkaMessage),
+    RvdMessage(RvdMessage),
+}
+
+impl From<SelMessage> for ScreenViewMessage {
+    fn from(msg: SelMessage) -> Self {
+        Self::SelMessage(msg)
+    }
+}
+
+impl From<SvscMessage> for ScreenViewMessage {
+    fn from(msg: SvscMessage) -> Self {
+        Self::SvscMessage(msg)
+    }
+}
+
+impl From<WpskkaMessage> for ScreenViewMessage {
+    fn from(msg: WpskkaMessage) -> Self {
+        Self::WpskkaMessage(msg)
+    }
+}
+
+impl From<RvdMessage> for ScreenViewMessage {
+    fn from(msg: RvdMessage) -> Self {
+        Self::RvdMessage(msg)
+    }
 }

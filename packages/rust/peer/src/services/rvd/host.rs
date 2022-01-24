@@ -1,44 +1,50 @@
-use crate::services::{
-    helpers::{clipboard_type_map::get_native_clipboard, rvd_common::*},
-    InformEvent,
+use crate::{
+    native::{
+        api::{MouseButton, MousePosition, NativeApiTemplate},
+        NativeApi,
+        NativeApiError,
+    },
+    services::{
+        helpers::{clipboard_type_map::get_native_clipboard, rvd_common::*},
+        InformEvent,
+    },
 };
 use common::messages::{
     rvd::{AccessMask, ButtonsMask, ClipboardNotification, DisplayChange, DisplayId, RvdMessage},
     ScreenViewMessage,
 };
-use native::api::{MouseButton, MousePosition, NativeApiTemplate};
 use std::sync::mpsc::{SendError, Sender};
 
 #[derive(Copy, Clone, Debug)]
-pub enum State {
+pub enum HostState {
     Handshake,
     WaitingForDisplayChangeReceived,
     SendData,
 }
 
 #[derive(Default)]
-struct Permissions {
+struct HostPermissions {
     pub clipboard_readable: bool,
     pub clipboard_writable: bool,
 }
 
-pub struct RvdHostHandler<T: NativeApiTemplate> {
-    state: State,
-    native: T,
+pub struct RvdHostHandler {
+    state: HostState,
+    native: NativeApi,
     current_display_change: DisplayChange, // the displays we are sharing
 }
 
-impl<T: NativeApiTemplate> RvdHostHandler<T> {
-    pub fn new(native: T) -> Self {
+impl RvdHostHandler {
+    pub fn new(native: NativeApi) -> Self {
         Self {
-            state: State::Handshake,
+            state: HostState::Handshake,
             native,
             current_display_change: Default::default(),
         }
     }
 
-    fn permissions(&self) -> Permissions {
-        return Permissions {
+    fn permissions(&self) -> HostPermissions {
+        return HostPermissions {
             clipboard_readable: self.current_display_change.clipboard_readable,
             clipboard_writable: self.current_display_change.clipboard_readable
                 && self
@@ -49,7 +55,7 @@ impl<T: NativeApiTemplate> RvdHostHandler<T> {
         };
     }
 
-    fn display_is_controllable(&self, display_id: DisplayId) -> Result<bool, RvdHostError<T>> {
+    fn display_is_controllable(&self, display_id: DisplayId) -> Result<bool, RvdHostError> {
         Ok(!self
             .current_display_change
             .display_information
@@ -64,75 +70,63 @@ impl<T: NativeApiTemplate> RvdHostHandler<T> {
         &mut self,
         msg: RvdMessage,
         write: Sender<ScreenViewMessage>,
-    ) -> Result<(), RvdHostError<T>> {
+    ) -> Result<(), RvdHostError> {
         match self.state {
-            State::Handshake => match msg {
+            HostState::Handshake => match msg {
                 RvdMessage::ProtocolVersionResponse(msg) => {
                     if !msg.ok {
                         return Err(RvdHostError::VersionBad);
                     }
-                    self.state = State::WaitingForDisplayChangeReceived;
+                    self.state = HostState::WaitingForDisplayChangeReceived;
                     Ok(())
                 }
                 _ => Err(RvdHostError::WrongMessageForState(msg, self.state)),
             },
-            State::WaitingForDisplayChangeReceived => match msg {
+            HostState::WaitingForDisplayChangeReceived => match msg {
                 // TODO edge: Wait for display change and we receive a message
                 RvdMessage::DisplayChangeReceived(_) => {
-                    self.state = State::SendData;
+                    self.state = HostState::SendData;
                     Ok(())
                 }
                 _ => Err(RvdHostError::WrongMessageForState(msg, self.state)),
             },
-            State::SendData => match msg {
+            HostState::SendData => match msg {
                 RvdMessage::MouseInput(msg) => {
                     if self.display_is_controllable(msg.display_id)? {
                         return Err(RvdHostError::PermissionsError("mouse input".to_string()));
                     }
-                    self.native
-                        .set_pointer_position(MousePosition {
-                            x: msg.x_location as u32,
-                            y: msg.y_location as u32,
-                            monitor_id: msg.display_id,
-                        })
-                        .map_err(RvdHostError::NativeError)?;
+                    self.native.set_pointer_position(MousePosition {
+                        x: msg.x_location as u32,
+                        y: msg.y_location as u32,
+                        monitor_id: msg.display_id,
+                    })?;
                     // TODO macro?
                     self.native
-                        .toggle_mouse(MouseButton::Left, msg.buttons.contains(ButtonsMask::LEFT))
-                        .map_err(RvdHostError::NativeError)?;
-                    self.native
-                        .toggle_mouse(
-                            MouseButton::Center,
-                            msg.buttons.contains(ButtonsMask::MIDDLE),
-                        )
-                        .map_err(RvdHostError::NativeError)?;
-                    self.native
-                        .toggle_mouse(MouseButton::Right, msg.buttons.contains(ButtonsMask::RIGHT))
-                        .map_err(RvdHostError::NativeError)?;
-                    self.native
-                        .toggle_mouse(
-                            MouseButton::ScrollUp,
-                            msg.buttons.contains(ButtonsMask::SCROLL_UP),
-                        )
-                        .map_err(RvdHostError::NativeError)?;
-                    self.native
-                        .toggle_mouse(
-                            MouseButton::ScrollDown,
-                            msg.buttons.contains(ButtonsMask::SCROLL_DOWN),
-                        )
-                        .map_err(RvdHostError::NativeError)?;
-                    self.native
-                        .toggle_mouse(
-                            MouseButton::ScrollLeft,
-                            msg.buttons.contains(ButtonsMask::SCROLL_LEFT),
-                        )
-                        .map_err(RvdHostError::NativeError)?;
-                    self.native
-                        .toggle_mouse(
-                            MouseButton::ScrollRight,
-                            msg.buttons.contains(ButtonsMask::SCROLL_RIGHT),
-                        )
-                        .map_err(RvdHostError::NativeError)?;
+                        .toggle_mouse(MouseButton::Left, msg.buttons.contains(ButtonsMask::LEFT))?;
+                    self.native.toggle_mouse(
+                        MouseButton::Center,
+                        msg.buttons.contains(ButtonsMask::MIDDLE),
+                    )?;
+                    self.native.toggle_mouse(
+                        MouseButton::Right,
+                        msg.buttons.contains(ButtonsMask::RIGHT),
+                    )?;
+                    self.native.toggle_mouse(
+                        MouseButton::ScrollUp,
+                        msg.buttons.contains(ButtonsMask::SCROLL_UP),
+                    )?;
+                    self.native.toggle_mouse(
+                        MouseButton::ScrollDown,
+                        msg.buttons.contains(ButtonsMask::SCROLL_DOWN),
+                    )?;
+                    self.native.toggle_mouse(
+                        MouseButton::ScrollLeft,
+                        msg.buttons.contains(ButtonsMask::SCROLL_LEFT),
+                    )?;
+                    self.native.toggle_mouse(
+                        MouseButton::ScrollRight,
+                        msg.buttons.contains(ButtonsMask::SCROLL_RIGHT),
+                    )?;
                     Ok(())
                 }
                 RvdMessage::KeyInput(msg) => {
@@ -144,16 +138,13 @@ impl<T: NativeApiTemplate> RvdHostHandler<T> {
                     {
                         return Err(RvdHostError::PermissionsError("key input".to_string()));
                     }
-                    Ok(self
-                        .native
-                        .key_toggle(msg.key, msg.down)
-                        .map_err(RvdHostError::NativeError)?)
+                    Ok(self.native.key_toggle(msg.key, msg.down)?)
                 }
                 RvdMessage::ClipboardRequest(msg) => {
-                    clipboard_request_impl!(self, msg, write, RvdHostError<T>)
+                    clipboard_request_impl!(self, msg, write, RvdHostError)
                 }
                 RvdMessage::ClipboardNotification(msg) => {
-                    clipboard_notificaiton_impl!(self, msg, RvdHostError<T>)
+                    clipboard_notificaiton_impl!(self, msg, RvdHostError)
                 }
                 _ => Err(RvdHostError::WrongMessageForState(msg, self.state)),
             },
@@ -162,13 +153,13 @@ impl<T: NativeApiTemplate> RvdHostHandler<T> {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum RvdHostError<T: NativeApiTemplate> {
+pub enum RvdHostError {
     #[error("client rejected version")]
     VersionBad,
     #[error("invalid message {0:?} for state {1:?}")]
-    WrongMessageForState(RvdMessage, State),
+    WrongMessageForState(RvdMessage, HostState),
     #[error("native error: {0}")]
-    NativeError(T::Error),
+    NativeError(#[from] NativeApiError),
     #[error("send_error")]
     WriteError(SendError<ScreenViewMessage>),
     #[error("send_error")]

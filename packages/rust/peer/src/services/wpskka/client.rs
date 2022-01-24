@@ -7,7 +7,7 @@ use crate::services::{
     InformEvent,
 };
 use common::{
-    constants::{HashAlgo, Mac, SRP_PARAM},
+    constants::{HashAlgo, SRP_PARAM},
     messages::{
         wpskka::{ClientHello, HostHello, WpskkaMessage},
         ScreenViewMessage,

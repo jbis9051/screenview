@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 common = { path = "../common" }
+cfg-if = "1.0.0"
 crossbeam-channel = "0.5.2"
 futures-executor = "0.3.19"
 futures-util = "0.3.19"
