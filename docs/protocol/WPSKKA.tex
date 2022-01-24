@@ -22,7 +22,7 @@ client.\\
         \hline
         16             & salt          &                \\
         \hline
-        256            & srp-B         &                \\
+        32            & srp-B         &                \\
         \hline
         16             & public-key    &                \\
         \hline
@@ -50,7 +50,7 @@ client.\\
         \hline
         1              & type          & 2              \\
         \hline
-        256            & srp-A         &                \\
+        32            & srp-A         &                \\
         \hline
         16             & public-key    &                \\
         \hline
@@ -64,7 +64,7 @@ client.\\
     & \text{srp-A} := \text{SRP-A()}\\
     & L_{client} = L_{host} := \text{SRP-PREMASTER()}\\
     & \text{public-key} := E_{client}^{pub}\\
-    & \text{mac} := \text{HMAC}(E_{client}^{pub}, \text{KDF}_1(L_{client}))\\
+    & \text{mac} := \text{HMAC}(\text{KDF}_1(L_{client}), E_{client}^{pub})\\
 \end{align*}
 
 \subsection{Hostverify}
@@ -83,7 +83,7 @@ client.\\
 \end{center}
 
 \begin{align*}
-    & \text{mac} := \text{HMAC}(E_{host}^{pub},\text{KDF}_1(L_{host}))\\
+    & \text{mac} := \text{HMAC}(\text{KDF}_1(L_{host}), E_{host}^{pub})\\
 \end{align*}
 
 \subsection{Transport Data Key Derivation}
