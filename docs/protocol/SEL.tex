@@ -38,12 +38,12 @@ process or reply to any messages that don't pass authentication. This prevents a
 The Server and Peer derive keys.
 
 \begin{align*}
-    &  G:= \text{session-id}                                                               \\
-    &  H := \text{peer-id}                                                                \\
-    &  J := \text{peer-key}                                                              \\
-    &  (\mathit{SU}_{peer}^{send} = \mathit{SU}_{serv}^{recv}, \mathit{SU}_{peer}^{recv} = \mathit{SU}_{serv}^{send}) := \text{KDF}_2(\text{HASH}(G\,
+    &  G\coloneqq \text{session-id}                                                               \\
+    &  H \coloneqq \text{peer-id}                                                                \\
+    &  J \coloneqq \text{peer-key}                                                              \\
+    &  (\mathit{SU}_{peer}^{send} = \mathit{SU}_{serv}^{recv}, \mathit{SU}_{peer}^{recv} = \mathit{SU}_{serv}^{send}) \coloneqq \text{KDF}_2(\text{HASH}(G\,
     ||\, H\,||\, J), \epsilon)                                        \\
-    &   \mathit{NU}_{peer}^{send} = \mathit{NU}_{serv}^{recv} = \mathit{NU}_{peer}^{recv} = \mathit{NU}_{serv}^{send} := 0
+    &   \mathit{NU}_{peer}^{send} = \mathit{NU}_{serv}^{recv} = \mathit{NU}_{peer}^{recv} = \mathit{NU}_{serv}^{send} \coloneqq 0
 \end{align*}
 
 \subsubsection{Transport Data Messages}
@@ -82,9 +82,9 @@ The Server and Peer derive keys.
 
 
 \begin{align*}
-    & \text{data} := \text{AEAD}(\mathit{SU}_{m}^{send}, \mathit{NU}_{m}^{send}, P, \epsilon)\\
-    & \text{counter} := \mathit{NU}_{m}^{send}\\
-    & \mathit{NU}_{m}^{send} := \mathit{NU}_{m}^{send} + 1
+    & \text{data} \coloneqq \text{AEAD}(\mathit{SU}_{m}^{send}, \mathit{NU}_{m}^{send}, P, \epsilon)\\
+    & \text{counter} \coloneqq \mathit{NU}_{m}^{send}\\
+    & \mathit{NU}_{m}^{send} \coloneqq \mathit{NU}_{m}^{send} + 1
 \end{align*}
 
 
