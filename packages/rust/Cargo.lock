@@ -34,8 +34,9 @@ checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
 name = "blake3"
-version = "1.3.0"
-source = "git+https://github.com/jbis9051/BLAKE3#e069e461166fa5bc6d569cf3792886e711ee44c5"
+version = "1.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a08e53fc5a564bb15bfe6fae56bd71522205f1f91893f9c0116edad6496c183f"
 dependencies = [
  "arrayref",
  "arrayvec",
@@ -385,8 +386,9 @@ dependencies = [
 
 [[package]]
 name = "hkdf"
-version = "0.12.0"
-source = "git+https://github.com/jbis9051/KDFs#3ec194cc0591cdf8aa47ec47cab5c5ebca571066"
+version = "0.12.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "158bc31e00a68e380286904cc598715f861f2b0ccf7aa6fe20c6d0c49ca5d0f6"
 dependencies = [
  "hmac",
 ]
@@ -719,8 +721,9 @@ checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 
 [[package]]
 name = "srp"
-version = "0.6.0-pre"
-source = "git+https://github.com/jbis9051/PAKEs/#83a9810aea217147327b73ddd8225d3bd65cc6df"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4cdd40049b29ab1315ccba7ffcf1eece8162982eab14edfac3cf2c2ffab18193"
 dependencies = [
  "digest",
  "generic-array",

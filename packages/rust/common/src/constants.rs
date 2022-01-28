@@ -1,4 +1,4 @@
-use hkdf::Hkdf as HHkdf;
+use hkdf::SimpleHkdf;
 use hmac::SimpleHmac;
 use srp::groups::G_2048;
 
@@ -8,6 +8,6 @@ pub static SRP_PARAM: &G_2048 = &G_2048;
 
 pub type HashAlgo = blake3::Hasher;
 pub type Hmac = SimpleHmac<HashAlgo>;
-pub type Hkdf = HHkdf<HashAlgo>;
+pub type Hkdf = SimpleHkdf<HashAlgo>;
 
 pub use hmac::Mac;
