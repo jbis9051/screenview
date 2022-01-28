@@ -81,7 +81,7 @@ Messages used in the authentication scheme are encapsulated in this message.
         \hline
         \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
         \hline
-        1              & type          & 2              \\
+        1              & type          & 3              \\
         \hline
         2              & length        &                \\
         \hline
@@ -100,7 +100,7 @@ Messages used in the authentication scheme are encapsulated in this message.
         \hline
         \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
         \hline
-        1              & type          & 3              \\
+        1              & type          & 4              \\
         \hline
         1              & ok            & 0 or 1         \\
         \hline
@@ -133,7 +133,7 @@ Transport Data Messages MUST NOT be sent until authentication is complete.
         \hline
         \textbf{Bytes}     & \textbf{Name} & \textbf{Value} \\
         \hline
-        1                  & type          & 4              \\
+        1                  & type          & 5              \\
         \hline
         2                  & data-length   &                \\
         \hline
@@ -162,7 +162,7 @@ $\mathit{NT}_{m}$ is an 64 bit counter that MUST NOT wrap. After a transport mes
         \hline
         \textbf{Bytes}     & \textbf{Name} & \textbf{Value} \\
         \hline
-        1                  & type          & 4              \\
+        1                  & type          & 6              \\
         \hline
         8                  & counter       &                \\
         \hline
