@@ -1,5 +1,6 @@
 mod message_component;
 pub use message_component::*;
+pub mod auth;
 pub mod rvd;
 pub mod sel;
 pub mod svsc;

@@ -5,31 +5,37 @@ use common::messages::{wpskka::*, MessageComponent};
 use std::io::Cursor;
 
 #[test]
-fn test_host_hello() {
-    let bytes = include_bytes!("binary/wpskka/host_hello.bin");
-    let message: HostHello = HostHello::read(&mut Cursor::new(bytes)).unwrap();
-    assert_eq!(message.username, bytes[.. 16]);
-    assert_eq!(message.salt, bytes[16 .. 32]);
-    assert_eq!(message.b_pub, bytes[32 .. 64]);
-    assert_eq!(message.public_key, bytes[64 ..]);
+fn test_auth_scheme() {
+    let bytes = include_bytes!("binary/wpskka/auth_scheme.bin");
+    let message: AuthScheme = AuthScheme::read(&mut Cursor::new(bytes)).unwrap();
+    assert_eq!(message.public_key, bytes[0 .. 16]);
+    assert_eq!(message.num_auth_schemes.len(), 1);
+    assert_eq!(message.num_auth_schemes[0], AuthSchemeType::SrpDynamic);
     test_write(&message, bytes);
 }
 
 #[test]
-fn test_client_hello() {
-    let bytes = include_bytes!("binary/wpskka/client_hello.bin");
-    let message: ClientHello = ClientHello::read(&mut Cursor::new(bytes)).unwrap();
-    assert_eq!(message.a_pub, bytes[.. 32]);
-    assert_eq!(message.public_key, bytes[32 .. 48]);
-    assert_eq!(message.mac, bytes[48 ..]);
+fn test_try_auth() {
+    let bytes = include_bytes!("binary/wpskka/try_auth.bin");
+    let message: TryAuth = TryAuth::read(&mut Cursor::new(bytes)).unwrap();
+    assert_eq!(message.public_key, bytes[0 .. 16]);
+    assert_eq!(message.auth_scheme, AuthSchemeType::SrpStatic);
     test_write(&message, bytes);
 }
 
 #[test]
-fn test_host_verify() {
-    let bytes = include_bytes!("binary/wpskka/host_verify.bin");
-    let message: HostVerify = HostVerify::read(&mut Cursor::new(bytes)).unwrap();
-    assert_eq!(&message.mac, bytes);
+fn test_auth_message() {
+    let bytes = include_bytes!("binary/wpskka/auth_message.bin");
+    let message: AuthMessage = AuthMessage::read(&mut Cursor::new(bytes)).unwrap();
+    assert_eq!(message.data[..], bytes[2 ..]);
+    test_write(&message, bytes);
+}
+
+#[test]
+fn test_auth_result() {
+    let bytes = include_bytes!("binary/wpskka/auth_result.bin");
+    let message: AuthResult = AuthResult::read(&mut Cursor::new(bytes)).unwrap();
+    assert!(&message.ok);
     test_write(&message, bytes);
 }
 
