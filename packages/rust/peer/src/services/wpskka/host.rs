@@ -1,80 +1,56 @@
-use crate::services::helpers::{
-    cipher_reliable_peer::{CipherError, CipherReliablePeer},
-    cipher_unreliable_peer::CipherUnreliablePeer,
-    wpskka_common::{hmac, hmac_verify, kdf1, keypair, random_bytes, random_srp_private_value},
+use crate::services::{
+    helpers::{
+        cipher_reliable_peer::{CipherError, CipherReliablePeer},
+        cipher_unreliable_peer::CipherUnreliablePeer,
+        wpskka_common::{hmac, hmac_verify, kdf1, keypair, random_bytes, random_srp_private_value},
+    },
+    wpskka::auth::{
+        srp_host::{SrpAuthHost, SrpHostError},
+        AuthScheme,
+    },
 };
 use common::{
     constants::{HashAlgo, SRP_PARAM},
     messages::{
-        wpskka::{HostHello, HostVerify, WpskkaMessage},
+        auth::srp::SrpMessage,
+        wpskka::{AuthSchemeType, HostHello, HostVerify, WpskkaMessage},
         ScreenViewMessage,
     },
 };
 use ring::agreement::{EphemeralPrivateKey, PublicKey};
-use srp::{client::SrpClient, server::SrpServer, types::SrpAuthError};
 use std::sync::mpsc::{SendError, Sender};
 
 #[derive(Copy, Clone, Debug)]
 pub enum State {
-    Handshake,
-    Data,
+    PreAuthSelect,
+    IsAuthenticating,
+    Authenticated,
 }
 
 pub struct WpskkaHostHandler {
     state: State,
+    current_auth: Option<AuthScheme>,
+
+    dynamic_password: Option<Vec<u8>>,
+    static_password: Option<Vec<u8>>,
 
     reliable: Option<CipherReliablePeer>,
     unreliable: Option<CipherUnreliablePeer>,
 
-    srp_server: SrpServer<'static, HashAlgo>,
-    verifier: Option<Vec<u8>>,
     keys: Option<(EphemeralPrivateKey, PublicKey)>,
-    b: Option<Vec<u8>>,
 }
 
 impl WpskkaHostHandler {
     pub fn new() -> Self {
         Self {
-            state: State::Handshake,
+            state: State::PreAuthSelect,
+            current_auth: None,
+            dynamic_password: None,
+            static_password: None,
             reliable: None,
             unreliable: None,
-            srp_server: SrpServer::new(SRP_PARAM),
-            verifier: None,
             keys: None,
-            b: None,
         }
-    }
-
-    pub fn init(
-        &mut self,
-        password: &[u8],
-        write: &mut Sender<ScreenViewMessage>,
-    ) -> Result<(), WpskkaHostError> {
-        // For SRP is an asymmetric or Augmented PAKE but we wanted a Balanced PAKE, so Host acts as the Client for registration and the server for authentication
-        let client = SrpClient::<'static, HashAlgo>::new(SRP_PARAM);
-        let username = random_bytes(16);
-        let salt = random_bytes(16);
-        let verifier = client.compute_verifier(&username, password, &salt);
-
-        let b = random_srp_private_value();
-        let b_pub = self.srp_server.compute_public_ephemeral(&b, &verifier);
-        let keys = keypair().map_err(|_| WpskkaHostError::RingError)?;
-        write
-            .send(ScreenViewMessage::WpskkaMessage(WpskkaMessage::HostHello(
-                HostHello {
-                    username: username.try_into().unwrap(),
-                    salt: salt.try_into().unwrap(),
-                    b_pub: b_pub.try_into().unwrap(),
-                    public_key: keys.1.as_ref().try_into().unwrap(),
-                },
-            )))
-            .map_err(WpskkaHostError::WriteError)?;
-
-        self.verifier = Some(verifier);
-        self.keys = Some(keys);
-        self.b = Some(b);
-
-        Ok(())
     }
 
     pub fn handle(
@@ -83,40 +59,75 @@ impl WpskkaHostHandler {
         write: &mut Sender<ScreenViewMessage>,
     ) -> Result<Option<Vec<u8>>, WpskkaHostError> {
         match self.state {
-            State::Handshake => match msg {
-                WpskkaMessage::ClientHello(msg) => {
-                    let srp_key_kdf = {
-                        let srp_verifier = self
-                            .srp_server
-                            .process_reply(
-                                self.b.as_ref().unwrap(),
-                                self.verifier.as_ref().unwrap(),
-                                &msg.a_pub,
-                            )
-                            .map_err(WpskkaHostError::SrpError)?;
-                        kdf1(srp_verifier.key())
-                    };
+            State::PreAuthSelect => match msg {
+                WpskkaMessage::TryAuth(msg) => {
+                    match msg.auth_scheme {
+                        AuthSchemeType::Invalid =>
+                            Err(WpskkaHostError::BadAuthSchemeType(msg.auth_scheme)),
+                        // These are basically the same schemes just with different password sources, so we can handle it together
+                        AuthSchemeType::SrpDynamic | AuthSchemeType::SrpStatic => {
+                            let password = if msg.auth_scheme == AuthSchemeType::SrpDynamic {
+                                self.dynamic_password
+                                    .ok_or(WpskkaHostError::BadAuthSchemeType(msg.auth_scheme))?
+                            } else {
+                                self.static_password
+                                    .ok_or(WpskkaHostError::BadAuthSchemeType(msg.auth_scheme))?
+                            };
 
-                    if !hmac_verify(&srp_key_kdf, &msg.public_key, &msg.mac) {
-                        return Err(WpskkaHostError::AuthError);
+                            let keys = keypair().map_err(|_| WpskkaHostError::RingError)?;
+                            let mut srp = SrpAuthHost::new(keys.1.clone());
+
+                            let outgoing = srp.init(&password);
+                            write
+                                .send(ScreenViewMessage::WpskkaMessage(
+                                    WpskkaMessage::AuthMessage(outgoing.to_bytes()),
+                                ))
+                                .map_err(WpskkaHostError::WriteError)?;
+                            self.current_auth = Some(AuthScheme::SrpAuthHost(srp));
+                            self.keys = Some(keys);
+                            self.state = State::IsAuthenticating;
+                            Ok(None)
+                        }
+                        AuthSchemeType::PublicKey =>
+                            Err(WpskkaHostError::BadAuthSchemeType(msg.auth_scheme)),
                     }
-
-                    let mac = hmac(&srp_key_kdf, self.keys.as_ref().unwrap().1.as_ref());
-
-                    write
-                        .send(ScreenViewMessage::WpskkaMessage(WpskkaMessage::HostVerify(
-                            HostVerify {
-                                mac: mac.try_into().unwrap(),
-                            },
-                        )))
-                        .map_err(WpskkaHostError::WriteError)?;
-
-                    self.state = State::Data;
-                    Ok(None)
                 }
                 _ => Err(WpskkaHostError::WrongMessageForState(msg, self.state)),
             },
-            State::Data => match msg {
+            State::IsAuthenticating => match msg {
+                WpskkaMessage::AuthMessage(msg) => {
+                    match self.current_auth.unwrap() {
+                        AuthScheme::SrpAuthHost(mut host) => {
+                            let msg: SrpMessage = SrpMessage::read(&msg.data);
+                            let outgoing = host.handle(msg).map_err(|err| {
+                                if err == SrpHostError::WrongMessageForState {
+                                    WpskkaHostError::BadAuthSchemeMessage
+                                } else {
+                                    WpskkaHostError::AuthFailed
+                                }
+                            })?;
+                            write
+                                .send(ScreenViewMessage::WpskkaMessage(
+                                    WpskkaMessage::AuthMessage(outgoing.to_bytes()),
+                                ))
+                                .map_err(WpskkaHostError::WriteError)?;
+                            if host.is_authenticated() {
+                                self.current_auth = None; // TODO Security: Look into zeroing out the data here
+                                self.state = State::Authenticated;
+                            }
+                            Ok(None)
+                        }
+                        _ => {
+                            panic!(
+                                "Somehow an unsupported auth scheme ended up in the auth scheme. \
+                                 Someone should get fired."
+                            )
+                        }
+                    }
+                }
+                _ => Err(WpskkaHostError::WrongMessageForState(msg, self.state)),
+            },
+            State::Authenticated => match msg {
                 WpskkaMessage::TransportDataMessageReliable(msg) => {
                     let reliable = self.reliable.as_mut().unwrap();
                     Ok(Some(
@@ -141,18 +152,23 @@ impl WpskkaHostHandler {
 
 #[derive(Debug, thiserror::Error)]
 pub enum WpskkaHostError {
-    #[error("{0}")]
-    CipherError(CipherError),
-    #[error("{0}")]
-    SrpError(SrpAuthError),
     #[error("invalid message {0:?} for state {1:?}")]
     WrongMessageForState(WpskkaMessage, State),
-    #[error("ring error")]
-    RingError,
+
+    #[error("unsupported auth scheme type")]
+    BadAuthSchemeType(AuthSchemeType),
+    #[error("authentication failed")]
+    AuthFailed,
+    #[error("BadAuthSchemeMessage")]
+    BadAuthSchemeMessage,
+
     #[error("inform error")]
     InformError(SendError<ScreenViewMessage>),
-    #[error("authentication error")]
-    AuthError,
     #[error("write error")]
     WriteError(SendError<ScreenViewMessage>),
+
+    #[error("ring error")]
+    RingError,
+    #[error("{0}")]
+    CipherError(CipherError),
 }

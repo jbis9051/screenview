@@ -21,6 +21,7 @@ pub struct HostVerify {
     pub mac: [u8; 32],
 }
 
+#[derive(Debug, MessageComponent)]
 pub enum SrpMessage {
     HostHello(HostHello),
     ClientHello(ClientHello),
