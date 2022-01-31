@@ -157,7 +157,7 @@ impl IoHandle {
 struct ReliableHandle {
     stream: Arc<TcpStream>,
     write: Sender<SelMessage>,
-    _handles: (JoinOnDrop<()>, JoinOnDrop<()>),
+    _handles: Box<(JoinOnDrop<()>, JoinOnDrop<()>)>,
 }
 
 impl ReliableHandle {
@@ -176,14 +176,13 @@ impl ReliableHandle {
 
         let write_handle = thread::spawn({
             let stream = Arc::clone(&stream);
-            let result_sender = result_sender.clone();
             move || write_reliable(stream, result_sender, write_rx)
         });
 
         Ok(Self {
             stream,
             write: write_tx,
-            _handles: (JoinOnDrop::new(read_handle), JoinOnDrop::new(write_handle)),
+            _handles: Box::new((JoinOnDrop::new(read_handle), JoinOnDrop::new(write_handle))),
         })
     }
 
@@ -201,7 +200,7 @@ impl Drop for ReliableHandle {
 struct UnreliableHandle {
     write: Sender<(SelMessage, usize)>,
     shutdown: Option<oneshot::Sender<()>>,
-    _handles: (JoinOnDrop<()>, JoinOnDrop<()>),
+    _handles: Box<(JoinOnDrop<()>, JoinOnDrop<()>)>,
 }
 
 impl UnreliableHandle {
@@ -220,15 +219,13 @@ impl UnreliableHandle {
             move || block_on(read_unreliable(socket, result_sender, shutdown_rx))
         });
 
-        let write_handle = thread::spawn({
-            let result_sender = result_sender.clone();
-            move || block_on(write_unreliable(socket, result_sender, write_rx))
-        });
+        let write_handle =
+            thread::spawn(move || block_on(write_unreliable(socket, result_sender, write_rx)));
 
         Ok(Self {
             write: write_tx,
             shutdown: Some(shutdown_tx),
-            _handles: (JoinOnDrop::new(read_handle), JoinOnDrop::new(write_handle)),
+            _handles: Box::new((JoinOnDrop::new(read_handle), JoinOnDrop::new(write_handle))),
         })
     }
 

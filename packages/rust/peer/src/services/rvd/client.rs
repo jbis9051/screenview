@@ -3,23 +3,20 @@ use crate::{
     services::{
         helpers::{clipboard_type_map::get_native_clipboard, rvd_common::*},
         InformEvent,
+        SendError,
     },
 };
 use common::{
     constants::SVSC_VERSION,
-    messages::{
-        rvd::{
-            ClipboardNotification,
-            DisplayChange,
-            DisplayChangeReceived,
-            MouseLocation,
-            ProtocolVersionResponse,
-            RvdMessage,
-        },
-        ScreenViewMessage,
+    messages::rvd::{
+        ClipboardNotification,
+        DisplayChange,
+        DisplayChangeReceived,
+        MouseLocation,
+        ProtocolVersionResponse,
+        RvdMessage,
     },
 };
-use std::sync::mpsc::{SendError, Sender};
 
 #[derive(Copy, Clone, Debug)]
 pub enum ClientState {
@@ -54,21 +51,22 @@ impl RvdClientHandler {
         &self.permissions
     }
 
-    pub fn handle(
+    pub fn handle<F>(
         &mut self,
         msg: RvdMessage,
-        write: Sender<ScreenViewMessage>,
-        events: Sender<InformEvent>,
-    ) -> Result<(), RvdClientError> {
+        mut write: F,
+        events: &mut Vec<InformEvent>,
+    ) -> Result<(), RvdClientError>
+    where
+        F: FnMut(RvdMessage) -> Result<(), SendError>,
+    {
         match self.state {
             ClientState::Handshake => match msg {
                 RvdMessage::ProtocolVersion(msg) => {
                     let ok = msg.version == SVSC_VERSION;
-                    write
-                        .send(ScreenViewMessage::RvdMessage(
-                            RvdMessage::ProtocolVersionResponse(ProtocolVersionResponse { ok }),
-                        ))
-                        .map_err(RvdClientError::WriteError)?;
+                    write(RvdMessage::ProtocolVersionResponse(
+                        ProtocolVersionResponse { ok },
+                    ))?;
                     self.state = ClientState::Data;
                     if ok {
                         Ok(())
@@ -76,7 +74,10 @@ impl RvdClientHandler {
                         Err(RvdClientError::VersionBad)
                     }
                 }
-                _ => Err(RvdClientError::WrongMessageForState(msg, self.state)),
+                _ => Err(RvdClientError::WrongMessageForState(
+                    Box::new(msg),
+                    self.state,
+                )),
             },
             ClientState::Data => match msg {
                 RvdMessage::FrameData(_) => {
@@ -84,23 +85,23 @@ impl RvdClientHandler {
                 }
                 RvdMessage::DisplayChange(msg) => {
                     self.current_display_change = msg;
-                    write
-                        .send(ScreenViewMessage::RvdMessage(
-                            RvdMessage::DisplayChangeReceived(DisplayChangeReceived {}),
-                        ))
-                        .map_err(RvdClientError::WriteError)?;
+                    write(RvdMessage::DisplayChangeReceived(DisplayChangeReceived {}))?;
                     Ok(())
                 }
-                RvdMessage::MouseLocation(msg) => events
-                    .send(InformEvent::RvdInform(RvdInform::MouseLocation(msg)))
-                    .map_err(RvdClientError::InformError),
+                RvdMessage::MouseLocation(msg) => {
+                    events.push(InformEvent::RvdInform(RvdInform::MouseLocation(msg)));
+                    Ok(())
+                }
                 RvdMessage::ClipboardRequest(msg) => {
                     clipboard_request_impl!(self, msg, write, RvdClientError)
                 }
                 RvdMessage::ClipboardNotification(msg) => {
                     clipboard_notificaiton_impl!(self, msg, RvdClientError)
                 }
-                _ => Err(RvdClientError::WrongMessageForState(msg, self.state)),
+                _ => Err(RvdClientError::WrongMessageForState(
+                    Box::new(msg),
+                    self.state,
+                )),
             },
         }
     }
@@ -111,13 +112,11 @@ pub enum RvdClientError {
     #[error("client rejected version")]
     VersionBad,
     #[error("invalid message {0:?} for state {1:?}")]
-    WrongMessageForState(RvdMessage, ClientState),
+    WrongMessageForState(Box<RvdMessage>, ClientState),
     #[error("native error: {0}")]
     NativeError(#[from] NativeApiError),
     #[error("write error")]
-    WriteError(SendError<ScreenViewMessage>),
-    #[error("inform error")]
-    InformError(SendError<InformEvent>),
+    WriteError(#[from] SendError),
     #[error("permission error: cannot {0}")]
     PermissionsError(String),
 }

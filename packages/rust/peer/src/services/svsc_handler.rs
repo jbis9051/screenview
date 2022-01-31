@@ -1,6 +1,12 @@
 use crate::services::InformEvent;
-use common::messages::svsc::{LeaseExtensionResponse, LeaseResponseData, SessionData, SvscMessage};
-use std::sync::mpsc::{SendError, Sender};
+use common::messages::svsc::{
+    LeaseExtensionResponse,
+    LeaseResponseData,
+    PeerId,
+    SessionData,
+    SessionDataSend,
+    SvscMessage,
+};
 
 #[derive(Copy, Clone, Debug)]
 pub enum State {
@@ -29,10 +35,18 @@ impl SvscHandler {
         }
     }
 
+    pub fn wrap(msg: Vec<u8>) -> SessionDataSend {
+        SessionDataSend { data: msg }
+    }
+
+    pub fn peer_id(&self) -> PeerId {
+        self.session.unwrap().peer_id
+    }
+
     pub fn handle(
         &mut self,
         msg: SvscMessage,
-        event: Sender<InformEvent>,
+        event: &mut Vec<InformEvent>,
     ) -> Result<Option<Vec<u8>>, SvscError> {
         match self.state {
             State::Handshake => match msg {
@@ -43,45 +57,39 @@ impl SvscHandler {
                     self.state = State::PreSession;
                     Ok(None)
                 }
-                _ => Err(SvscError::WrongMessageForState(msg, self.state)),
+                _ => Err(SvscError::WrongMessageForState(Box::new(msg), self.state)),
             },
-            State::PreSession => Err(SvscError::WrongMessageForState(msg, self.state)),
+            State::PreSession => Err(SvscError::WrongMessageForState(Box::new(msg), self.state)),
             State::AwaitingLeaseResponse => match msg {
                 SvscMessage::LeaseResponse(msg) => {
                     let data = msg.response_data.ok_or(SvscError::LeaseRequestRejected)?;
                     self.lease = Some(data);
                     self.state = State::InLease;
-                    event
-                        .send(InformEvent::SvscInform(SvscInform::LeaseUpdate(data)))
-                        .map_err(SvscError::InformError)?;
+                    event.push(InformEvent::SvscInform(SvscInform::LeaseUpdate(data)));
                     Ok(None)
                 }
-                _ => Err(SvscError::WrongMessageForState(msg, self.state)),
+                _ => Err(SvscError::WrongMessageForState(Box::new(msg), self.state)),
             },
             State::AwaitingSessionResponse => match msg {
                 SvscMessage::EstablishSessionResponse(msg) => {
                     let data = msg.response_data.ok_or(SvscError::LeaseRequestRejected)?;
                     self.session = Some(data);
-                    event
-                        .send(InformEvent::SvscInform(SvscInform::SessionUpdate(data)))
-                        .map_err(SvscError::InformError)?;
+                    event.push(InformEvent::SvscInform(SvscInform::SessionUpdate(data)));
                     Ok(None)
                 }
-                _ => Err(SvscError::WrongMessageForState(msg, self.state)),
+                _ => Err(SvscError::WrongMessageForState(Box::new(msg), self.state)),
             },
             State::InLease => match msg {
                 SvscMessage::LeaseExtensionResponse(msg) =>
                     self.handle_lease_extension_response(msg),
                 SvscMessage::EstablishSessionNotification(msg) => {
                     self.session = Some(msg.session_data);
-                    event
-                        .send(InformEvent::SvscInform(SvscInform::SessionUpdate(
-                            msg.session_data,
-                        )))
-                        .map_err(SvscError::InformError)?;
+                    event.push(InformEvent::SvscInform(SvscInform::SessionUpdate(
+                        msg.session_data,
+                    )));
                     Ok(None)
                 }
-                _ => Err(SvscError::WrongMessageForState(msg, self.state)),
+                _ => Err(SvscError::WrongMessageForState(Box::new(msg), self.state)),
             },
             State::InSession => match msg {
                 SvscMessage::LeaseExtensionResponse(msg) =>
@@ -91,13 +99,11 @@ impl SvscHandler {
                         self.state = State::InLease;
                     }
                     self.session = None;
-                    event
-                        .send(InformEvent::SvscInform(SvscInform::SessionEnd))
-                        .map_err(SvscError::InformError)?;
+                    event.push(InformEvent::SvscInform(SvscInform::SessionEnd));
                     Ok(None)
                 }
                 SvscMessage::SessionDataReceive(msg) => Ok(Some(msg.data)),
-                _ => Err(SvscError::WrongMessageForState(msg, self.state)),
+                _ => Err(SvscError::WrongMessageForState(Box::new(msg), self.state)),
             },
         }
     }
@@ -123,15 +129,13 @@ pub enum SvscError {
     #[error("server rejected version")]
     VersionBad,
     #[error("invalid message {0:?} for state {1:?}")]
-    WrongMessageForState(SvscMessage, State),
+    WrongMessageForState(Box<SvscMessage>, State),
     #[error("unexpected extension response")]
     UnexpectedExtension,
     #[error("lease request was rejected")]
     LeaseRequestRejected,
     #[error("lease extension request was rejected")]
     LeaseExtensionRequestRejected,
-    #[error("send error")]
-    InformError(SendError<InformEvent>),
 }
 
 pub enum SvscInform {

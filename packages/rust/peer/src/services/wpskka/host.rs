@@ -9,18 +9,15 @@ use crate::services::{
         AuthScheme,
     },
     InformEvent,
+    SendError,
 };
 use common::messages::{
     auth::srp::SrpMessage,
     wpskka::{AuthMessage, AuthSchemeType, TryAuth, WpskkaMessage},
     MessageComponent,
-    ScreenViewMessage,
 };
 use ring::agreement::{EphemeralPrivateKey, PublicKey};
-use std::{
-    io::Cursor,
-    sync::mpsc::{SendError, Sender},
-};
+use std::{io::Cursor, sync::Arc};
 
 
 #[derive(Copy, Clone, Debug)]
@@ -32,15 +29,15 @@ pub enum State {
 
 pub struct WpskkaHostHandler {
     state: State,
-    current_auth: Option<AuthScheme>,
+    current_auth: Option<Box<AuthScheme>>,
 
     dynamic_password: Option<Vec<u8>>,
     static_password: Option<Vec<u8>>,
 
     reliable: Option<CipherReliablePeer>,
-    unreliable: Option<CipherUnreliablePeer>,
+    unreliable: Option<Arc<CipherUnreliablePeer>>,
 
-    keys: Option<(EphemeralPrivateKey, PublicKey)>,
+    keys: Option<Box<(EphemeralPrivateKey, PublicKey)>>,
 }
 
 impl WpskkaHostHandler {
@@ -56,11 +53,16 @@ impl WpskkaHostHandler {
         }
     }
 
-    pub fn handle_try_auth(
-        &mut self,
-        msg: TryAuth,
-        write: &mut Sender<ScreenViewMessage>,
-    ) -> Result<(), WpskkaHostError> {
+    pub fn reliable_cipher_mut(&mut self) -> &mut CipherReliablePeer {
+        self.reliable.as_mut().unwrap()
+    }
+
+    pub fn unreliable_cipher(&self) -> &Arc<CipherUnreliablePeer> {
+        self.unreliable.as_ref().unwrap()
+    }
+
+    pub fn handle_try_auth<F>(&mut self, msg: TryAuth, write: F) -> Result<(), WpskkaHostError>
+    where F: Fn(WpskkaMessage) -> Result<(), SendError> {
         match msg.auth_scheme {
             AuthSchemeType::Invalid => Err(WpskkaHostError::BadAuthSchemeType(msg.auth_scheme)),
             // These are basically the same schemes just with different password sources, so we can handle it together
@@ -79,18 +81,15 @@ impl WpskkaHostHandler {
                 let mut srp = SrpAuthHost::new(keys.1.clone());
 
                 let outgoing = srp.init(&password);
-                write
-                    .send(ScreenViewMessage::WpskkaMessage(
-                        WpskkaMessage::AuthMessage(AuthMessage {
-                            data: outgoing
-                                .to_bytes()
-                                .map_err(|_| WpskkaHostError::BadAuthSchemeMessage)?,
-                        }),
-                    ))
-                    .map_err(WpskkaHostError::WriteError)?;
+                write(WpskkaMessage::AuthMessage(AuthMessage {
+                    data: outgoing
+                        .to_bytes()
+                        .map_err(|_| WpskkaHostError::BadAuthSchemeMessage)?,
+                }))
+                .map_err(WpskkaHostError::WriteError)?;
 
-                self.current_auth = Some(AuthScheme::SrpAuthHost(srp));
-                self.keys = Some(keys);
+                self.current_auth = Some(Box::new(AuthScheme::SrpAuthHost(srp)));
+                self.keys = Some(Box::new(keys));
                 self.state = State::IsAuthenticating;
 
                 Ok(())
@@ -99,19 +98,25 @@ impl WpskkaHostHandler {
         }
     }
 
-    pub fn handle(
+    pub fn handle<F>(
         &mut self,
         msg: WpskkaMessage,
-        write: &mut Sender<ScreenViewMessage>,
-        events: Sender<InformEvent>,
-    ) -> Result<Option<Vec<u8>>, WpskkaHostError> {
+        write: F,
+        events: &mut Vec<InformEvent>,
+    ) -> Result<Option<Vec<u8>>, WpskkaHostError>
+    where
+        F: Fn(WpskkaMessage) -> Result<(), SendError>,
+    {
         match self.state {
             State::PreAuthSelect => match msg {
                 WpskkaMessage::TryAuth(msg) => {
                     self.handle_try_auth(msg, write)?;
                     Ok(None)
                 }
-                _ => Err(WpskkaHostError::WrongMessageForState(msg, self.state)),
+                _ => Err(WpskkaHostError::WrongMessageForState(
+                    Box::new(msg),
+                    self.state,
+                )),
             },
             State::IsAuthenticating => match msg {
                 WpskkaMessage::TryAuth(msg) => {
@@ -120,36 +125,29 @@ impl WpskkaHostHandler {
                     Ok(None)
                 }
                 WpskkaMessage::AuthMessage(msg) => {
-                    match self.current_auth.as_mut().unwrap() {
+                    match &mut **self.current_auth.as_mut().unwrap() {
                         AuthScheme::SrpAuthHost(srp_host) => {
                             let msg = SrpMessage::read(&mut Cursor::new(&msg.data))
                                 .map_err(|_| WpskkaHostError::BadAuthSchemeMessage)?;
                             match srp_host.handle(msg) {
                                 Ok(outgoing) => {
-                                    write
-                                        .send(ScreenViewMessage::WpskkaMessage(
-                                            WpskkaMessage::AuthMessage(AuthMessage {
-                                                data: outgoing.to_bytes().map_err(|_| {
-                                                    WpskkaHostError::BadAuthSchemeMessage
-                                                })?,
-                                            }),
-                                        ))
-                                        .map_err(WpskkaHostError::WriteError)?;
+                                    let data = outgoing
+                                        .to_bytes()
+                                        .map_err(|_| WpskkaHostError::BadAuthSchemeMessage)?;
                                     if srp_host.is_authenticated() {
                                         self.current_auth = None; // TODO Security: Look into zeroing out the data here
                                         self.state = State::Authenticated;
                                     }
+                                    write(WpskkaMessage::AuthMessage(AuthMessage { data }))?;
                                     Ok(None)
                                 }
                                 Err(err) => match err {
                                     SrpHostError::WrongMessageForState(..) =>
                                         Err(WpskkaHostError::BadAuthSchemeMessage),
                                     _ => {
-                                        events
-                                            .send(InformEvent::WpskkaHostInform(
-                                                WpskkaHostInform::AuthFailed,
-                                            ))
-                                            .map_err(WpskkaHostError::InformError)?;
+                                        events.push(InformEvent::WpskkaHostInform(
+                                            WpskkaHostInform::AuthFailed,
+                                        ));
                                         Ok(None)
                                     }
                                 },
@@ -163,7 +161,10 @@ impl WpskkaHostHandler {
                         }
                     }
                 }
-                _ => Err(WpskkaHostError::WrongMessageForState(msg, self.state)),
+                _ => Err(WpskkaHostError::WrongMessageForState(
+                    Box::new(msg),
+                    self.state,
+                )),
             },
             State::Authenticated => match msg {
                 WpskkaMessage::TransportDataMessageReliable(msg) => {
@@ -182,7 +183,10 @@ impl WpskkaHostHandler {
                             .map_err(WpskkaHostError::CipherError)?,
                     ))
                 }
-                _ => Err(WpskkaHostError::WrongMessageForState(msg, self.state)),
+                _ => Err(WpskkaHostError::WrongMessageForState(
+                    Box::new(msg),
+                    self.state,
+                )),
             },
         }
     }
@@ -191,22 +195,20 @@ impl WpskkaHostHandler {
 #[derive(Debug, thiserror::Error)]
 pub enum WpskkaHostError {
     #[error("invalid message {0:?} for state {1:?}")]
-    WrongMessageForState(WpskkaMessage, State),
+    WrongMessageForState(Box<WpskkaMessage>, State),
 
     #[error("unsupported auth scheme type")]
     BadAuthSchemeType(AuthSchemeType),
     #[error("BadAuthSchemeMessage")]
     BadAuthSchemeMessage,
 
-    #[error("inform error")]
-    InformError(SendError<InformEvent>),
     #[error("write error")]
-    WriteError(SendError<ScreenViewMessage>),
+    WriteError(#[from] SendError),
 
     #[error("ring error")]
     RingError,
     #[error("{0}")]
-    CipherError(CipherError),
+    CipherError(#[from] CipherError),
 }
 
 pub enum WpskkaHostInform {

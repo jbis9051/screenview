@@ -11,7 +11,7 @@ impl WindowsApi {
 impl NativeApiTemplate for WindowsApi {
     type Error = Error;
 
-    fn key_toggle(&self, key: Key, down: bool) {
+    fn key_toggle(&mut self, key: Key, down: bool) -> Result<(), Self::Error> {
         unimplemented!()
     }
 
@@ -27,21 +27,13 @@ impl NativeApiTemplate for WindowsApi {
         unimplemented!()
     }
 
-    fn scroll_mouse(&self, scroll: MouseScroll) -> Result<(), Error> {
-        unimplemented!()
-    }
-
-    fn clipboard_types(&self) -> Result<Vec<ClipboardType>, Error> {
-        unimplemented!()
-    }
-
-    fn clipboard_content(&self, type_name: ClipboardType) -> Result<Vec<u8>, Error> {
+    fn clipboard_content(&self, type_name: &ClipboardType) -> Result<Vec<u8>, Error> {
         unimplemented!()
     }
 
     fn set_clipboard_content(
         &mut self,
-        type_name: ClipboardType,
+        type_name: &ClipboardType,
         content: &[u8],
     ) -> Result<(), Error> {
         unimplemented!()
@@ -72,4 +64,5 @@ impl NativeApiTemplate for WindowsApi {
     }
 }
 
+#[derive(thiserror::Error, Debug)]
 pub enum Error {}

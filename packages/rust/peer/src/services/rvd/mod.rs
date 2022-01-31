@@ -4,9 +4,30 @@ mod host;
 pub use client::*;
 pub use host::*;
 
+use crate::services::{InformEvent, SendError};
+use common::messages::rvd::RvdMessage;
+
 pub enum RvdHandler {
     Host(RvdHostHandler),
-    Cliient(RvdClientHandler),
+    Client(RvdClientHandler),
+}
+
+impl RvdHandler {
+    pub fn handle<F>(
+        &mut self,
+        msg: RvdMessage,
+        write: F,
+        events: &mut Vec<InformEvent>,
+    ) -> Result<(), RvdError>
+    where
+        F: FnMut(RvdMessage) -> Result<(), SendError>,
+    {
+        match self {
+            Self::Host(handler) => handler.handle(msg, write)?,
+            Self::Client(handler) => handler.handle(msg, write, events)?,
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, thiserror::Error)]

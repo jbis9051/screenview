@@ -6,14 +6,17 @@ use crate::{
     },
     services::{
         helpers::{clipboard_type_map::get_native_clipboard, rvd_common::*},
-        InformEvent,
+        SendError,
     },
 };
-use common::messages::{
-    rvd::{AccessMask, ButtonsMask, ClipboardNotification, DisplayChange, DisplayId, RvdMessage},
-    ScreenViewMessage,
+use common::messages::rvd::{
+    AccessMask,
+    ButtonsMask,
+    ClipboardNotification,
+    DisplayChange,
+    DisplayId,
+    RvdMessage,
 };
-use std::sync::mpsc::{SendError, Sender};
 
 #[derive(Copy, Clone, Debug)]
 pub enum HostState {
@@ -66,11 +69,8 @@ impl RvdHostHandler {
             .contains(AccessMask::CONTROLLABLE))
     }
 
-    pub fn handle(
-        &mut self,
-        msg: RvdMessage,
-        write: Sender<ScreenViewMessage>,
-    ) -> Result<(), RvdHostError> {
+    pub fn handle<F>(&mut self, msg: RvdMessage, mut write: F) -> Result<(), RvdHostError>
+    where F: FnMut(RvdMessage) -> Result<(), SendError> {
         match self.state {
             HostState::Handshake => match msg {
                 RvdMessage::ProtocolVersionResponse(msg) => {
@@ -80,7 +80,10 @@ impl RvdHostHandler {
                     self.state = HostState::WaitingForDisplayChangeReceived;
                     Ok(())
                 }
-                _ => Err(RvdHostError::WrongMessageForState(msg, self.state)),
+                _ => Err(RvdHostError::WrongMessageForState(
+                    Box::new(msg),
+                    self.state,
+                )),
             },
             HostState::WaitingForDisplayChangeReceived => match msg {
                 // TODO edge: Wait for display change and we receive a message
@@ -88,7 +91,10 @@ impl RvdHostHandler {
                     self.state = HostState::SendData;
                     Ok(())
                 }
-                _ => Err(RvdHostError::WrongMessageForState(msg, self.state)),
+                _ => Err(RvdHostError::WrongMessageForState(
+                    Box::new(msg),
+                    self.state,
+                )),
             },
             HostState::SendData => match msg {
                 RvdMessage::MouseInput(msg) => {
@@ -146,7 +152,10 @@ impl RvdHostHandler {
                 RvdMessage::ClipboardNotification(msg) => {
                     clipboard_notificaiton_impl!(self, msg, RvdHostError)
                 }
-                _ => Err(RvdHostError::WrongMessageForState(msg, self.state)),
+                _ => Err(RvdHostError::WrongMessageForState(
+                    Box::new(msg),
+                    self.state,
+                )),
             },
         }
     }
@@ -157,13 +166,11 @@ pub enum RvdHostError {
     #[error("client rejected version")]
     VersionBad,
     #[error("invalid message {0:?} for state {1:?}")]
-    WrongMessageForState(RvdMessage, HostState),
+    WrongMessageForState(Box<RvdMessage>, HostState),
     #[error("native error: {0}")]
     NativeError(#[from] NativeApiError),
     #[error("send_error")]
-    WriteError(SendError<ScreenViewMessage>),
-    #[error("send_error")]
-    InformError(SendError<InformEvent>),
+    WriteError(#[from] SendError),
     #[error("permission error: cannot {0}")]
     PermissionsError(String),
     #[error("display not found: id number {0}")]

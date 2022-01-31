@@ -94,7 +94,7 @@ pub struct TransportDataMessageUnreliable {
     pub data: Vec<u8>,
 }
 
-#[derive(Debug)]
+#[derive(MessageComponent, Debug)]
 pub enum WpskkaMessage {
     AuthScheme(AuthScheme),
     TryAuth(TryAuth),

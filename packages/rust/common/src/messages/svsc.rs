@@ -163,7 +163,7 @@ pub struct SessionDataReceive {
 #[message_id(13)]
 pub struct KeepAlive {}
 
-#[derive(Debug)]
+#[derive(MessageComponent, Debug)]
 pub enum SvscMessage {
     ProtocolVersion(ProtocolVersion),
     ProtocolVersionResponse(ProtocolVersionResponse),
@@ -172,7 +172,6 @@ pub enum SvscMessage {
     LeaseExtensionRequest(LeaseExtensionRequest),
     LeaseExtensionResponse(LeaseExtensionResponse),
     EstablishSessionRequest(EstablishSessionRequest),
-    SessionData(SessionData),
     EstablishSessionResponse(EstablishSessionResponse),
     EstablishSessionNotification(EstablishSessionNotification),
     SessionEnd(SessionEnd),

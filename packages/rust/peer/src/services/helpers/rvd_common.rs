@@ -5,18 +5,14 @@ macro_rules! clipboard_request_impl {
         }
         let clip_type = get_native_clipboard(&$msg.info.clipboard_type);
         let content = $self.native.clipboard_content(&clip_type).ok();
-        $send
-            .send(ScreenViewMessage::RvdMessage(
-                RvdMessage::ClipboardNotification(ClipboardNotification {
-                    info: $msg.info.clone(),
-                    content: if $msg.info.content_request {
-                        content
-                    } else {
-                        None
-                    },
-                }),
-            ))
-            .map_err(<$error_type>::WriteError)?;
+        $send(RvdMessage::ClipboardNotification(ClipboardNotification {
+            info: $msg.info.clone(),
+            content: if $msg.info.content_request {
+                content
+            } else {
+                None
+            },
+        }))?;
         Ok(())
     }};
 }
