@@ -15,10 +15,10 @@ pub trait MessageComponent: Sized {
 
     fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> Result<(), Error>;
 
-    fn to_bytes(&self) -> Vec<u8> {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         let mut cursor = Cursor::new(Vec::new());
         self.write(&mut cursor)?;
-        cursor.into_inner()
+        Ok(cursor.into_inner())
     }
 }
 

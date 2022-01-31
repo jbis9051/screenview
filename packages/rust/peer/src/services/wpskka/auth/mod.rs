@@ -1,4 +1,3 @@
-use ring::agreement::PublicKey;
 use srp_client::SrpAuthClient;
 use srp_host::SrpAuthHost;
 

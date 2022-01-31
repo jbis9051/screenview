@@ -1,3 +1,5 @@
+extern crate core;
+
 mod io;
 pub mod services;
 

@@ -4,10 +4,15 @@ pub mod sel_handler;
 pub mod svsc_handler;
 pub mod wpskka;
 
-use crate::services::{rvd::RvdInform, svsc_handler::SvscInform, wpskka::WpskkaClientInform};
+use crate::services::{
+    rvd::RvdInform,
+    svsc_handler::SvscInform,
+    wpskka::{WpskkaClientInform, WpskkaHostInform},
+};
 
 pub enum InformEvent {
     SvscInform(SvscInform),
     RvdInform(RvdInform),
     WpskkaClientInform(WpskkaClientInform),
+    WpskkaHostInform(WpskkaHostInform),
 }

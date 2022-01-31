@@ -28,7 +28,7 @@ pub struct SrpAuthClient {
 }
 
 impl SrpAuthClient {
-    fn new(public_key: PublicKey) -> Self {
+    pub fn new(public_key: PublicKey) -> Self {
         Self {
             state: State::PreHello,
             authenticated: false,
@@ -38,11 +38,11 @@ impl SrpAuthClient {
         }
     }
 
-    fn is_authenticated(&self) -> bool {
+    pub fn is_authenticated(&self) -> bool {
         self.authenticated
     }
 
-    pub fn process_password(&mut self, password: &[u8]) -> SrpMessage {
+    pub fn process_password(&mut self, password: &[u8]) -> Result<SrpMessage, SrpClientError> {
         // we've received the password form node we need to do some srp stuff and then send a mac to authenticate our keys
         let msg = self.host_hello.as_ref().unwrap();
         let a = random_srp_private_value();
@@ -62,13 +62,16 @@ impl SrpAuthClient {
         self.state = State::PreVerify;
 
 
-        SrpMessage::ClientHello(ClientHello {
+        Ok(SrpMessage::ClientHello(ClientHello {
             a_pub: a_pub.try_into().unwrap(),
             mac: mac.try_into().unwrap(),
-        })
+        }))
     }
 
-    fn handle(&mut self, msg: SrpMessage) -> Result<(Option<WpskkaClientInform>), SrpClientError> {
+    pub fn handle(
+        &mut self,
+        msg: SrpMessage,
+    ) -> Result<Option<WpskkaClientInform>, SrpClientError> {
         match self.state {
             State::PreHello => match msg {
                 SrpMessage::HostHello(msg) => {
