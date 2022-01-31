@@ -35,5 +35,5 @@ pub enum RvdError {
     #[error("host error: {0}")]
     Host(#[from] RvdHostError),
     #[error("client error: {0}")]
-    Cliient(#[from] RvdClientError),
+    Client(#[from] RvdClientError),
 }
