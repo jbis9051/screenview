@@ -1,4 +1,1 @@
-packages/**/build
-packages/**/target
-.github
-out
+**/build
