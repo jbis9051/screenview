@@ -10,7 +10,7 @@
         "build": "lerna run build --stream"
     },
     "workspaces": [
-        "packages/*"
+        "packages/client"
     ],
     "husky": {
         "hooks": {
