@@ -1,0 +1,25 @@
+.wrapper {
+    display: flex;
+    height: 100%;
+    width: 100%;
+    flex-direction: column;
+    background: #f2f3f5;
+
+    .content {
+        flex: 1;
+    }
+
+    .logoWrapper {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0 45px 5px 10px;
+        font-size: 24px;
+        font-weight: bold;
+        color: dodgerblue;
+    }
+
+    .logo {
+        width: 70px;
+    }
+}

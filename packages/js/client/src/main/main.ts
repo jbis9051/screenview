@@ -1,10 +1,10 @@
 import { app, BrowserWindow } from 'electron';
-import * as path from 'path';
 
 function createWindow() {
     const mainWindow = new BrowserWindow({
-        height: 600,
-        width: 800,
+        height: 550,
+        width: 950,
+        titleBarStyle: 'hidden',
     });
     if (process.env.NODE_ENV === 'development') {
         mainWindow.loadURL('http://localhost:8080');

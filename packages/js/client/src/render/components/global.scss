@@ -1,0 +1,22 @@
+* {
+    box-sizing: border-box;
+    user-select: none;
+}
+
+html,
+body,
+#root {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    width: 100%;
+}
+
+@font-face {
+    font-family: 'Source Sans Pro';
+    src: url('../assets/Source_Sans_Pro/SourceSansPro-Regular.ttf');
+}
+
+body {
+    font-family: 'Source Sans Pro', sans-serif;
+}

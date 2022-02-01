@@ -1,0 +1,25 @@
+@use '../var';
+
+.wrapper {
+    display: flex;
+    border-radius: 0.25rem;
+    height: 55px;
+    align-items: center;
+    margin: 5px 7px;
+    font-size: 17px;
+    cursor: pointer;
+
+    .icon {
+        height: 100%;
+        width: 22%;
+        font-size: 20px;
+        color: darken(var.$border-color, 40);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+}
+
+.selected {
+    background: #d3d7db;
+}

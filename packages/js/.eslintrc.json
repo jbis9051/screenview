@@ -43,6 +43,7 @@
         "no-prototype-builtins": 1,
         "@typescript-eslint/no-non-null-assertion": 0,
         "@typescript-eslint/explicit-module-boundary-types": 0,
+        "no-shadow": "off", // https://stackoverflow.com/a/63961972/7886229
         "@typescript-eslint/no-shadow": ["error"],
         "@typescript-eslint/no-explicit-any": "off",
         "no-use-before-define": "off", // https://stackoverflow.com/a/64024916/7886229

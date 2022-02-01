@@ -1,0 +1,39 @@
+@use 'var';
+
+.wrapper {
+    height: 100%;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+
+    .frame {
+        height: 40px;
+        background: rgb(255, 255, 255);
+        -webkit-app-region: drag;
+        border-bottom: 1px solid var.$border-color;
+    }
+
+    .content {
+        flex: 1;
+        display: flex;
+
+        .sideBar {
+            width: 275px;
+        }
+
+        .rightContent {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .mainContent {
+            flex: 1;
+        }
+
+        .statusBottom {
+            height: 60px;
+            border-top: 1px solid var.$border-color;
+        }
+    }
+}
