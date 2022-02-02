@@ -2,15 +2,20 @@ import { makeAutoObservable } from 'mobx';
 
 export enum Tab {
     CONNECT,
+    MY_COMPUTERS,
     CONTACTS,
     SETTINGS,
 }
 
-class UI {
+class UIStore {
     currentTab: Tab = Tab.CONNECT;
+
+    shareAllScreensImmediately = true;
+
+    allowControl = true;
 
     constructor() {
         makeAutoObservable(this);
     }
 }
-export default new UI();
+export default new UIStore();

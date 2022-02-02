@@ -1,0 +1,41 @@
+@use '../var';
+
+.wrapper {
+    border-bottom: 1px solid var.$border-color;
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    height: 100%;
+    width: 100%;
+
+    .imageWrapper {
+        width: 50px;
+        height: 50px;
+        margin-right: 20px;
+    }
+
+    .imageWrapperCircle {
+        height: 100%;
+        width: 100%;
+        background: #0764c8;
+        border-radius: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: flex-end;
+        color: #aecdec;
+        font-size: 38px;
+        overflow: hidden;
+    }
+
+    .signIn {
+        span {
+            display: block;
+            cursor: pointer;
+        }
+
+        .signUp {
+            font-size: 13px;
+            color: #6e6e71;
+        }
+    }
+}

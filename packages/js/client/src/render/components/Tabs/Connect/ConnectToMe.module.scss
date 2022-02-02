@@ -1,0 +1,39 @@
+@use '../../var';
+
+.infoWrapper {
+    padding-left: 10px;
+    border-left: 2px solid var.$accent-color;
+    font-weight: lighter;
+    margin: 15px 0;
+
+    .infoName {
+        font-size: 18px;
+    }
+
+    .infoContent {
+        font-size: 25px;
+        display: flex;
+        align-items: center;
+        user-select: text;
+    }
+
+    .regenPassword {
+        padding-left: 10px;
+        font-size: 15px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding-top: 3px;
+        color: #5d5d5d;
+        cursor: pointer;
+    }
+}
+
+.label {
+    display: block;
+    .checkbox {
+        display: inline-block;
+        margin-right: 10px;
+        margin-bottom: 8px;
+    }
+}

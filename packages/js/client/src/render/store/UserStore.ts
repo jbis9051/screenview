@@ -1,10 +1,10 @@
 import { makeAutoObservable } from 'mobx';
 
-class BackendState {
-    status = false;
+class UserStore {
+    user = null;
 
     constructor() {
         makeAutoObservable(this);
     }
 }
-export default new BackendState();
+export default new UserStore();

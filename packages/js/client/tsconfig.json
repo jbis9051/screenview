@@ -1,7 +1,7 @@
 {
     "compilerOptions": {
-        "target": "es5",
-        "lib": ["dom"],
+        "target": "es2020",
+        "lib": ["dom", "es2021"],
         "skipLibCheck": true,
         "strict": true,
         "forceConsistentCasingInFileNames": true,

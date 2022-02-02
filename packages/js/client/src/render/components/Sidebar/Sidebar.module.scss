@@ -5,6 +5,10 @@
     flex-direction: column;
     background: #f2f3f5;
 
+    .user {
+        height: 100px;
+    }
+
     .content {
         flex: 1;
     }
@@ -17,9 +21,9 @@
         font-size: 24px;
         font-weight: bold;
         color: dodgerblue;
-    }
 
-    .logo {
-        width: 70px;
+        .logo {
+            width: 70px;
+        }
     }
 }

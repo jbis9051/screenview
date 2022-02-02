@@ -3,7 +3,7 @@ import './global.scss';
 import { observer } from 'mobx-react';
 import styles from './App.module.scss';
 import Sidebar from './Sidebar/Sidebar';
-import UI, { Tab } from '../store/UI';
+import UI, { Tab } from '../store/UIStore';
 import Connect from './Tabs/Connect/Connect';
 import StatusBar from './StatusBar';
 

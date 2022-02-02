@@ -4,6 +4,8 @@ function createWindow() {
     const mainWindow = new BrowserWindow({
         height: 550,
         width: 950,
+        minHeight: 550,
+        minWidth: 900,
         titleBarStyle: 'hidden',
     });
     if (process.env.NODE_ENV === 'development') {

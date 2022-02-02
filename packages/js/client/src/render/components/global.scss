@@ -15,6 +15,13 @@ body,
 @font-face {
     font-family: 'Source Sans Pro';
     src: url('../assets/Source_Sans_Pro/SourceSansPro-Regular.ttf');
+    font-weight: normal;
+}
+
+@font-face {
+    font-family: 'Source Sans Pro';
+    src: url('../assets/Source_Sans_Pro/SourceSansPro-Light.ttf');
+    font-weight: 300;
 }
 
 body {
