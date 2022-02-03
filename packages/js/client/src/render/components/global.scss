@@ -24,6 +24,18 @@ body,
     font-weight: 300;
 }
 
+@font-face {
+    font-family: 'Inter';
+    src: url('../assets/Inter/Inter-Regular.ttf');
+    font-weight: normal;
+}
+
+@font-face {
+    font-family: 'Inter';
+    src: url('../assets/Inter/Inter-Thin-BETA.ttf');
+    font-weight: 300;
+}
+
 body {
-    font-family: 'Source Sans Pro', sans-serif;
+    font-family: 'Inter', sans-serif;
 }

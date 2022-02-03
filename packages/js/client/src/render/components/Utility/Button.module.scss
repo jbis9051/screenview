@@ -1,9 +1,14 @@
 .button {
     background: dodgerblue;
+    border: 1px solid #1c7ce7;
     color: white;
-    padding: 0 22px;
-    border: none;
-    height: 35px;
+    padding: 0 12px;
+    height: 25px;
     font-size: 15px;
     border-radius: 5px;
+    cursor: pointer;
+}
+.button:active {
+    transition: background-color 30ms;
+    background: #135fa8;
 }

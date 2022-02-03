@@ -5,6 +5,7 @@
 .input {
     width: 250px;
     font-size: 20px;
+    font-family: 'Source Sans Pro', sans-serif;
 }
 
 .options {
@@ -18,4 +19,8 @@
         margin-right: 5px;
         margin-left: 2px;
     }
+}
+
+.button {
+    margin-top: 20px;
 }

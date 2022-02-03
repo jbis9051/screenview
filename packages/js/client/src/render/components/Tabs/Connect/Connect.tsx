@@ -1,7 +1,7 @@
 import React from 'react';
 import styles from './Connect.module.scss';
 import ConnectToMe from './ConnectToMe';
-import DirectConnect from './DirectConnect';
+import ConnectToOthers from './ConnectToOthers';
 
 const Connect: React.FunctionComponent = () => (
     <div className={styles.wrapper}>
@@ -9,7 +9,7 @@ const Connect: React.FunctionComponent = () => (
             <ConnectToMe />
         </div>
         <div className={styles.right}>
-            <DirectConnect />
+            <ConnectToOthers />
         </div>
     </div>
 );

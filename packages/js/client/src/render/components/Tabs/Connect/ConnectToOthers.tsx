@@ -3,8 +3,9 @@ import styles from './ConnectToOthers.module.scss';
 import Title from './Title';
 import Input from '../../Utility/Input';
 import formatID from '../../../helper/formatID';
+import Button from '../../Utility/Button';
 
-const DirectConnect: React.FunctionComponent = () => {
+const ConnectToOthers: React.FunctionComponent = () => {
     const [connectID, setConnectID] = useState('');
 
     useEffect(() => {
@@ -39,8 +40,11 @@ const DirectConnect: React.FunctionComponent = () => {
                     />
                     <span className={styles.optionText}>File Transfer</span>
                 </label>
+                <div className={styles.button}>
+                    <Button>Connect</Button>
+                </div>
             </div>
         </>
     );
 };
-export default DirectConnect;
+export default ConnectToOthers;
