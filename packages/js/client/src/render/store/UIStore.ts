@@ -14,6 +14,10 @@ class UIStore {
 
     allowControl = true;
 
+    modal = {
+        signIn: false,
+    };
+
     constructor() {
         makeAutoObservable(this);
     }

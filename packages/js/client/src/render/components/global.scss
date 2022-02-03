@@ -39,3 +39,11 @@ body,
 body {
     font-family: 'Inter', sans-serif;
 }
+
+a {
+    text-decoration: unset;
+}
+
+a:hover {
+    text-decoration: underline;
+}

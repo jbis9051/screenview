@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, shell } from 'electron';
 
 function createWindow() {
     const mainWindow = new BrowserWindow({
@@ -8,6 +8,11 @@ function createWindow() {
         minWidth: 900,
         titleBarStyle: 'hidden',
     });
+    mainWindow.webContents.addListener('new-window', (e, url) => {
+        e.preventDefault();
+        return shell.openExternal(url);
+    });
+
     if (process.env.NODE_ENV === 'development') {
         mainWindow.loadURL('http://localhost:8080');
     } else {

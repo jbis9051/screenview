@@ -6,9 +6,11 @@ import Sidebar from './Sidebar/Sidebar';
 import UI, { Tab } from '../store/UIStore';
 import Connect from './Tabs/Connect/Connect';
 import StatusBar from './StatusBar';
+import Modal from './Modal/Modal';
 
 const App = observer(() => (
     <div className={styles.wrapper}>
+        <Modal />
         <div className={styles.frame} />
         <div className={styles.content}>
             <div className={styles.sideBar}>

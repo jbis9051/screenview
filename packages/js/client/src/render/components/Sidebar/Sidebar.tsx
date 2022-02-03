@@ -20,10 +20,10 @@ const Sidebar: React.FunctionComponent = () => (
             <SidebarItem tab={Tab.CONNECT} icon={faDesktop}>
                 Connect
             </SidebarItem>
-            <SidebarItem tab={Tab.MY_COMPUTERS} icon={faUser}>
+            <SidebarItem tab={Tab.MY_COMPUTERS} userGated icon={faUser}>
                 My Computers
             </SidebarItem>
-            <SidebarItem tab={Tab.CONTACTS} icon={faUserFriends}>
+            <SidebarItem tab={Tab.CONTACTS} userGated icon={faUserFriends}>
                 Contacts
             </SidebarItem>
             <SidebarItem tab={Tab.SETTINGS} icon={faCog}>

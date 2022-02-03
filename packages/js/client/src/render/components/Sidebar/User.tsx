@@ -4,10 +4,18 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUser } from '@fortawesome/free-solid-svg-icons';
 import styles from './User.module.scss';
 import UserStore from '../../store/UserStore';
-import Button from '../Utility/Button';
+import UIStore from '../../store/UIStore';
+import ConfigStore from '../../store/ConfigStore';
 
 const User: React.FunctionComponent = observer(() => (
-    <div className={styles.wrapper}>
+    <div
+        className={styles.wrapper}
+        onClick={() => {
+            if (!UserStore.user) {
+                UIStore.modal.signIn = true;
+            }
+        }}
+    >
         {UserStore.user || (
             <>
                 <div className={styles.imageWrapper}>
@@ -17,9 +25,14 @@ const User: React.FunctionComponent = observer(() => (
                 </div>
                 <div className={styles.signIn}>
                     <span>Sign In</span>
-                    <span className={styles.signUp}>
+                    <a
+                        onClick={(e) => e.stopPropagation()}
+                        className={styles.signUp}
+                        href={`${ConfigStore.authUrl}/auth/sign_up`}
+                        target={'_blank'}
+                    >
                         Don't have an account?
-                    </span>
+                    </a>
                 </div>
             </>
         )}

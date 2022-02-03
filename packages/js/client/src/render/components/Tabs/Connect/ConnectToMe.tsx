@@ -8,6 +8,7 @@ import BackendStore from '../../../store/BackendStore';
 import Input from '../../Utility/Input';
 import UIStore from '../../../store/UIStore';
 import formatID from '../../../helper/formatID';
+import Label from '../../Utility/Label';
 
 const ConnectToMe: React.FunctionComponent = observer(() => (
     <>
@@ -32,28 +33,32 @@ const ConnectToMe: React.FunctionComponent = observer(() => (
                 )}
             </div>
         </div>
-        <label className={styles.label}>
+        <div className={styles.label}>
             <Input
                 type={'checkbox'}
+                id={'connectToMe.shareDesktop'}
                 className={styles.checkbox}
                 checked={UIStore.shareAllScreensImmediately}
                 onChange={(e) => {
                     UIStore.shareAllScreensImmediately = e.target.checked;
                 }}
             />
-            Automatically Share My Desktop
-        </label>
-        <label className={styles.label}>
+            <Label htmlFor={'connectToMe.shareDesktop'}>
+                Automatically Share My Desktop
+            </Label>
+        </div>
+        <div className={styles.label}>
             <Input
                 type={'checkbox'}
+                id={'connectToMe.allowControl'}
                 className={styles.checkbox}
                 checked={UIStore.allowControl}
                 onChange={(e) => {
                     UIStore.allowControl = e.target.checked;
                 }}
             />
-            Allow Control
-        </label>
+            <Label htmlFor={'connectToMe.allowControl'}>Allow Control</Label>
+        </div>
     </>
 ));
 export default ConnectToMe;
