@@ -5,7 +5,9 @@ on:
     paths-ignore:
       - README.md
   push:
-    branches: [master]
+    branches:
+      - master
+      - "feature/*"
     paths-ignore:
       - README.md
 
