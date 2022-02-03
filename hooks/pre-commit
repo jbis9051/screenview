@@ -6,3 +6,9 @@ echo "$ cargo +nightly fmt --all -- --check"
 cargo +nightly fmt -- --check
 echo "$ cargo clippy"
 cargo clippy --all --all-features
+
+cd ../../
+
+cd packages/js || exit 1
+echo "$ yarn lint:check"
+yarn lint:check
