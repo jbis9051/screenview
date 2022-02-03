@@ -36,6 +36,7 @@ const ConnectToOthers: React.FunctionComponent = () => {
                 <label>
                     <input
                         type={'radio'}
+                        disabled={true}
                         name={'directConnect.connectionType'}
                     />
                     <span className={styles.optionText}>File Transfer</span>
