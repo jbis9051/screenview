@@ -1,6 +1,6 @@
 import { app, BrowserWindow, shell } from 'electron';
 
-function createWindow() {
+function createMainWindow() {
     const mainWindow = new BrowserWindow({
         height: 550,
         width: 950,
@@ -8,6 +8,7 @@ function createWindow() {
         minWidth: 900,
         titleBarStyle: 'hidden',
     });
+
     mainWindow.webContents.addListener('new-window', (e, url) => {
         e.preventDefault();
         return shell.openExternal(url);
@@ -21,9 +22,9 @@ function createWindow() {
 }
 
 app.on('ready', () => {
-    createWindow();
+    createMainWindow();
     app.on('activate', () => {
-        if (BrowserWindow.getAllWindows().length === 0) createWindow();
+        if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
     });
 });
 
