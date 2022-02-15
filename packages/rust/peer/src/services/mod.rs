@@ -159,7 +159,7 @@ impl ScreenViewHandler {
             let cipher = &**sel_handler.unreliable_cipher();
             SelMessage::TransportDataPeerMessageUnreliable(SelHandler::wrap_unreliable(
                 data,
-                svsc_handler.peer_id(),
+                *svsc_handler.peer_id().unwrap(),
                 cipher,
             )?)
         };

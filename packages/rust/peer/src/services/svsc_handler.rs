@@ -1,5 +1,7 @@
 use crate::services::InformEvent;
 use common::messages::svsc::{
+    EstablishSessionStatus,
+    ExpirationTime,
     LeaseExtensionResponse,
     LeaseResponseData,
     PeerId,
@@ -11,27 +13,27 @@ use common::messages::svsc::{
 #[derive(Copy, Clone, Debug)]
 pub enum State {
     Handshake,
-    PreSession, // limbo land, we shouldn't receive any messages
-    AwaitingLeaseResponse,
-    AwaitingSessionResponse,
-    InLease, // we have an ID assigned
-    InSession,
+    PostHandshake,
 }
 
 pub struct SvscHandler {
     state: State,
-    awaiting_extension_response: bool,
     lease: Option<LeaseResponseData>,
     session: Option<SessionData>,
+    awaiting_lease_response: bool,
+    awaiting_extension_response: bool,
+    awaiting_session_response: bool,
 }
 
 impl SvscHandler {
     pub fn new() -> Self {
         Self {
             state: State::Handshake,
-            awaiting_extension_response: false,
             lease: None,
             session: None,
+            awaiting_lease_response: false,
+            awaiting_extension_response: false,
+            awaiting_session_response: false,
         }
     }
 
@@ -39,8 +41,16 @@ impl SvscHandler {
         SessionDataSend { data: msg }
     }
 
-    pub fn peer_id(&self) -> PeerId {
-        self.session.unwrap().peer_id
+    pub fn peer_id(&self) -> Option<&PeerId> {
+        Some(&self.session()?.peer_id)
+    }
+
+    pub fn lease(&self) -> Option<&LeaseResponseData> {
+        self.lease.as_ref()
+    }
+
+    pub fn session(&self) -> Option<&SessionData> {
+        self.session.as_ref()
     }
 
     pub fn handle(
@@ -50,77 +60,73 @@ impl SvscHandler {
     ) -> Result<Option<Vec<u8>>, SvscError> {
         match self.state {
             State::Handshake => match msg {
+                // initial message
                 SvscMessage::ProtocolVersionResponse(msg) => {
                     if !msg.ok {
                         return Err(SvscError::VersionBad);
                     }
-                    self.state = State::PreSession;
+                    self.state = State::PostHandshake;
                     Ok(None)
                 }
                 _ => Err(SvscError::WrongMessageForState(Box::new(msg), self.state)),
             },
-            State::PreSession => Err(SvscError::WrongMessageForState(Box::new(msg), self.state)),
-            State::AwaitingLeaseResponse => match msg {
+            // SVSC is mostly stateless (or many messages can happen in any state), so lets just check by message instead
+            _ => match msg {
                 SvscMessage::LeaseResponse(msg) => {
-                    let data = msg.response_data.ok_or(SvscError::LeaseRequestRejected)?;
-                    self.lease = Some(data);
-                    self.state = State::InLease;
-                    event.push(InformEvent::SvscInform(SvscInform::LeaseUpdate(data)));
-                    Ok(None)
-                }
-                _ => Err(SvscError::WrongMessageForState(Box::new(msg), self.state)),
-            },
-            State::AwaitingSessionResponse => match msg {
-                SvscMessage::EstablishSessionResponse(msg) => {
-                    let data = msg.response_data.ok_or(SvscError::LeaseRequestRejected)?;
-                    self.session = Some(data);
-                    event.push(InformEvent::SvscInform(SvscInform::SessionUpdate(data)));
-                    Ok(None)
-                }
-                _ => Err(SvscError::WrongMessageForState(Box::new(msg), self.state)),
-            },
-            State::InLease => match msg {
-                SvscMessage::LeaseExtensionResponse(msg) =>
-                    self.handle_lease_extension_response(msg),
-                SvscMessage::EstablishSessionNotification(msg) => {
-                    self.session = Some(msg.session_data);
-                    event.push(InformEvent::SvscInform(SvscInform::SessionUpdate(
-                        msg.session_data,
-                    )));
-                    Ok(None)
-                }
-                _ => Err(SvscError::WrongMessageForState(Box::new(msg), self.state)),
-            },
-            State::InSession => match msg {
-                SvscMessage::LeaseExtensionResponse(msg) =>
-                    self.handle_lease_extension_response(msg),
-                SvscMessage::SessionEndNotification(_) => {
-                    if self.lease.is_some() {
-                        self.state = State::InLease;
+                    if !self.awaiting_lease_response {
+                        return Err(SvscError::WrongMessageForState(
+                            Box::new(SvscMessage::LeaseResponse(msg)),
+                            self.state,
+                        ));
                     }
-                    self.session = None;
-                    event.push(InformEvent::SvscInform(SvscInform::SessionEnd));
+                    self.awaiting_lease_response = false;
+                    event.push(InformEvent::SvscInform(match msg.response_data {
+                        None => SvscInform::LeaseRequestRejected,
+                        Some(data) => {
+                            self.lease = Some(data);
+                            SvscInform::LeaseUpdate
+                        }
+                    }));
                     Ok(None)
                 }
-                SvscMessage::SessionDataReceive(msg) => Ok(Some(msg.data)),
+
+                SvscMessage::EstablishSessionResponse(msg) => {
+                    if !self.awaiting_session_response {
+                        return Err(SvscError::WrongMessageForState(
+                            Box::new(SvscMessage::EstablishSessionResponse(msg)),
+                            self.state,
+                        ));
+                    }
+                    self.awaiting_session_response = false;
+                    event.push(InformEvent::SvscInform(match msg.response_data {
+                        None => SvscInform::SessionRequestRejected(msg.status),
+                        Some(data) => {
+                            self.session = Some(data);
+                            SvscInform::SessionUpdate
+                        }
+                    }));
+                    Ok(None)
+                }
+
+                SvscMessage::LeaseExtensionResponse(msg) => {
+                    if self.awaiting_extension_response {
+                        return Err(SvscError::UnexpectedExtension);
+                    }
+                    self.awaiting_extension_response = false;
+                    event.push(InformEvent::SvscInform(match msg.new_expiration {
+                        None => SvscInform::LeaseExtensionRequestRejected,
+                        Some(expiration) => {
+                            let mut lease = self.lease.as_mut().unwrap();
+                            lease.expiration = expiration;
+                            SvscInform::LeaseUpdate
+                        }
+                    }));
+                    Ok(None)
+                }
+
                 _ => Err(SvscError::WrongMessageForState(Box::new(msg), self.state)),
             },
         }
-    }
-
-    fn handle_lease_extension_response(
-        &mut self,
-        msg: LeaseExtensionResponse,
-    ) -> Result<Option<Vec<u8>>, SvscError> {
-        if self.awaiting_extension_response {
-            return Err(SvscError::UnexpectedExtension);
-        }
-        let expiration = msg
-            .new_expiration
-            .ok_or(SvscError::LeaseExtensionRequestRejected)?;
-        self.lease.unwrap().expiration = expiration;
-        self.awaiting_extension_response = false;
-        Ok(None)
     }
 }
 
@@ -132,14 +138,14 @@ pub enum SvscError {
     WrongMessageForState(Box<SvscMessage>, State),
     #[error("unexpected extension response")]
     UnexpectedExtension,
-    #[error("lease request was rejected")]
-    LeaseRequestRejected,
-    #[error("lease extension request was rejected")]
-    LeaseExtensionRequestRejected,
 }
 
 pub enum SvscInform {
-    LeaseUpdate(LeaseResponseData),
-    SessionUpdate(SessionData),
+    LeaseUpdate,
+    SessionUpdate,
     SessionEnd,
+
+    LeaseRequestRejected,
+    SessionRequestRejected(EstablishSessionStatus),
+    LeaseExtensionRequestRejected,
 }
