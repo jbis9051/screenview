@@ -4,11 +4,11 @@ import { faRedoAlt } from '@fortawesome/free-solid-svg-icons';
 import { observer } from 'mobx-react';
 import styles from './ConnectToMe.module.scss';
 import Title from './Title';
-import BackendStore from '../../../store/BackendStore';
-import Input from '../../Utility/Input';
-import UIStore from '../../../store/UIStore';
-import formatID from '../../../helper/formatID';
-import Label from '../../Utility/Label';
+import BackendStore from '../../../../store/BackendStore';
+import Input from '../../../Utility/Input';
+import UIStore from '../../../../store/UIStore';
+import formatID from '../../../../helper/formatID';
+import Label from '../../../Utility/Label';
 
 const ConnectToMe: React.FunctionComponent = observer(() => (
     <>

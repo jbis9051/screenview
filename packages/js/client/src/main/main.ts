@@ -1,5 +1,7 @@
 import { app, BrowserWindow, shell } from 'electron';
+import PageType from '../render/Pages/PageType';
 
+// eslint-disable-next-line consistent-return
 function createMainWindow() {
     const mainWindow = new BrowserWindow({
         height: 550,
@@ -15,10 +17,9 @@ function createMainWindow() {
     });
 
     if (process.env.NODE_ENV === 'development') {
-        mainWindow.loadURL('http://localhost:8080');
-    } else {
-        // mainWindow.loadFile(path.join(__dirname, '../index.html'));
+        return mainWindow.loadURL(`http://localhost:8080/#${PageType.HOME}`);
     }
+    // mainWindow.loadFile(path.join(__dirname, '../index.html'));
 }
 
 app.on('ready', () => {

@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import styles from './ConnectToOthers.module.scss';
 import Title from './Title';
-import Input from '../../Utility/Input';
-import formatID from '../../../helper/formatID';
-import Button from '../../Utility/Button';
+import Input from '../../../Utility/Input';
+import formatID from '../../../../helper/formatID';
+import Button from '../../../Utility/Button';
 
 const ConnectToOthers: React.FunctionComponent = () => {
     const [connectID, setConnectID] = useState('');

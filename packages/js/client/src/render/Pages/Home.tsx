@@ -1,14 +1,14 @@
 import React from 'react';
-import './global.scss';
+import '../components/global.scss';
 import { observer } from 'mobx-react';
-import styles from './App.module.scss';
-import Sidebar from './Sidebar/Sidebar';
+import styles from './Home.module.scss';
+import Sidebar from '../components/Home/Sidebar/Sidebar';
 import UI, { Tab } from '../store/UIStore';
-import Connect from './Tabs/Connect/Connect';
-import StatusBar from './StatusBar';
-import Modal from './Modal/Modal';
+import Connect from '../components/Home/Tabs/Connect/Connect';
+import StatusBar from '../components/Home/StatusBar';
+import Modal from '../components/Home/Modal/Modal';
 
-const App = observer(() => (
+const Home = observer(() => (
     <div className={styles.wrapper}>
         <Modal />
         <div className={styles.frame} />
@@ -28,4 +28,4 @@ const App = observer(() => (
     </div>
 ));
 
-export default App;
+export default Home;

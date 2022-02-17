@@ -4,8 +4,8 @@ import { IconProp } from '@fortawesome/fontawesome-svg-core';
 import { observer } from 'mobx-react';
 import cl from 'classnames';
 import styles from './SidebarItem.module.scss';
-import UIStore, { Tab } from '../../store/UIStore';
-import UserStore from '../../store/UserStore';
+import UIStore, { Tab } from '../../../store/UIStore';
+import UserStore from '../../../store/UserStore';
 
 interface SidebarItemProps {
     icon: IconProp;

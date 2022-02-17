@@ -6,9 +6,9 @@ import {
     faDesktop,
 } from '@fortawesome/free-solid-svg-icons';
 import styles from './Sidebar.module.scss';
-import logo from '../../../../../../../brand/render/logo.svg';
+import logo from '../../../../../../../../brand/render/logo.svg';
 import SidebarItem from './SidebarItem';
-import { Tab } from '../../store/UIStore';
+import { Tab } from '../../../store/UIStore';
 import User from './User';
 
 const Sidebar: React.FunctionComponent = () => (
