@@ -80,7 +80,7 @@ impl WpskkaHostHandler {
                 let keys = keypair().map_err(|_| WpskkaHostError::RingError)?;
                 let mut srp = SrpAuthHost::new(keys.1.clone());
 
-                let outgoing = srp.init(&password);
+                let outgoing = srp.init(password);
                 write(WpskkaMessage::AuthMessage(AuthMessage {
                     data: outgoing
                         .to_bytes()

@@ -33,13 +33,13 @@ pub fn kdf1(ikm: &[u8]) -> [u8; 32] {
 }
 
 pub fn hmac(key: &[u8], input: &[u8]) -> Vec<u8> {
-    let mut hmac = Hmac::new_from_slice(&key).unwrap();
+    let mut hmac = Hmac::new_from_slice(key).unwrap();
     hmac.update(input);
     hmac.finalize().into_bytes().to_vec()
 }
 
 pub fn hmac_verify(key: &[u8], input: &[u8], verify: &[u8]) -> bool {
-    let mut hmac = Hmac::new_from_slice(&key).unwrap();
+    let mut hmac = Hmac::new_from_slice(key).unwrap();
     hmac.update(input);
     hmac.verify_slice(verify).is_ok()
 }
