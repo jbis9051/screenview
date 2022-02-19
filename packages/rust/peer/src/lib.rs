@@ -1,8 +1,16 @@
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        let result = 2 + 2;
-        assert_eq!(result, 4);
+extern crate core;
+
+mod io;
+pub mod services;
+
+mod native {
+    cfg_if::cfg_if! {
+        if #[cfg(test)] {
+            pub use ::native::api;
+            pub type NativeApiError = Box<dyn std::error::Error + 'static>;
+            pub type NativeApi = Box<dyn api::NativeApiTemplate<Error = NativeApiError>>;
+        } else {
+            pub use ::native::*;
+        }
     }
 }

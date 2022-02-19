@@ -1,7 +1,4 @@
-use std::{
-    error::Error,
-    fmt::{Display, Formatter},
-};
+use std::fmt::{Display, Formatter};
 
 use image::RgbImage;
 
@@ -25,7 +22,7 @@ pub struct Window {
 pub struct MousePosition {
     pub x: u32,
     pub y: u32,
-    pub monitor_id: u32,
+    pub monitor_id: u8,
 }
 
 #[derive(Clone, Copy)]
@@ -61,10 +58,8 @@ impl Display for ClipboardType {
 
 pub type Frame = RgbImage;
 
-pub(crate) trait NativeApiTemplate: Sized {
-    type Error: Error;
-
-    fn new() -> Result<Self, Self::Error>;
+pub trait NativeApiTemplate {
+    type Error;
 
     fn key_toggle(&mut self, key: Key, down: bool) -> Result<(), Self::Error>;
 
@@ -108,30 +103,32 @@ pub(crate) mod dummy {
 
     pub enum DummyApi {}
 
+    impl DummyApi {
+        pub fn new() -> Result<Self, Infallible> {
+            unimplemented!()
+        }
+    }
+
     impl NativeApiTemplate for DummyApi {
         type Error = Infallible;
 
-        fn new() -> Result<Self, Self::Error> {
+        fn key_toggle(&mut self, _key: Key, _down: bool) -> Result<(), Infallible> {
             unimplemented!()
         }
 
-        fn key_toggle(&mut self, _key: Key, _down: bool) -> Result<(), Self::Error> {
+        fn pointer_position(&self) -> Result<MousePosition, Infallible> {
             unimplemented!()
         }
 
-        fn pointer_position(&self) -> Result<MousePosition, Self::Error> {
+        fn set_pointer_position(&self, _pos: MousePosition) -> Result<(), Infallible> {
             unimplemented!()
         }
 
-        fn set_pointer_position(&self, _pos: MousePosition) -> Result<(), Self::Error> {
+        fn toggle_mouse(&self, _button: MouseButton, _down: bool) -> Result<(), Infallible> {
             unimplemented!()
         }
 
-        fn toggle_mouse(&self, _button: MouseButton, _down: bool) -> Result<(), Self::Error> {
-            unimplemented!()
-        }
-
-        fn clipboard_content(&self, _type_name: &ClipboardType) -> Result<Vec<u8>, Self::Error> {
+        fn clipboard_content(&self, _type_name: &ClipboardType) -> Result<Vec<u8>, Infallible> {
             unimplemented!()
         }
 
@@ -139,23 +136,23 @@ pub(crate) mod dummy {
             &mut self,
             _type_name: &ClipboardType,
             _content: &[u8],
-        ) -> Result<(), Self::Error> {
+        ) -> Result<(), Infallible> {
             unimplemented!()
         }
 
-        fn monitors(&mut self) -> Result<Vec<Monitor>, Self::Error> {
+        fn monitors(&mut self) -> Result<Vec<Monitor>, Infallible> {
             unimplemented!()
         }
 
-        fn windows(&mut self) -> Result<Vec<Window>, Self::Error> {
+        fn windows(&mut self) -> Result<Vec<Window>, Infallible> {
             unimplemented!()
         }
 
-        fn capture_display_frame(&self, _display: &Monitor) -> Result<Frame, Self::Error> {
+        fn capture_display_frame(&self, _display: &Monitor) -> Result<Frame, Infallible> {
             unimplemented!()
         }
 
-        fn capture_window_frame(&self, _display: &Window) -> Result<Frame, Self::Error> {
+        fn capture_window_frame(&self, _display: &Window) -> Result<Frame, Infallible> {
             unimplemented!()
         }
     }

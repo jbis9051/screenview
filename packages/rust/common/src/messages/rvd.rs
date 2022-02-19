@@ -8,26 +8,28 @@ use std::{
     io::{Cursor, Read, Write},
 };
 
-#[derive(MessageComponent)]
+#[derive(MessageComponent, Debug)]
+#[message_id(0)]
 pub struct ProtocolVersion {
     #[parse(fixed_len(11))]
     pub version: String, // fixed 11 bytes
 }
 
 #[derive(MessageComponent, Debug)]
+#[message_id(1)]
 pub struct ProtocolVersionResponse {
     pub ok: bool,
 }
 
-#[derive(MessageComponent, Debug)]
-#[message_id(1)]
+#[derive(MessageComponent, Debug, Default)]
+#[message_id(2)]
 pub struct DisplayChange {
     pub clipboard_readable: bool,
     #[parse(len_prefixed(1))]
     pub display_information: Vec<DisplayInformation>,
 }
 
-type DisplayId = u8;
+pub type DisplayId = u8;
 
 #[derive(MessageComponent, Debug)]
 pub struct DisplayInformation {
@@ -50,20 +52,20 @@ bitflags! {
 
 impl_bitflags_message_component!(AccessMask);
 
-#[derive(MessageComponent)]
-#[message_id(2)]
+#[derive(MessageComponent, Debug)]
+#[message_id(3)]
 pub struct DisplayChangeReceived {}
 
-#[derive(MessageComponent)]
-#[message_id(3)]
+#[derive(MessageComponent, Debug)]
+#[message_id(4)]
 pub struct MouseLocation {
     pub display_id: DisplayId,
     pub x_location: u16,
     pub y_location: u16,
 }
 
-#[derive(MessageComponent)]
-#[message_id(4)]
+#[derive(MessageComponent, Debug)]
+#[message_id(5)]
 pub struct MouseInput {
     pub display_id: DisplayId,
     pub x_location: u16,
@@ -85,14 +87,14 @@ bitflags! {
 
 impl_bitflags_message_component!(ButtonsMask);
 
-#[derive(MessageComponent)]
-#[message_id(5)]
+#[derive(MessageComponent, Debug)]
+#[message_id(6)]
 pub struct KeyInput {
     pub down: bool,
     pub key: u32, // keysym
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum ClipboardType {
     Text,
     Rtf,
@@ -130,6 +132,7 @@ impl From<&ClipboardType> for u8 {
     }
 }
 
+#[derive(Debug)]
 struct ClipboardCustomName<'a>(pub Cow<'a, str>);
 
 impl<'a> MessageComponent for ClipboardCustomName<'a> {
@@ -149,7 +152,7 @@ impl<'a> MessageComponent for ClipboardCustomName<'a> {
     }
 }
 
-#[derive(MessageComponent)]
+#[derive(MessageComponent, Debug)]
 struct ClipboardMetaInter<'a> {
     clipboard_type: u8,
     #[parse(condition = "(clipboard_type & Self::CUSTOM_FLAG) != 0")]
@@ -222,6 +225,7 @@ impl TryFrom<ClipboardMetaInter<'_>> for ClipboardMeta {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct ClipboardMeta {
     pub clipboard_type: ClipboardType,
     pub content_request: bool,
@@ -237,26 +241,40 @@ impl MessageComponent for ClipboardMeta {
     }
 }
 
-#[derive(MessageComponent)]
-#[message_id(6)]
+#[derive(MessageComponent, Debug)]
+#[message_id(7)]
 pub struct ClipboardRequest {
     pub info: ClipboardMeta,
 }
 
-#[derive(MessageComponent)]
-#[message_id(7)]
+#[derive(MessageComponent, Debug)]
+#[message_id(8)]
 pub struct ClipboardNotification {
     pub info: ClipboardMeta,
     #[parse(condition = "info.content_request", len_prefixed(3))]
     pub content: Option<Vec<u8>>,
 }
 
-#[derive(MessageComponent)]
-#[message_id(8)]
+#[derive(MessageComponent, Debug)]
+#[message_id(9)]
 pub struct FrameData {
     pub frame_number: u32,
     pub display_id: u8,
     pub cell_number: u16,
     #[parse(len_prefixed(2))]
     pub data: Vec<u8>,
+}
+
+#[derive(MessageComponent, Debug)]
+pub enum RvdMessage {
+    ProtocolVersion(ProtocolVersion),
+    ProtocolVersionResponse(ProtocolVersionResponse),
+    DisplayChange(DisplayChange),
+    DisplayChangeReceived(DisplayChangeReceived),
+    MouseLocation(MouseLocation),
+    MouseInput(MouseInput),
+    KeyInput(KeyInput),
+    ClipboardRequest(ClipboardRequest),
+    ClipboardNotification(ClipboardNotification),
+    FrameData(FrameData),
 }

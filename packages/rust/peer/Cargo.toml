@@ -4,3 +4,13 @@ version = "0.0.0"
 edition = "2021"
 
 [dependencies]
+common = { path = "../common" }
+cfg-if = "1.0.0"
+crossbeam-channel = "0.5.2"
+futures-executor = "0.3.19"
+futures-util = "0.3.19"
+native = { path = "../native" }
+thiserror = "1.0.30"
+srp = "0.6.0"
+ring = "0.16.20"
+tokio = { version = "1.15.0", features=["net", "sync"] }

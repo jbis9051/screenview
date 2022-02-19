@@ -52,7 +52,14 @@ use crate::{
 pub struct MacApi {
     modifier_keys: CGEventFlags,
 }
+
 impl MacApi {
+    pub fn new() -> Result<Self, Error> {
+        Ok(Self {
+            modifier_keys: CGEventFlags::empty(),
+        })
+    }
+
     fn cgstring_to_string(cf_ref: CFStringRef) -> Option<String> {
         let c_ptr = unsafe { CFStringGetCStringPtr(cf_ref, kCFStringEncodingUTF8) };
         if c_ptr.is_null() {
@@ -155,13 +162,7 @@ impl MacApi {
 impl NativeApiTemplate for MacApi {
     type Error = Error;
 
-    fn new() -> Result<Self, Self::Error> {
-        Ok(Self {
-            modifier_keys: CGEventFlags::empty(),
-        })
-    }
-
-    fn key_toggle(&mut self, key: Key, down: bool) -> Result<(), Self::Error> {
+    fn key_toggle(&mut self, key: Key, down: bool) -> Result<(), Error> {
         self.handle_modifier(key, down);
         let key_code = KEYSYM_MAC.get(&key).ok_or(KeyNotFoundError(key))?;
         let source = CGEventSource::new(CGEventSourceStateID::CombinedSessionState)
@@ -173,7 +174,7 @@ impl NativeApiTemplate for MacApi {
         Ok(())
     }
 
-    fn pointer_position(&self) -> Result<MousePosition, Self::Error> {
+    fn pointer_position(&self) -> Result<MousePosition, Error> {
         let source = CGEventSource::new(CGEventSourceStateID::CombinedSessionState)
             .map_err(|_| UnableToCreateCGSource)?;
         let event = CGEvent::new(source).map_err(|_| CGEventError)?;
@@ -185,7 +186,7 @@ impl NativeApiTemplate for MacApi {
         })
     }
 
-    fn set_pointer_position(&self, pos: MousePosition) -> Result<(), Self::Error> {
+    fn set_pointer_position(&self, pos: MousePosition) -> Result<(), Error> {
         let source = CGEventSource::new(CGEventSourceStateID::CombinedSessionState)
             .map_err(|_| UnableToCreateCGSource)?;
         let event = CGEvent::new_mouse_event(
@@ -199,7 +200,7 @@ impl NativeApiTemplate for MacApi {
         Ok(())
     }
 
-    fn toggle_mouse(&self, button: MouseButton, down: bool) -> Result<(), Self::Error> {
+    fn toggle_mouse(&self, button: MouseButton, down: bool) -> Result<(), Error> {
         // TODO can we get smooth scrolling?
         let source = CGEventSource::new(CGEventSourceStateID::CombinedSessionState)
             .map_err(|_| UnableToCreateCGSource)?;
@@ -285,7 +286,7 @@ impl NativeApiTemplate for MacApi {
         Ok(())
     }
 
-    fn clipboard_content(&self, type_name: &ClipboardType) -> Result<Vec<u8>, Self::Error> {
+    fn clipboard_content(&self, type_name: &ClipboardType) -> Result<Vec<u8>, Error> {
         let paste_board = unsafe { NSPasteboard::generalPasteboard(nil) };
         if paste_board == nil {
             return Err(NSPasteboardError);
@@ -311,7 +312,7 @@ impl NativeApiTemplate for MacApi {
         &mut self,
         type_name: &ClipboardType,
         content: &[u8],
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         let type_name = unsafe {
             match type_name {
                 ClipboardType::Text => NSPasteboardTypeString,
@@ -322,7 +323,7 @@ impl NativeApiTemplate for MacApi {
         MacApi::set_clipboard_content_mac(type_name, content)
     }
 
-    fn monitors(&mut self) -> Result<Vec<Monitor>, Self::Error> {
+    fn monitors(&mut self) -> Result<Vec<Monitor>, Error> {
         let display = unsafe { NSScreen::screens(nil) };
         let count = unsafe { NSArray::count(display) };
         let mut monitors = Vec::with_capacity(count as usize);
@@ -362,7 +363,7 @@ impl NativeApiTemplate for MacApi {
         Ok(monitors)
     }
 
-    fn windows(&mut self) -> Result<Vec<Window>, Self::Error> {
+    fn windows(&mut self) -> Result<Vec<Window>, Error> {
         let windows_array = unsafe {
             CGWindowListCopyWindowInfo(
                 kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements,
@@ -453,7 +454,7 @@ impl NativeApiTemplate for MacApi {
         Ok(windows)
     }
 
-    fn capture_display_frame(&self, display: &Monitor) -> Result<Frame, Self::Error> {
+    fn capture_display_frame(&self, display: &Monitor) -> Result<Frame, Error> {
         let core_display = CGDisplay::new(display.id);
         let frame = core_display
             .image()
@@ -461,7 +462,7 @@ impl NativeApiTemplate for MacApi {
         MacApi::cgimage_to_frame(&frame).map_err(|_| CaptureDisplayError(display.name.clone()))
     }
 
-    fn capture_window_frame(&self, window: &Window) -> Result<Frame, Self::Error> {
+    fn capture_window_frame(&self, window: &Window) -> Result<Frame, Error> {
         let image = CGDisplay::screenshot(
             unsafe { CGRectNull },
             kCGWindowListOptionIncludingWindow,

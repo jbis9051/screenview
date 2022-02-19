@@ -85,10 +85,8 @@ pub struct X11Api {
 
 unsafe impl Send for X11Api {}
 
-impl NativeApiTemplate for X11Api {
-    type Error = Error;
-
-    fn new() -> Result<Self, Self::Error> {
+impl X11Api {
+    pub fn new() -> Result<Self, Error> {
         let dpy = unsafe { XOpenDisplay(ptr::null()) };
         if dpy.is_null() {
             return Err(Error::DisplayOpenFailed);
@@ -120,8 +118,12 @@ impl NativeApiTemplate for X11Api {
             clipboard: Clipboard::new()?,
         })
     }
+}
 
-    fn key_toggle(&mut self, keysym: u32, down: bool) -> Result<(), Self::Error> {
+impl NativeApiTemplate for X11Api {
+    type Error = Error;
+
+    fn key_toggle(&mut self, keysym: u32, down: bool) -> Result<(), Error> {
         let dpy = self.conn.get_raw_dpy();
         let down = if down { 1 } else { 0 };
 
@@ -134,7 +136,7 @@ impl NativeApiTemplate for X11Api {
         Ok(())
     }
 
-    fn pointer_position(&self) -> Result<MousePosition, Self::Error> {
+    fn pointer_position(&self) -> Result<MousePosition, Error> {
         let reply = self
             .conn
             .wait_for_reply(self.conn.send_request(&QueryPointer { window: self.root }))?;
@@ -149,7 +151,7 @@ impl NativeApiTemplate for X11Api {
                     && (x - info.x) < info.width
                     && (y - info.y) < info.height
             })
-            .unwrap_or(0) as u32;
+            .unwrap_or(0) as u8;
 
         Ok(MousePosition {
             x: reply.root_x() as _,
@@ -158,7 +160,7 @@ impl NativeApiTemplate for X11Api {
         })
     }
 
-    fn set_pointer_position(&self, pos: MousePosition) -> Result<(), Self::Error> {
+    fn set_pointer_position(&self, pos: MousePosition) -> Result<(), Error> {
         self.conn
             .check_request(self.conn.send_request_checked(&WarpPointer {
                 src_window: Window::none(),
@@ -173,7 +175,7 @@ impl NativeApiTemplate for X11Api {
             .map_err(Into::into)
     }
 
-    fn toggle_mouse(&self, button: MouseButton, down: bool) -> Result<(), Self::Error> {
+    fn toggle_mouse(&self, button: MouseButton, down: bool) -> Result<(), Error> {
         let dpy = self.conn.get_raw_dpy();
 
         unsafe {
@@ -184,7 +186,7 @@ impl NativeApiTemplate for X11Api {
         Ok(())
     }
 
-    fn clipboard_content(&self, type_name: &ClipboardType) -> Result<Vec<u8>, Self::Error> {
+    fn clipboard_content(&self, type_name: &ClipboardType) -> Result<Vec<u8>, Error> {
         let atoms = &self.clipboard.setter.atoms;
         let target = match type_name {
             ClipboardType::Text => atoms.utf8_string,
@@ -205,7 +207,7 @@ impl NativeApiTemplate for X11Api {
         &mut self,
         type_name: &ClipboardType,
         content: &[u8],
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         let atoms = &self.clipboard.setter.atoms;
         let target = match type_name {
             ClipboardType::Text => atoms.utf8_string,
@@ -217,7 +219,7 @@ impl NativeApiTemplate for X11Api {
             .map_err(Into::into)
     }
 
-    fn monitors(&mut self) -> Result<Vec<Monitor>, Self::Error> {
+    fn monitors(&mut self) -> Result<Vec<Monitor>, Error> {
         self.update_monitors()?;
         Ok(self
             .monitors
@@ -232,7 +234,7 @@ impl NativeApiTemplate for X11Api {
             .collect())
     }
 
-    fn windows(&mut self) -> Result<Vec<api::Window>, Self::Error> {
+    fn windows(&mut self) -> Result<Vec<api::Window>, Error> {
         let mut windows = Vec::new();
         self.list_windows(self.root, &mut windows)?;
         let mut api_windows = Vec::with_capacity(windows.len());
@@ -273,7 +275,7 @@ impl NativeApiTemplate for X11Api {
         Ok(api_windows)
     }
 
-    fn capture_display_frame(&self, monitor: &Monitor) -> Result<Frame, Self::Error> {
+    fn capture_display_frame(&self, monitor: &Monitor) -> Result<Frame, Error> {
         let info = match self.monitors.get(monitor.id as usize) {
             Some(info) => info,
             None => return Err(Error::UnknownMonitor),
@@ -282,11 +284,7 @@ impl NativeApiTemplate for X11Api {
         self.capture(self.root, info.x, info.y, info.width, info.height)
     }
 
-    fn update_display_frame(
-        &self,
-        monitor: &Monitor,
-        frame: &mut Frame,
-    ) -> Result<(), Self::Error> {
+    fn update_display_frame(&self, monitor: &Monitor, frame: &mut Frame) -> Result<(), Error> {
         let info = match self.monitors.get(monitor.id as usize) {
             Some(info) => info,
             None => return Err(Error::UnknownMonitor),
@@ -295,7 +293,7 @@ impl NativeApiTemplate for X11Api {
         self.update_frame(self.root, info.x, info.y, info.width, info.height, frame)
     }
 
-    fn capture_window_frame(&self, window: &api::Window) -> Result<Frame, Self::Error> {
+    fn capture_window_frame(&self, window: &api::Window) -> Result<Frame, Error> {
         let x11_window = unsafe { Window::new(window.id) };
         let geometry = self
             .conn
@@ -312,11 +310,7 @@ impl NativeApiTemplate for X11Api {
         )
     }
 
-    fn update_window_frame(
-        &self,
-        window: &api::Window,
-        frame: &mut Frame,
-    ) -> Result<(), Self::Error> {
+    fn update_window_frame(&self, window: &api::Window, frame: &mut Frame) -> Result<(), Error> {
         let x11_window = unsafe { Window::new(window.id) };
         let geometry = self
             .conn

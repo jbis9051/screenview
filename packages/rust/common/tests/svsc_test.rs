@@ -1,8 +1,7 @@
 mod helper;
 use crate::helper::test_write;
 use byteorder::{LittleEndian, ReadBytesExt};
-use common::messages::svsc::*;
-use common::messages::MessageComponent;
+use common::messages::{svsc::*, MessageComponent};
 use std::io::Cursor;
 
 #[test]

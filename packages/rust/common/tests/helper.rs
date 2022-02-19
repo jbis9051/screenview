@@ -7,3 +7,9 @@ pub fn test_write<T: MessageComponent>(message: &T, bytes: &[u8]) {
     let inner = cursor.into_inner();
     assert_eq!(inner, bytes, "write failed");
 }
+
+macro_rules! b_to_u64 {
+    ($b:literal) => {
+        &u64::from_le_bytes(*$b)
+    };
+}

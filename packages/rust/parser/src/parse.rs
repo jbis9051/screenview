@@ -3,7 +3,17 @@ use quote::ToTokens;
 use syn::{
     parenthesized,
     parse::{Parse, ParseStream},
-    parse2, DataStruct, Error, Expr, Fields, Ident, LitInt, LitStr, Result, Token, Type,
+    parse2,
+    DataStruct,
+    Error,
+    Expr,
+    Fields,
+    Ident,
+    LitInt,
+    LitStr,
+    Result,
+    Token,
+    Type,
 };
 
 use crate::{extract_type_from_container, matches_ident};
@@ -129,20 +139,18 @@ impl ParseParams {
     fn merge(&mut self, other: Self) -> Result<()> {
         match (&self.len, other.len) {
             (None, Some(len)) => self.len = Some(len),
-            (Some(_), Some(len)) => {
-                return Err(Error::new_spanned(len, "Duplicate length parameter"))
-            }
+            (Some(_), Some(len)) =>
+                return Err(Error::new_spanned(len, "Duplicate length parameter")),
             (_, None) => {}
         }
 
         match (&self.condition, other.condition) {
             (None, Some(condition)) => self.condition = Some(condition),
-            (Some(_), Some(condition)) => {
+            (Some(_), Some(condition)) =>
                 return Err(Error::new_spanned(
                     condition,
                     "Duplicate condition parameter",
-                ))
-            }
+                )),
             (_, None) => {}
         }
 
@@ -192,12 +200,11 @@ impl Parse for ParseParams {
 
                 "bool_prefixed" => ParseParams::from_condition(Condition::Prefixed(ident)),
 
-                ident_str => {
+                ident_str =>
                     return Err(Error::new_spanned(
                         ident,
                         &format!("Unknown parameter `{}`", ident_str),
-                    ))
-                }
+                    )),
             };
 
             params.merge(new_param)?;
