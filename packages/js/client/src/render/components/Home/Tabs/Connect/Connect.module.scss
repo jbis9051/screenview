@@ -1,0 +1,13 @@
+.wrapper {
+    display: flex;
+    padding: 30px 10px;
+    max-width: 900px;
+}
+
+.left {
+    flex: 1;
+}
+
+.right {
+    flex: 1;
+}

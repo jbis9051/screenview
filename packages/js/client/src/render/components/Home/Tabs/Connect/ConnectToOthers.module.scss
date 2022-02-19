@@ -1,0 +1,28 @@
+.labelText {
+    margin: 10px 0;
+    width: 100%;
+}
+.input {
+    width: 250px;
+    font-size: 20px;
+    font-family: 'Source Sans Pro', sans-serif;
+}
+
+.options {
+    margin-top: 20px;
+    label {
+        display: flex;
+        align-items: center;
+        font-size: 14px;
+        margin-bottom: 5px;
+    }
+
+    input {
+        margin-right: 5px;
+        margin-left: 2px;
+    }
+}
+
+.button {
+    margin-top: 20px;
+}

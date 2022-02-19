@@ -1,0 +1,11 @@
+@mixin dialog {
+    background: #f9f9f9;
+    color: #353535;
+    padding: 25px;
+    border-radius: 10px;
+    width: 500px;
+    max-width: 100%;
+    margin: 30px;
+    overflow: auto;
+    max-height: 100%;
+}

@@ -1,0 +1,11 @@
+.input {
+    font-family: inherit;
+    border: 1px solid #dadada;
+    padding: 6px 13px;
+    border-radius: 5px;
+    outline: none;
+}
+
+.input:focus {
+    border: 1px solid #007aff;
+}

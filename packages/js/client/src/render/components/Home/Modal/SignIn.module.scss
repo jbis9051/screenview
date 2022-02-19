@@ -1,0 +1,29 @@
+@use 'ModalDialog';
+
+.wrapper {
+    @include ModalDialog.dialog;
+
+    padding: 50px 50px;
+
+    .label {
+        display: block;
+        margin-bottom: 15px;
+    }
+
+    .input {
+        width: 100%;
+        font-size: 20px;
+    }
+
+    .buttonWrapper {
+        display: flex;
+        margin-top: 20px;
+        justify-content: space-between;
+    }
+
+    .forgotPassword {
+        font-size: 13px;
+        color: #0070f3;
+        display: inline-block;
+    }
+}

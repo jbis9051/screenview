@@ -1,0 +1,38 @@
+name: Client Tests
+
+on:
+  pull_request:
+    paths-ignore:
+      - README.md
+  push:
+    branches:
+      - master
+      - "feature/*"
+    paths-ignore:
+      - README.md
+
+defaults:
+  run:
+    shell: bash
+    working-directory: packages/js
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2.1.2
+        with:
+          node-version: "17"
+      - run: yarn install
+      - run: yarn build
+
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2.1.2
+        with:
+          node-version: "17"
+      - run: yarn install
+      - run: yarn lint:check
