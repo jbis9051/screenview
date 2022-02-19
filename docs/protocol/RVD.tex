@@ -6,8 +6,7 @@ Host and the Client.\\
 
 All messages MUST occur over the transport listed.\\
 
-With the exception of the Handshake messages, all RVD messages' first byte contain a number to indicate
-the message type. \\
+All RVD messages' first byte contain a number to indicate the message type. \\
 
 A sequence-number is an incrementing 32-bit counter each UDP message sent, separate for Host and Client. All
 messages sent over UDP MUST begin with a 4 bytes sequence-number. sequence-number is initialized
@@ -78,6 +77,8 @@ The ProtocolVersion message consists of 11 bytes interpreted as a string of ASCI
         \hline
         \textbf{Bytes} & \textbf{Name} & \textbf{Value}           \\
         \hline
+        1              & type                 & 0                  \\
+        \hline
         11             & version       & ``\texttt{RVD 001.000}'' \\
         \hline
     \end{tabular}
@@ -93,6 +94,8 @@ the Client.
     \begin{tabular}{|c|c|c|}
         \hline
         \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
+        \hline
+        1              & type                 & 1                  \\
         \hline
         1              & ok            & 0 or 1         \\
         \hline
@@ -117,7 +120,7 @@ received by the Host.
         \hline
         \textbf{Bytes} & \textbf{Name}        & \textbf{Value}     \\
         \hline
-        1              & type                 & 1                  \\
+        1              & type                 & 2                  \\
         \hline
         1              & clipboard-readable   & 0 or 1             \\
         \hline
@@ -250,7 +253,7 @@ the most recent DisplayChange.
         \hline
         \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
         \hline
-        1              & type          & 2              \\
+        1              & type          & 3              \\
         \hline
     \end{tabular}
 \end{center}
@@ -268,7 +271,7 @@ reply when it receives a \emph{MouseInput}.
         \hline
         \textbf{Bytes} & \textbf{Name} & \textbf{Value} & \textbf{Description}      \\
         \hline
-        3              & type          & 3              &                           \\
+        3              & type          & 4              &                           \\
         \hline
         1              & display-id    & 0-255          &                           \\
         \hline
@@ -293,7 +296,7 @@ used.
         \hline
         \textbf{Bytes} & \textbf{Name} & \textbf{Value} & \textbf{Description}      \\
         \hline
-        1              & type          & 4              &                           \\
+        1              & type          & 5              &                           \\
         \hline
         1              & display-id    & 0-255          &                           \\
         \hline
@@ -325,7 +328,7 @@ The \emph{KeyInput} event sends key presses or releases.
         \hline
         \textbf{Bytes} & \textbf{Name} & \textbf{Value} & \textbf{Description}                                 \\
         \hline
-        1              & type          & 5              &                                                      \\
+        1              & type          & 6              &                                                      \\
         \hline
         1              & down-flag     & 0 or 1         & indicates whether the key is now pressed or released \\
         \hline
@@ -348,7 +351,7 @@ Used to check if a clipboard type exists on the Host.
         \hline
         \textbf{Bytes}   & \textbf{Name}    & \textbf{Value} \\
         \hline
-        1                & type             & 6              \\
+        1                & type             & 7              \\
         \hline
         1                & clipboard-type   &                \\
         \hline
@@ -397,7 +400,7 @@ Notifies a Peer of a clipboard update. The receiving Peer should update their cl
         \hline
         \textbf{Bytes}        & \textbf{Name}    & \textbf{Value}   \\
         \hline
-        1                     & type             & 7                \\
+        1                     & type             & 8                \\
         \hline
         1                     & clipboard-type   &                  \\
         \hline
@@ -431,7 +434,7 @@ The \emph{FrameData} message contains an update of a particular cell on a partic
         \hline
         \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
         \hline
-        1              & type          & 8             \\
+        1              & type          & 9             \\
         \hline
         4              & frame-number  &                \\
         \hline

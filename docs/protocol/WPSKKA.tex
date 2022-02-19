@@ -4,11 +4,194 @@ The WPSKKA protocol is the E2EE Encryption layer protocol used to communicate be
 first byte contain a number to indicate
 the message type.\\
 
-WPSKKA relies on SRP as defined in \href{https://datatracker.ietf.org/doc/html/rfc5054}{RFC5054} to establish a
+\subsection{Handshake}
+
+WPSKKA begins with a handshake to choose an authentication scheme. The goal of authentication is to authenticate the Peers' ephemeral keys. The Host begins with sending all the authentication schemes available as well as their public key which will be authenticated using one of the schemes. WPSKKA defines multiple authentication schemes for different use cases.
+
+\subsubsection{AuthScheme}
+
+\begin{center}
+    Host \textrightarrow\ Client\\
+    \begin{tabular}{|c|c|c|}
+        \hline
+        \textbf{Bytes}   & \textbf{Name}    & \textbf{Value} \\
+        \hline
+        1                & type             & 1              \\
+        \hline
+        16               & public-key       &                \\
+        \hline
+        1                & num-auth-schemes &                \\
+        \hline
+        num-auth-schemes & auth-schemes     &                \\
+        \hline
+    \end{tabular}
+\end{center}
+
+num-auth-schemes is the number of auth schemes. auth-schemes contians 1 byte per auth-scheme to indidcate which authentication scheme is available. Authentication schmes are defined below.\\
+
+public-key is the Host's ephemeral public key
+
+\begin{center}
+    Authentication Schemes\\
+    \begin{tabular}{|c|c|}
+        \hline
+        \textbf{Number} & \textbf{Name}     \\
+        \hline
+        0               & Invalid or Denied \\
+        \hline
+        1               & SRP Dynamic       \\
+        \hline
+        2               & SRP Static        \\
+        \hline
+        3               & Public key        \\
+        \hline
+    \end{tabular}
+\end{center}
+
+\subsubsection{TryAuth}
+
+The TryAuth messages indicates a Client would to attempt authentication with a particular auth scheme.
+
+\begin{center}
+    Client \textrightarrow\ Host\\
+    \begin{tabular}{|c|c|c|}
+        \hline
+        \textbf{Bytes} & \textbf{Name}      & \textbf{Value} \\
+        \hline
+        1              & type               & 2              \\
+        \hline
+        16               & public-key       &                \\
+        \hline
+        1              & auth-scheme-number &                \\
+        \hline
+    \end{tabular}
+\end{center}
+
+auth-scheme-number is the authentication scheme number the client would like to attempt
+
+public-key is the Client's ephemeral public key
+
+\subsubsection{AuthMessage}
+
+Messages used in the authentication scheme are encapsulated in this message.
+
+\begin{center}
+    Host $\leftrightarrow$ Client\\
+    \begin{tabular}{|c|c|c|}
+        \hline
+        \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
+        \hline
+        1              & type          & 3              \\
+        \hline
+        2              & length        &                \\
+        \hline
+        length         & auth-message  &                \\
+        \hline
+    \end{tabular}
+\end{center}
+
+\subsubsection{AuthResult}
+
+Messages used in the authentication scheme are encapsulated in this message.
+
+\begin{center}
+    Host $\rightarrow$ Client\\
+    \begin{tabular}{|c|c|c|}
+        \hline
+        \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
+        \hline
+        1              & type          & 4              \\
+        \hline
+        1              & ok            & 0 or 1         \\
+        \hline
+    \end{tabular}
+\end{center}
+
+ok indicates whether the authentication method was successful (1) or not (0). If not, the Client MAY attempt another authentication scheme or try the same one again by sending a TryAuth message. Either party MAP choose to end the connection.
+
+\subsection{Transport Data Key Derivation}
+
+\begin{align*}
+    & C_{host} = \text{DH}(E_{client}^{pub},\ E_{host}^{priv})\\
+    & C_{client} = \text{DH}(E_{host}^{pub},\ E_{client}^{priv})\\
+    & (\mathit{ST}_{peer}^{send} = \mathit{ST}_{serv}^{recv},\ \mathit{ST}_{peer}^{recv} = \mathit{ST}_{serv}^{send}, \mathit{SU}_{peer}^{send} = \mathit{SU}_{serv}^{recv},\ \mathit{SU}_{peer}^{recv} = \mathit{SU}_{serv}^{send}) \coloneqq \text{KDF}_4(C_{host} = C_{client},
+    \ \epsilon) \\
+    & \mathit{NT}_{host}^{send} = \mathit{NT}_{client}^{recv} = \mathit{NT}_{host}^{recv} = \mathit{NT}_{client}^{send} = \mathit{NU}_{host}^{send} = \mathit{NU}_{client}^{recv} = \mathit{NU}_{host}^{recv} = \mathit{NU}_{client}^{send} \coloneqq 0
+\end{align*}
+
+ST keys and NT nonces are used for TCP. SU keys and NT nonces are using for UDP.
+
+\subsection{Subsequent Messages: Transport Data Messages}
+
+Transport Data Messages MUST NOT be sent until authentication is complete.
+
+\subsubsection{TCP}
+
+\begin{center}
+    Host $\leftrightarrow$ Client\\
+    \begin{tabular}{|c|c|c|}
+        \hline
+        \textbf{Bytes}     & \textbf{Name} & \textbf{Value} \\
+        \hline
+        1                  & type          & 5              \\
+        \hline
+        2                  & data-length   &                \\
+        \hline
+        \emph{data-length} & data          &                \\
+        \hline
+    \end{tabular}
+\end{center}
+
+\begin{align*}
+    & \text{data} \coloneqq \text{AEAD}(\mathit{ST}_{m}^{send},\mathit{NT}_{m}^{send}, P, \epsilon)\\
+    & \text{counter} \coloneqq \mathit{NT}_{m}^{send}\\
+    & \mathit{NT}_{m}^{send} \coloneqq \mathit{NT}_{m}^{send} + 1
+\end{align*}
+
+
+Where \emph{P} is the payload to be transported.\\
+
+$\mathit{NT}_{m}$ is an 64 bit counter that MUST NOT wrap. After a transport message is sent, if $\mathit{NT}_{m}$ equals
+($2^{64}-1$) the UDP and TCP connection MUST be dropped. Subsequent messages MUST NOT be sent. \\
+
+\subsubsection{UDP}
+
+\begin{center}
+    Host $\leftrightarrow$ Client\\
+    \begin{tabular}{|c|c|c|}
+        \hline
+        \textbf{Bytes}     & \textbf{Name} & \textbf{Value} \\
+        \hline
+        1                  & type          & 6              \\
+        \hline
+        8                  & counter       &                \\
+        \hline
+        2                  & data-length   &                \\
+        \hline
+        \emph{data-length} & data          &                \\
+        \hline
+    \end{tabular}
+\end{center}
+
+\begin{align*}
+    & \text{data} \coloneqq \text{AEAD}(\mathit{SU}_{m}^{send},\mathit{NU}_{m}^{send}, P, \epsilon)\\
+    & \text{counter} \coloneqq \mathit{NU}_{m}^{send}\\
+    & \mathit{NU}_{m}^{send} \coloneqq \mathit{NU}_{m}^{send} + 1
+\end{align*}
+
+
+Where \emph{P} is the payload to be transported.\\
+
+$\mathit{NU}_{m}$ is an 64 bit counter that MUST NOT wrap. After a transport message is sent, if $\mathit{NU}_{m}$ equals
+($2^{64}-1$) the UDP and TCP connection MUST be dropped. Subsequent messages MUST NOT be sent. \\
+
+\subsection{SRP Dynamic (1)}
+
+SRP Dynamic relies on SRP as defined in \href{https://datatracker.ietf.org/doc/html/rfc5054}{RFC5054} to establish a
 shared key used to authenticate DH keys via a mac. The Host will serve as the SRP server, the Client will serve as the SRP
 client.\\
 
-\subsection{HostHello}
+\subsubsection{HostHello}
 
 \begin{center}
     Host \textrightarrow\ Client\\
@@ -22,25 +205,21 @@ client.\\
         \hline
         16             & salt          &                \\
         \hline
-        256            & srp-B         &                \\
-        \hline
-        16             & public-key    &                \\
+        32             & srp-B         &                \\
         \hline
     \end{tabular}
 \end{center}
 
 \begin{align*}
-    & (D_{host}^{pub},\, D_{host}^{priv}) := \text{DH-Generate()}\\
-    & I := RAND(128)\\
-    & s := RAND(128)\\
-    & B := \text{SRP-B()}\\
-    & \text{username} := I\\
-    & \text{salt} := s\\
-    & \text{srp-B} := B\\
-    & \text{public-key} := D_{host}^{pub}\\
+    & I \coloneqq RAND(128)\\
+    & s \coloneqq RAND(128)\\
+    & B \coloneqq \text{SRP-B()}\\
+    & \text{username} \coloneqq I\\
+    & \text{salt} \coloneqq s\\
+    & \text{srp-B} \coloneqq B\\
 \end{align*}
 
-\subsection{ClientHello}
+\subsubsection{ClientHello}
 
 \begin{center}
     Client \textrightarrow\ Host\\
@@ -50,9 +229,7 @@ client.\\
         \hline
         1              & type          & 2              \\
         \hline
-        256            & srp-A         &                \\
-        \hline
-        16             & public-key    &                \\
+        32             & srp-A         &                \\
         \hline
         32             & mac           &                \\
         \hline
@@ -60,14 +237,16 @@ client.\\
 \end{center}
 
 \begin{align*}
-    & (D_{client}^{pub},\, D_{client}^{priv}) := \text{DH-Generate()}\\
-    & \text{srp-A} := \text{SRP-A()}\\
-    & L_{client} = L_{host} := \text{SRP-PREMASTER()}\\
-    & \text{public-key} := D_{client}^{pub}\\
-    & \text{mac} := \text{HMAC}(D_{client}^{pub}, \text{KDF}_1(L_{client}))\\
+    & \text{srp-A} \coloneqq \text{SRP-A()}\\
+    & L_{client} = L_{host} \coloneqq \text{SRP-PREMASTER()}\\
+    & \text{mac} \coloneqq \text{HMAC}(\text{KDF}_1(L_{client}), \text{public-key})\\
 \end{align*}
 
-\subsection{Hostverify}
+public-key is the client's public key
+
+The Host validates the mac. If the mac is incorrect a failed AuthResult is sent.
+
+\subsubsection{HostVerify}
 
 \begin{center}
     Host \textrightarrow\ Client\\
@@ -83,47 +262,17 @@ client.\\
 \end{center}
 
 \begin{align*}
-    & \text{mac} := \text{HMAC}((D_{host}^{pub},\text{KDF}_1(L_{host}))\\
+    & \text{mac} \coloneqq \text{HMAC}(\text{KDF}_1(L_{host}), \text{public-key})\\
 \end{align*}
 
-\subsection{Transport Data Key Derivation}
+public-key is the Host's public key
 
-\begin{align*}
-    & Q_{host} = \text{DH}(D_{client}^{pub},\ D_{host}^{priv})\\
-    & Q_{client} = \text{DH}(D_{host}^{pub},\ D_{client}^{priv})\\
-    & (U_{peer}^{send} = U_{serv}^{recv},\ U_{peer}^{recv} = U_{serv}^{send}) := \text{KDF}_2(Q_{host} = Q_{client},
-    \ \epsilon) \\
-    & O_{host}^{send} = O_{client}^{recv} = O_{host}^{recv} = O_{client}^{send} := 0
-\end{align*}
+After the HostVerify is sent, the Host MUST send a successful AuthResult.
 
-\subsection{Subsequent Messages: Transport Data Messages}
+\subsection{SRP Static (2)}
 
-\begin{center}
-    Host $\leftrightarrow$ Client\\
-    \begin{tabular}{|c|c|c|}
-        \hline
-        \textbf{Bytes}     & \textbf{Name} & \textbf{Value} \\
-        \hline
-        1                  & type          & 4              \\
-        \hline
-        8                  & counter       &                \\
-        \hline
-        2                  & data-length   &                \\
-        \hline
-        \emph{data-length} & data          &                \\
-        \hline
-    \end{tabular}
-\end{center}
+SRP Static uses the exact same scheme as SRP Dynamic. The only difference is that the SRP password is user defined instead of generated per session. This can be useful in situations where a user wants to be able to connect to a remote computer without physical presence at the other Host's machine.
 
-\begin{align*}
-    & \text{data} := \text{AEAD}(U_{m}^{send}, O_{m}^{send}, P, \epsilon)\\
-    & \text{counter} := O_{m}^{send}\\
-    & O_{m}^{send} := O_{m}^{send} + 1
-\end{align*}
+\subsection{Public Key (3)}
 
-
-Where \emph{P} is the payload to be transported.\\
-
-$O_{m}$ is an 64 bit counter that MUST NOT wrap. After a transport message is sent, if $O_{m}$ equals
-($2^{64}-1$) the TCP connection MUST be dropped. Subsequent messages MUST NOT be sent. \\
-
+WIP

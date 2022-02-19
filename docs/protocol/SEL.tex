@@ -1,0 +1,95 @@
+\section{Server Encryption Layer (SEL)}
+
+SEL provides security for communication between Peers and the Server. TCP and UDP have
+different security methods. UDP encryption depends on secrets established in the SVSC protocol and therefore can only
+be begin after TCP encryption is already established.
+
+\subsection{TCP}
+
+The TCP SEL is TLS 1.3 as defined in
+\href{https://datatracker.ietf.org/doc/html/rfc8446}{RFC8446}. TLS v1.3 MUST be used. Previous versions of TLS MUST NOT be used.\\
+
+The Client initiates a TLS connection with the Server in accordance with \href{https://datatracker.ietf.org/doc/html/rfc8446}{RFC8446}. All subsiquent SEL TCP communications occurs over TLS:
+
+\begin{center}
+    Peer $\leftrightarrow$ Server\\
+    \begin{tabular}{|c|c|c|}
+        \hline
+        \textbf{Bytes}     & \textbf{Name} & \textbf{Value} \\
+        \hline
+        1                  & type          & 1              \\
+        \hline
+        2                  & data-length   &                \\
+        \hline
+        \emph{data-length} & data          &                \\
+        \hline
+    \end{tabular}
+\end{center}
+
+\subsection{UDP}
+
+UDP encryption and authentication rely on the \emph{session-id}, \emph{peer-id} and \emph{peer-key} values
+established in a session
+(described in \hyperlink{subsection.4.4}{4.4}). The Server (nor the Peer) MUST NOT
+process or reply to any messages that don't pass authentication. This prevents an amplification attack.\\
+
+\subsubsection{Transport Data Key Derivation}
+
+The Server and Peer derive keys.
+
+\begin{align*}
+    &  G\coloneqq \text{session-id}                                                               \\
+    &  H \coloneqq \text{peer-id}                                                                \\
+    &  J \coloneqq \text{peer-key}                                                              \\
+    &  (\mathit{SU}_{peer}^{send} = \mathit{SU}_{serv}^{recv}, \mathit{SU}_{peer}^{recv} = \mathit{SU}_{serv}^{send}) \coloneqq \text{KDF}_2(\text{HASH}(G\,
+    ||\, H\,||\, J), \epsilon)                                        \\
+    &   \mathit{NU}_{peer}^{send} = \mathit{NU}_{serv}^{recv} = \mathit{NU}_{peer}^{recv} = \mathit{NU}_{serv}^{send} \coloneqq 0
+\end{align*}
+
+\subsubsection{Transport Data Messages}
+
+\begin{center}
+    Peer \textrightarrow Server\\
+    \begin{tabular}{|c|c|c|}
+        \hline
+        \textbf{Bytes}                & \textbf{Name}  & \textbf{Value} \\
+        \hline
+        1                             & type           & 2              \\
+        \hline
+        16                            & \emph{peer-id} &                \\
+        \hline
+        8                             & counter        &                \\
+        \hline
+        $\text{UDP length} - 8$ bytes & data           &                \\
+        \hline
+    \end{tabular}
+\end{center}
+
+\begin{center}
+    Server \textrightarrow Peer\\
+    \begin{tabular}{|c|c|c|}
+        \hline
+        \textbf{Bytes}                & \textbf{Name} & \textbf{Value} \\
+        \hline
+        1                             & type          & 3              \\
+        \hline
+        8                             & counter       &                \\
+        \hline
+        $\text{UDP length} - 8$ bytes & data          &                \\
+        \hline
+    \end{tabular}
+\end{center}
+
+
+\begin{align*}
+    & \text{data} \coloneqq \text{AEAD}(\mathit{SU}_{m}^{send}, \mathit{NU}_{m}^{send}, P, \epsilon)\\
+    & \text{counter} \coloneqq \mathit{NU}_{m}^{send}\\
+    & \mathit{NU}_{m}^{send} \coloneqq \mathit{NU}_{m}^{send} + 1
+\end{align*}
+
+
+Where $P$ is the payload to be transported\\
+
+$\mathit{NU}_{m}$ is an 64 bit counter that MUST NOT wrap. After a transport message is sent, if $\mathit{NU}_{m}$ equals
+($2^{64}-1$) the TCP connection MUST be dropped. Subsequent UDP messages MUST NOT be sent. \\
+
