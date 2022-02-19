@@ -1,5 +1,11 @@
-#[cfg(all(target_os = "macos", not(dummy_api)))]
-pub mod keycode_mac;
+use cfg_if::cfg_if;
+
 pub mod keysym;
-#[cfg(all(target_os = "macos", not(dummy_api)))]
-pub mod keysym_to_mac;
+
+cfg_if! {
+    if #[cfg(dummy_api)] {
+    } else if #[cfg(target_os = "macos")]{
+        pub mod keycode_mac;
+        pub mod keysym_to_mac;
+    }
+}
