@@ -411,7 +411,7 @@ impl NativeApiTemplate for MacApi {
         if data == nil {
             return Err(ClipboardNotFound(type_name.to_string()));
         }
-        Ok(Self::nsdata_to_vec(data)) // TODO may be null terminated :(
+        Ok(Self::nsdata_to_vec(data))
     }
 
     fn set_clipboard_content(
