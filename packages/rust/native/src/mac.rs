@@ -1,15 +1,7 @@
 use std::{ffi::CStr, ops::Deref, os::raw::c_uchar, slice::from_raw_parts};
 
 use cocoa::{
-    appkit::{
-        NSApp,
-        NSApplication,
-        NSColorSpace,
-        NSEvent,
-        NSPasteboard,
-        NSPasteboardTypeString,
-        NSScreen,
-    },
+    appkit::{NSApp, NSColorSpace, NSEvent, NSPasteboard, NSPasteboardTypeString, NSScreen},
     base::{id, nil},
     foundation::{
         NSArray,
@@ -20,7 +12,6 @@ use cocoa::{
         NSPoint,
         NSRect,
         NSRunLoop,
-        NSSize,
         NSString,
         NSUInteger,
     },
@@ -76,6 +67,11 @@ struct MacMonitor {
     rect: NSRect,
 }
 
+struct MacMousePosition {
+    point: NSPoint,
+    monitor: MacMonitor,
+}
+
 pub struct MacApi {
     modifier_keys: CGEventFlags,
     _nsapplication: id,
@@ -97,7 +93,6 @@ impl MacApi {
     /// runs an AppKit loop once, fixing caching issues with getting monitors
     fn run_loop() {
         let run_loop: id = unsafe { NSRunLoop::currentRunLoop() };
-
 
         let _: id = unsafe {
             msg_send![run_loop,
@@ -161,7 +156,7 @@ impl MacApi {
     fn cgimage_to_frame(image: &CGImage) -> Result<Frame, ()> {
         let bytes_per_pixel = image.bits_per_pixel() / 8;
         if bytes_per_pixel != 4 {
-            // TODO error
+            return Err(());
         }
         let data = image.data();
         let rgba = data.bytes();
@@ -245,6 +240,20 @@ impl MacApi {
         }
         Ok(monitors)
     }
+
+    fn pointer_position_impl(&self) -> Result<MacMousePosition, Error> {
+        let nspoint = unsafe { NSEvent::mouseLocation(nil) };
+        let monitor = self
+            .monitors_impl()?
+            .into_iter()
+            .find(|m| unsafe { NSMouseInRect(nspoint, m.rect, false) })
+            .ok_or(Error::MonitorNotFound)?;
+
+        Ok(MacMousePosition {
+            point: nspoint,
+            monitor,
+        })
+    }
 }
 
 impl NativeApiTemplate for MacApi {
@@ -263,27 +272,31 @@ impl NativeApiTemplate for MacApi {
     }
 
     fn pointer_position(&self) -> Result<MousePosition, Error> {
-        let nspoint = unsafe { NSEvent::mouseLocation(nil) };
-        let monitors = self.monitors_impl()?;
-        let monitor = monitors
-            .iter()
-            .find(|m| unsafe { NSMouseInRect(nspoint, m.rect, false) })
-            .ok_or(Error::MonitorNotFound)?;
-
+        let position = self.pointer_position_impl()?;
         Ok(MousePosition {
-            x: (nspoint.x - monitor.rect.origin.x) as u32,
-            y: (monitor.rect.size.height - nspoint.y - monitor.rect.origin.y) as u32,
-            monitor_id: monitor.id as u8,
+            x: (position.point.x - position.monitor.rect.origin.x) as u32,
+            y: (position.monitor.rect.size.height
+                - position.point.y
+                - position.monitor.rect.origin.y) as u32,
+            monitor_id: position.monitor.id as u8,
         })
     }
 
     fn set_pointer_position(&self, pos: MousePosition) -> Result<(), Error> {
         let source = CGEventSource::new(CGEventSourceStateID::CombinedSessionState)
             .map_err(|_| UnableToCreateCGSource)?;
+        let monitor = self
+            .monitors_impl()?
+            .into_iter()
+            .find(|m| m.id == pos.monitor_id as u32)
+            .ok_or(MonitorNotFound)?;
         let event = CGEvent::new_mouse_event(
             source,
             CGEventType::MouseMoved,
-            CGPoint::new(pos.x as CGFloat, pos.y as CGFloat),
+            CGPoint::new(
+                pos.x as CGFloat + monitor.rect.origin.x,
+                pos.y as CGFloat + monitor.rect.origin.y,
+            ), // CGEvent uses origin of upper left I guess
             CGMouseButton::Left,
         )
         .map_err(|_| CGEventError)?;
@@ -340,9 +353,11 @@ impl NativeApiTemplate for MacApi {
                 scroll_event.post(CGEventTapLocation::Session);
             }
             _ => {
-                let mouse_position = self.pointer_position()?;
-                let mouse_position =
-                    CGPoint::new(mouse_position.x as CGFloat, mouse_position.y as CGFloat);
+                let mouse_position = self.pointer_position_impl()?;
+                let mouse_position = CGPoint::new(
+                    mouse_position.point.x as CGFloat,
+                    mouse_position.point.y as CGFloat,
+                );
                 let mouse_type = match button {
                     MouseButton::Left =>
                         if down {
@@ -518,23 +533,23 @@ impl NativeApiTemplate for MacApi {
         Ok(windows)
     }
 
-    fn capture_display_frame(&self, display: &Monitor) -> Result<Frame, Error> {
-        let core_display = CGDisplay::new(display.id);
+    fn capture_monitor_frame(&self, monitor_id: u32) -> Result<Frame, Error> {
+        let core_display = CGDisplay::new(monitor_id);
         let frame = core_display
             .image()
-            .ok_or_else(|| CaptureDisplayError(display.name.clone()))?;
-        MacApi::cgimage_to_frame(&frame).map_err(|_| CaptureDisplayError(display.name.clone()))
+            .ok_or_else(|| CaptureDisplayError(monitor_id.to_string()))?;
+        MacApi::cgimage_to_frame(&frame).map_err(|_| CaptureDisplayError(monitor_id.to_string()))
     }
 
-    fn capture_window_frame(&self, window: &Window) -> Result<Frame, Error> {
+    fn capture_window_frame(&self, window_id: u32) -> Result<Frame, Error> {
         let image = CGDisplay::screenshot(
             unsafe { CGRectNull },
             kCGWindowListOptionIncludingWindow,
-            window.id,
+            window_id,
             kCGWindowImageBoundsIgnoreFraming,
         )
-        .ok_or_else(|| CaptureDisplayError(window.name.clone()))?;
-        MacApi::cgimage_to_frame(&image).map_err(|_| CaptureDisplayError(window.name.clone()))
+        .ok_or_else(|| CaptureDisplayError(window_id.to_string()))?;
+        MacApi::cgimage_to_frame(&image).map_err(|_| CaptureDisplayError(window_id.to_string()))
     }
 }
 

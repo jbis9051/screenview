@@ -47,19 +47,19 @@ impl NativeApiTemplate for WindowsApi {
         unimplemented!()
     }
 
-    fn capture_display_frame(&self, display: &Monitor) -> Result<Frame, Error> {
+    fn capture_monitor_frame(&self, monitor_id: u32) -> Result<Frame, Error> {
         unimplemented!()
     }
 
-    fn update_display_frame(&self, display: &Monitor, cap: &mut Frame) -> Result<(), Error> {
+    fn update_monitor_frame(&self, monitor_id: u32, cap: &mut Frame) -> Result<(), Error> {
         unimplemented!()
     }
 
-    fn capture_window_frame(&self, display: &Window) -> Result<Frame, Error> {
+    fn capture_window_frame(&self, window_id: u32) -> Result<Frame, Error> {
         unimplemented!()
     }
 
-    fn update_window_frame(&self, window: &Window, cap: &mut Frame) -> Result<(), Error> {
+    fn update_window_frame(&self, window_id: u32, cap: &mut Frame) -> Result<(), Error> {
         unimplemented!()
     }
 }

@@ -275,8 +275,8 @@ impl NativeApiTemplate for X11Api {
         Ok(api_windows)
     }
 
-    fn capture_display_frame(&self, monitor: &Monitor) -> Result<Frame, Error> {
-        let info = match self.monitors.get(monitor.id as usize) {
+    fn capture_monitor_frame(&self, monitor_id: u32) -> Result<Frame, Error> {
+        let info = match self.monitors.get(monitor_id as usize) {
             Some(info) => info,
             None => return Err(Error::UnknownMonitor),
         };
@@ -284,8 +284,8 @@ impl NativeApiTemplate for X11Api {
         self.capture(self.root, info.x, info.y, info.width, info.height)
     }
 
-    fn update_display_frame(&self, monitor: &Monitor, frame: &mut Frame) -> Result<(), Error> {
-        let info = match self.monitors.get(monitor.id as usize) {
+    fn update_monitor_frame(&self, monitor_id: u32, frame: &mut Frame) -> Result<(), Error> {
+        let info = match self.monitors.get(monitor_id as usize) {
             Some(info) => info,
             None => return Err(Error::UnknownMonitor),
         };
@@ -293,8 +293,8 @@ impl NativeApiTemplate for X11Api {
         self.update_frame(self.root, info.x, info.y, info.width, info.height, frame)
     }
 
-    fn capture_window_frame(&self, window: &api::Window) -> Result<Frame, Error> {
-        let x11_window = unsafe { Window::new(window.id) };
+    fn capture_window_frame(&self, window_id: u32) -> Result<Frame, Error> {
+        let x11_window = unsafe { Window::new(window_id) };
         let geometry = self
             .conn
             .wait_for_reply(self.conn.send_request(&GetGeometry {
@@ -310,8 +310,8 @@ impl NativeApiTemplate for X11Api {
         )
     }
 
-    fn update_window_frame(&self, window: &api::Window, frame: &mut Frame) -> Result<(), Error> {
-        let x11_window = unsafe { Window::new(window.id) };
+    fn update_window_frame(&self, window_id: u32, frame: &mut Frame) -> Result<(), Error> {
+        let x11_window = unsafe { Window::new(window_id) };
         let geometry = self
             .conn
             .wait_for_reply(self.conn.send_request(&GetGeometry {
