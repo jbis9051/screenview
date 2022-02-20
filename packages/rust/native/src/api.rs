@@ -81,17 +81,17 @@ pub trait NativeApiTemplate {
 
     fn windows(&mut self) -> Result<Vec<Window>, Self::Error>;
 
-    fn capture_display_frame(&self, display: &Monitor) -> Result<Frame, Self::Error>;
+    fn capture_monitor_frame(&self, monitor_id: u32) -> Result<Frame, Self::Error>;
 
-    fn update_display_frame(&self, display: &Monitor, cap: &mut Frame) -> Result<(), Self::Error> {
-        *cap = self.capture_display_frame(display)?;
+    fn update_monitor_frame(&self, monitor_id: u32, cap: &mut Frame) -> Result<(), Self::Error> {
+        *cap = self.capture_monitor_frame(monitor_id)?;
         Ok(())
     }
 
-    fn capture_window_frame(&self, display: &Window) -> Result<Frame, Self::Error>;
+    fn capture_window_frame(&self, window_id: u32) -> Result<Frame, Self::Error>;
 
-    fn update_window_frame(&self, window: &Window, cap: &mut Frame) -> Result<(), Self::Error> {
-        *cap = self.capture_window_frame(window)?;
+    fn update_window_frame(&self, window_id: u32, cap: &mut Frame) -> Result<(), Self::Error> {
+        *cap = self.capture_window_frame(window_id)?;
         Ok(())
     }
 }
@@ -148,11 +148,11 @@ pub(crate) mod dummy {
             unimplemented!()
         }
 
-        fn capture_display_frame(&self, _display: &Monitor) -> Result<Frame, Infallible> {
+        fn capture_monitor_frame(&self, _monitor_id: u32) -> Result<Frame, Infallible> {
             unimplemented!()
         }
 
-        fn capture_window_frame(&self, _display: &Window) -> Result<Frame, Infallible> {
+        fn capture_window_frame(&self, _monitor_id: u32) -> Result<Frame, Infallible> {
             unimplemented!()
         }
     }

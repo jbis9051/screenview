@@ -1,9 +1,20 @@
 use std::{ffi::CStr, ops::Deref, os::raw::c_uchar, slice::from_raw_parts};
 
 use cocoa::{
-    appkit::{NSColorSpace, NSPasteboard, NSPasteboardTypeString, NSScreen},
+    appkit::{NSApp, NSColorSpace, NSEvent, NSPasteboard, NSPasteboardTypeString, NSScreen},
     base::{id, nil},
-    foundation::{NSArray, NSData, NSDictionary, NSString, NSUInteger},
+    foundation::{
+        NSArray,
+        NSData,
+        NSDate,
+        NSDefaultRunLoopMode,
+        NSDictionary,
+        NSPoint,
+        NSRect,
+        NSRunLoop,
+        NSString,
+        NSUInteger,
+    },
 };
 use core_foundation::{
     base::FromVoid,
@@ -42,6 +53,7 @@ use core_graphics::{
 use core_graphics_types::{base::CGFloat, geometry::CGPoint};
 use image::RgbImage;
 use libc::c_void;
+use objc::{runtime::BOOL, *};
 
 use crate::{
     api::*,
@@ -49,15 +61,45 @@ use crate::{
     mac::Error::*,
 };
 
+struct MacMonitor {
+    id: u32,
+    name: String,
+    rect: NSRect,
+}
+
+struct MacMousePosition {
+    point: NSPoint,
+    monitor: MacMonitor,
+}
+
 pub struct MacApi {
     modifier_keys: CGEventFlags,
+    _nsapplication: id,
 }
+
+extern "C" {
+    fn NSMouseInRect(aPoint: NSPoint, aRect: NSRect, flipped: BOOL) -> BOOL;
+}
+
 
 impl MacApi {
     pub fn new() -> Result<Self, Error> {
         Ok(Self {
             modifier_keys: CGEventFlags::empty(),
+            _nsapplication: unsafe { NSApp() },
         })
+    }
+
+    /// runs an AppKit loop once, fixing caching issues with getting monitors
+    fn run_loop() {
+        let run_loop: id = unsafe { NSRunLoop::currentRunLoop() };
+
+        let _: id = unsafe {
+            msg_send![run_loop,
+                runMode: NSDefaultRunLoopMode
+                beforeDate: NSDate::distantPast(nil)
+            ]
+        };
     }
 
     fn cgstring_to_string(cf_ref: CFStringRef) -> Option<String> {
@@ -111,26 +153,10 @@ impl MacApi {
         true
     }
 
-    fn set_clipboard_content_mac(type_name: id, content: &[u8]) -> Result<(), Error> {
-        let paste_board = unsafe { NSPasteboard::generalPasteboard(nil) };
-        unsafe { NSPasteboard::clearContents(paste_board) };
-        let data = unsafe {
-            NSData::dataWithBytes_length_(
-                nil,
-                content.as_ptr() as *const c_void,
-                content.len() as NSUInteger,
-            )
-        };
-        if unsafe { NSPasteboard::setData_forType(paste_board, data, type_name) } {
-            return Ok(());
-        }
-        Err(ClipboardSetError("Generic".to_string()))
-    }
-
     fn cgimage_to_frame(image: &CGImage) -> Result<Frame, ()> {
         let bytes_per_pixel = image.bits_per_pixel() / 8;
         if bytes_per_pixel != 4 {
-            // TODO error
+            return Err(());
         }
         let data = image.data();
         let rgba = data.bytes();
@@ -157,6 +183,77 @@ impl MacApi {
                 .expect("couldn't convert"),
         )
     }
+
+    fn set_clipboard_content_impl(type_name: id, content: &[u8]) -> Result<(), Error> {
+        let paste_board = unsafe { NSPasteboard::generalPasteboard(nil) };
+        unsafe { NSPasteboard::clearContents(paste_board) };
+        let data = unsafe {
+            NSData::dataWithBytes_length_(
+                nil,
+                content.as_ptr() as *const c_void,
+                content.len() as NSUInteger,
+            )
+        };
+        if unsafe { NSPasteboard::setData_forType(paste_board, data, type_name) } {
+            return Ok(());
+        }
+        Err(ClipboardSetError("Generic".to_string()))
+    }
+
+    fn monitors_impl(&self) -> Result<Vec<MacMonitor>, Error> {
+        MacApi::run_loop();
+
+        let display = unsafe { NSScreen::screens(nil) };
+        let count = unsafe { NSArray::count(display) };
+        let mut monitors = Vec::with_capacity(count as usize);
+        for i in 0 .. count {
+            let nsscreen = unsafe { NSArray::objectAtIndex(display, i) };
+            let nsrect = unsafe { NSScreen::frame(nsscreen) };
+            let nsdictionary = unsafe { NSScreen::deviceDescription(nsscreen) };
+            let nsnumber = unsafe {
+                NSDictionary::objectForKey_(
+                    nsdictionary,
+                    NSString::alloc(nil).init_str("NSScreenNumber"),
+                )
+            };
+            let mut number: u32 = 0u32;
+            if !unsafe {
+                CFNumberGetValue(
+                    nsnumber as CFNumberRef,
+                    kCFNumberIntType,
+                    (&mut number) as *mut _ as *mut c_void,
+                )
+            } {
+                continue;
+            };
+            let name = unsafe {
+                CStr::from_ptr(NSString::UTF8String(nsscreen.localizedName()))
+                    .to_str()
+                    .map_err(|_| NSStringError)?
+                    .to_owned()
+            };
+            monitors.push(MacMonitor {
+                id: number,
+                name,
+                rect: nsrect,
+            });
+        }
+        Ok(monitors)
+    }
+
+    fn pointer_position_impl(&self) -> Result<MacMousePosition, Error> {
+        let nspoint = unsafe { NSEvent::mouseLocation(nil) };
+        let monitor = self
+            .monitors_impl()?
+            .into_iter()
+            .find(|m| unsafe { NSMouseInRect(nspoint, m.rect, false) })
+            .ok_or(Error::MonitorNotFound)?;
+
+        Ok(MacMousePosition {
+            point: nspoint,
+            monitor,
+        })
+    }
 }
 
 impl NativeApiTemplate for MacApi {
@@ -175,24 +272,31 @@ impl NativeApiTemplate for MacApi {
     }
 
     fn pointer_position(&self) -> Result<MousePosition, Error> {
-        let source = CGEventSource::new(CGEventSourceStateID::CombinedSessionState)
-            .map_err(|_| UnableToCreateCGSource)?;
-        let event = CGEvent::new(source).map_err(|_| CGEventError)?;
-        let point = event.location();
+        let position = self.pointer_position_impl()?;
         Ok(MousePosition {
-            x: point.x as u32,
-            y: point.y as u32,
-            monitor_id: 0,
+            x: (position.point.x - position.monitor.rect.origin.x) as u32,
+            y: (position.monitor.rect.size.height
+                - position.point.y
+                - position.monitor.rect.origin.y) as u32,
+            monitor_id: position.monitor.id as u8,
         })
     }
 
     fn set_pointer_position(&self, pos: MousePosition) -> Result<(), Error> {
         let source = CGEventSource::new(CGEventSourceStateID::CombinedSessionState)
             .map_err(|_| UnableToCreateCGSource)?;
+        let monitor = self
+            .monitors_impl()?
+            .into_iter()
+            .find(|m| m.id == pos.monitor_id as u32)
+            .ok_or(MonitorNotFound)?;
         let event = CGEvent::new_mouse_event(
             source,
             CGEventType::MouseMoved,
-            CGPoint::new(pos.x as CGFloat, pos.y as CGFloat),
+            CGPoint::new(
+                pos.x as CGFloat + monitor.rect.origin.x,
+                pos.y as CGFloat + monitor.rect.origin.y,
+            ), // CGEvent uses origin of upper left I guess
             CGMouseButton::Left,
         )
         .map_err(|_| CGEventError)?;
@@ -249,9 +353,11 @@ impl NativeApiTemplate for MacApi {
                 scroll_event.post(CGEventTapLocation::Session);
             }
             _ => {
-                let mouse_position = self.pointer_position()?;
-                let mouse_position =
-                    CGPoint::new(mouse_position.x as CGFloat, mouse_position.y as CGFloat);
+                let mouse_position = self.pointer_position_impl()?;
+                let mouse_position = CGPoint::new(
+                    mouse_position.point.x as CGFloat,
+                    mouse_position.point.y as CGFloat,
+                );
                 let mouse_type = match button {
                     MouseButton::Left =>
                         if down {
@@ -305,7 +411,7 @@ impl NativeApiTemplate for MacApi {
         if data == nil {
             return Err(ClipboardNotFound(type_name.to_string()));
         }
-        Ok(Self::nsdata_to_vec(data)) // TODO may be null terminated :(
+        Ok(Self::nsdata_to_vec(data))
     }
 
     fn set_clipboard_content(
@@ -320,47 +426,20 @@ impl NativeApiTemplate for MacApi {
                     NSString::alloc(nil).init_str(type_name.as_str()),
             }
         };
-        MacApi::set_clipboard_content_mac(type_name, content)
+        MacApi::set_clipboard_content_impl(type_name, content)
     }
 
     fn monitors(&mut self) -> Result<Vec<Monitor>, Error> {
-        let display = unsafe { NSScreen::screens(nil) };
-        let count = unsafe { NSArray::count(display) };
-        let mut monitors = Vec::with_capacity(count as usize);
-        for i in 0 .. count {
-            let nsscreen = unsafe { NSArray::objectAtIndex(display, i) };
-            let nsrect = unsafe { NSScreen::frame(nsscreen) };
-            let nsdictionary = unsafe { NSScreen::deviceDescription(nsscreen) };
-            let nsnumber = unsafe {
-                NSDictionary::objectForKey_(
-                    nsdictionary,
-                    NSString::alloc(nil).init_str("NSScreenNumber"),
-                )
-            };
-            let mut number: u32 = 0u32;
-            if !unsafe {
-                CFNumberGetValue(
-                    nsnumber as CFNumberRef,
-                    kCFNumberIntType,
-                    (&mut number) as *mut _ as *mut c_void,
-                )
-            } {
-                continue;
-            };
-            let name = unsafe {
-                CStr::from_ptr(NSString::UTF8String(nsscreen.localizedName()))
-                    .to_str()
-                    .map_err(|_| NSStringError)?
-                    .to_owned()
-            };
-            monitors.push(Monitor {
-                id: number,
-                name,
-                width: nsrect.size.width as u32,
-                height: nsrect.size.height as u32,
-            });
-        }
-        Ok(monitors)
+        Ok(self
+            .monitors_impl()?
+            .into_iter()
+            .map(|m| Monitor {
+                id: m.id,
+                name: m.name,
+                width: m.rect.size.width as u32,
+                height: m.rect.size.height as u32,
+            })
+            .collect())
     }
 
     fn windows(&mut self) -> Result<Vec<Window>, Error> {
@@ -454,23 +533,23 @@ impl NativeApiTemplate for MacApi {
         Ok(windows)
     }
 
-    fn capture_display_frame(&self, display: &Monitor) -> Result<Frame, Error> {
-        let core_display = CGDisplay::new(display.id);
+    fn capture_monitor_frame(&self, monitor_id: u32) -> Result<Frame, Error> {
+        let core_display = CGDisplay::new(monitor_id);
         let frame = core_display
             .image()
-            .ok_or_else(|| CaptureDisplayError(display.name.clone()))?;
-        MacApi::cgimage_to_frame(&frame).map_err(|_| CaptureDisplayError(display.name.clone()))
+            .ok_or_else(|| CaptureDisplayError(monitor_id.to_string()))?;
+        MacApi::cgimage_to_frame(&frame).map_err(|_| CaptureDisplayError(monitor_id.to_string()))
     }
 
-    fn capture_window_frame(&self, window: &Window) -> Result<Frame, Error> {
+    fn capture_window_frame(&self, window_id: u32) -> Result<Frame, Error> {
         let image = CGDisplay::screenshot(
             unsafe { CGRectNull },
             kCGWindowListOptionIncludingWindow,
-            window.id,
+            window_id,
             kCGWindowImageBoundsIgnoreFraming,
         )
-        .ok_or_else(|| CaptureDisplayError(window.name.clone()))?;
-        MacApi::cgimage_to_frame(&image).map_err(|_| CaptureDisplayError(window.name.clone()))
+        .ok_or_else(|| CaptureDisplayError(window_id.to_string()))?;
+        MacApi::cgimage_to_frame(&image).map_err(|_| CaptureDisplayError(window_id.to_string()))
     }
 }
 
@@ -496,4 +575,6 @@ pub enum Error {
     NSPasteboardError,
     #[error("Error occurred with NSString API")]
     NSStringError,
+    #[error("Couldn't find a matching monitor with the mouse position")]
+    MonitorNotFound,
 }
