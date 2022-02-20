@@ -1,9 +1,29 @@
 use std::{ffi::CStr, ops::Deref, os::raw::c_uchar, slice::from_raw_parts};
 
 use cocoa::{
-    appkit::{NSColorSpace, NSPasteboard, NSPasteboardTypeString, NSScreen},
+    appkit::{
+        NSApp,
+        NSApplication,
+        NSColorSpace,
+        NSEvent,
+        NSPasteboard,
+        NSPasteboardTypeString,
+        NSScreen,
+    },
     base::{id, nil},
-    foundation::{NSArray, NSData, NSDictionary, NSString, NSUInteger},
+    foundation::{
+        NSArray,
+        NSData,
+        NSDate,
+        NSDefaultRunLoopMode,
+        NSDictionary,
+        NSPoint,
+        NSRect,
+        NSRunLoop,
+        NSSize,
+        NSString,
+        NSUInteger,
+    },
 };
 use core_foundation::{
     base::FromVoid,
@@ -42,6 +62,7 @@ use core_graphics::{
 use core_graphics_types::{base::CGFloat, geometry::CGPoint};
 use image::RgbImage;
 use libc::c_void;
+use objc::{runtime::BOOL, *};
 
 use crate::{
     api::*,
@@ -49,15 +70,41 @@ use crate::{
     mac::Error::*,
 };
 
+struct MacMonitor {
+    id: u32,
+    name: String,
+    rect: NSRect,
+}
+
 pub struct MacApi {
     modifier_keys: CGEventFlags,
+    _nsapplication: id,
 }
+
+extern "C" {
+    fn NSMouseInRect(aPoint: NSPoint, aRect: NSRect, flipped: BOOL) -> BOOL;
+}
+
 
 impl MacApi {
     pub fn new() -> Result<Self, Error> {
         Ok(Self {
             modifier_keys: CGEventFlags::empty(),
+            _nsapplication: unsafe { NSApp() },
         })
+    }
+
+    /// runs an AppKit loop once, fixing caching issues with getting monitors
+    fn run_loop() {
+        let run_loop: id = unsafe { NSRunLoop::currentRunLoop() };
+
+
+        let _: id = unsafe {
+            msg_send![run_loop,
+                runMode: NSDefaultRunLoopMode
+                beforeDate: NSDate::distantPast(nil)
+            ]
+        };
     }
 
     fn cgstring_to_string(cf_ref: CFStringRef) -> Option<String> {
@@ -111,22 +158,6 @@ impl MacApi {
         true
     }
 
-    fn set_clipboard_content_mac(type_name: id, content: &[u8]) -> Result<(), Error> {
-        let paste_board = unsafe { NSPasteboard::generalPasteboard(nil) };
-        unsafe { NSPasteboard::clearContents(paste_board) };
-        let data = unsafe {
-            NSData::dataWithBytes_length_(
-                nil,
-                content.as_ptr() as *const c_void,
-                content.len() as NSUInteger,
-            )
-        };
-        if unsafe { NSPasteboard::setData_forType(paste_board, data, type_name) } {
-            return Ok(());
-        }
-        Err(ClipboardSetError("Generic".to_string()))
-    }
-
     fn cgimage_to_frame(image: &CGImage) -> Result<Frame, ()> {
         let bytes_per_pixel = image.bits_per_pixel() / 8;
         if bytes_per_pixel != 4 {
@@ -157,6 +188,63 @@ impl MacApi {
                 .expect("couldn't convert"),
         )
     }
+
+    fn set_clipboard_content_impl(type_name: id, content: &[u8]) -> Result<(), Error> {
+        let paste_board = unsafe { NSPasteboard::generalPasteboard(nil) };
+        unsafe { NSPasteboard::clearContents(paste_board) };
+        let data = unsafe {
+            NSData::dataWithBytes_length_(
+                nil,
+                content.as_ptr() as *const c_void,
+                content.len() as NSUInteger,
+            )
+        };
+        if unsafe { NSPasteboard::setData_forType(paste_board, data, type_name) } {
+            return Ok(());
+        }
+        Err(ClipboardSetError("Generic".to_string()))
+    }
+
+    fn monitors_impl(&self) -> Result<Vec<MacMonitor>, Error> {
+        MacApi::run_loop();
+
+        let display = unsafe { NSScreen::screens(nil) };
+        let count = unsafe { NSArray::count(display) };
+        let mut monitors = Vec::with_capacity(count as usize);
+        for i in 0 .. count {
+            let nsscreen = unsafe { NSArray::objectAtIndex(display, i) };
+            let nsrect = unsafe { NSScreen::frame(nsscreen) };
+            let nsdictionary = unsafe { NSScreen::deviceDescription(nsscreen) };
+            let nsnumber = unsafe {
+                NSDictionary::objectForKey_(
+                    nsdictionary,
+                    NSString::alloc(nil).init_str("NSScreenNumber"),
+                )
+            };
+            let mut number: u32 = 0u32;
+            if !unsafe {
+                CFNumberGetValue(
+                    nsnumber as CFNumberRef,
+                    kCFNumberIntType,
+                    (&mut number) as *mut _ as *mut c_void,
+                )
+            } {
+                continue;
+            };
+            let name = unsafe {
+                CStr::from_ptr(NSString::UTF8String(nsscreen.localizedName()))
+                    .to_str()
+                    .map_err(|_| NSStringError)?
+                    .to_owned()
+            };
+            monitors.push(MacMonitor {
+                id: number,
+                name,
+                rect: nsrect,
+            });
+        }
+        Ok(monitors)
+    }
 }
 
 impl NativeApiTemplate for MacApi {
@@ -175,14 +263,17 @@ impl NativeApiTemplate for MacApi {
     }
 
     fn pointer_position(&self) -> Result<MousePosition, Error> {
-        let source = CGEventSource::new(CGEventSourceStateID::CombinedSessionState)
-            .map_err(|_| UnableToCreateCGSource)?;
-        let event = CGEvent::new(source).map_err(|_| CGEventError)?;
-        let point = event.location();
+        let nspoint = unsafe { NSEvent::mouseLocation(nil) };
+        let monitors = self.monitors_impl()?;
+        let monitor = monitors
+            .iter()
+            .find(|m| unsafe { NSMouseInRect(nspoint, m.rect, false) })
+            .ok_or(Error::MonitorNotFound)?;
+
         Ok(MousePosition {
-            x: point.x as u32,
-            y: point.y as u32,
-            monitor_id: 0,
+            x: (nspoint.x - monitor.rect.origin.x) as u32,
+            y: (monitor.rect.size.height - nspoint.y - monitor.rect.origin.y) as u32,
+            monitor_id: monitor.id as u8,
         })
     }
 
@@ -320,47 +411,20 @@ impl NativeApiTemplate for MacApi {
                     NSString::alloc(nil).init_str(type_name.as_str()),
             }
         };
-        MacApi::set_clipboard_content_mac(type_name, content)
+        MacApi::set_clipboard_content_impl(type_name, content)
     }
 
     fn monitors(&mut self) -> Result<Vec<Monitor>, Error> {
-        let display = unsafe { NSScreen::screens(nil) };
-        let count = unsafe { NSArray::count(display) };
-        let mut monitors = Vec::with_capacity(count as usize);
-        for i in 0 .. count {
-            let nsscreen = unsafe { NSArray::objectAtIndex(display, i) };
-            let nsrect = unsafe { NSScreen::frame(nsscreen) };
-            let nsdictionary = unsafe { NSScreen::deviceDescription(nsscreen) };
-            let nsnumber = unsafe {
-                NSDictionary::objectForKey_(
-                    nsdictionary,
-                    NSString::alloc(nil).init_str("NSScreenNumber"),
-                )
-            };
-            let mut number: u32 = 0u32;
-            if !unsafe {
-                CFNumberGetValue(
-                    nsnumber as CFNumberRef,
-                    kCFNumberIntType,
-                    (&mut number) as *mut _ as *mut c_void,
-                )
-            } {
-                continue;
-            };
-            let name = unsafe {
-                CStr::from_ptr(NSString::UTF8String(nsscreen.localizedName()))
-                    .to_str()
-                    .map_err(|_| NSStringError)?
-                    .to_owned()
-            };
-            monitors.push(Monitor {
-                id: number,
-                name,
-                width: nsrect.size.width as u32,
-                height: nsrect.size.height as u32,
-            });
-        }
-        Ok(monitors)
+        Ok(self
+            .monitors_impl()?
+            .into_iter()
+            .map(|m| Monitor {
+                id: m.id,
+                name: m.name,
+                width: m.rect.size.width as u32,
+                height: m.rect.size.height as u32,
+            })
+            .collect())
     }
 
     fn windows(&mut self) -> Result<Vec<Window>, Error> {
@@ -496,4 +560,6 @@ pub enum Error {
     NSPasteboardError,
     #[error("Error occurred with NSString API")]
     NSStringError,
+    #[error("Couldn't find a matching monitor with the mouse position")]
+    MonitorNotFound,
 }
