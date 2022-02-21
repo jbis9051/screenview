@@ -3,6 +3,7 @@ pub mod rvd;
 pub mod sel_handler;
 pub mod svsc_handler;
 pub mod wpskka;
+
 use crate::services::helpers::cipher_reliable_peer::CipherError;
 use common::messages::{
     rvd::RvdMessage,
@@ -41,141 +42,92 @@ pub struct ScreenViewHandler {
 
 impl ScreenViewHandler {
     pub fn send(&mut self, message: ScreenViewMessage) -> Result<(), SendError> {
-        let sel_handler = &self.sel;
-        let svsc_handler = &self.svsc;
-        let wpskka_handler = &mut self.wpskka;
-        let io_handle = &mut self.io_handle;
-
         match message {
-            ScreenViewMessage::RvdMessage(rvd) =>
-                Self::send_rvd(io_handle, sel_handler, svsc_handler, wpskka_handler, rvd),
-            ScreenViewMessage::WpskkaMessage(wpskka) =>
-                Self::send_wpskka(io_handle, sel_handler, svsc_handler, wpskka),
-            ScreenViewMessage::SvscMessage(svsc) =>
-                Self::send_svsc(io_handle, sel_handler, svsc_handler, svsc, true),
-            ScreenViewMessage::SelMessage(sel) => {
-                let reliable = matches!(sel, SelMessage::TransportDataMessageReliable(_));
-                Self::send_sel(io_handle, sel, reliable)
-            }
+            ScreenViewMessage::RvdMessage(rvd) => self.send_rvd(rvd),
+            ScreenViewMessage::WpskkaMessage(wpskka) => self.send_wpskka(wpskka),
+            ScreenViewMessage::SvscMessage(svsc) => self.send_svsc(svsc, true),
+            ScreenViewMessage::SelMessage(sel) => self.send_sel(sel),
         }
     }
 
     pub fn handle(&mut self, message: SelMessage) -> Result<Vec<InformEvent>, HandlerError> {
-        let sel = &mut self.sel;
-        let svsc = &mut self.svsc;
-        let wpskka = &mut self.wpskka;
-        let rvd = &mut self.rvd;
-        let io_handle = &mut self.io_handle;
         let mut events = Vec::new();
 
-        let svsc_data = sel.handle(message)?;
+        let svsc_data = self.sel.handle(message)?;
         let svsc_message = SvscMessage::read(&mut Cursor::new(&svsc_data[..]))?;
-        let wpskka_data = match svsc.handle(svsc_message, &mut events)? {
+
+        let wpskka_data = match self.svsc.handle(svsc_message, &mut events)? {
             Some(data) => data,
             None => return Ok(events),
         };
         let wpskka_message = WpskkaMessage::read(&mut Cursor::new(&wpskka_data[..]))?;
-        let rvd_data = wpskka.handle(
-            wpskka_message,
-            |msg| Self::send_wpskka(io_handle, sel, svsc, msg),
-            &mut events,
-        )?;
+        let mut send_wpskka = Vec::new();
+        let rvd_data = self
+            .wpskka
+            .handle(wpskka_message, &mut send_wpskka, &mut events)?;
+        for message in send_wpskka {
+            self.send_wpskka(message)?;
+        }
+
         let rvd_data = match rvd_data {
             Some(data) => data,
             None => return Ok(events),
         };
         let rvd_message = RvdMessage::read(&mut Cursor::new(&rvd_data[..]))?;
-        rvd.handle(
-            rvd_message,
-            |msg| Self::send_rvd(io_handle, sel, svsc, wpskka, msg),
-            &mut events,
-        )?;
-
+        let mut send_rvd = Vec::new();
+        self.rvd.handle(rvd_message, &mut send_rvd, &mut events)?;
+        for message in send_rvd {
+            self.send_rvd(message)?;
+        }
         Ok(events)
     }
 
-    fn send_rvd(
-        io_handle: &mut NativeIoHandle,
-        sel_handler: &SelHandler,
-        svsc_handler: &SvscHandler,
-        wpskka_handler: &mut WpskkaHandler,
-        rvd: RvdMessage,
-    ) -> Result<(), SendError> {
+    fn send_rvd(&mut self, rvd: RvdMessage) -> Result<(), SendError> {
         let data = rvd.to_bytes()?;
 
         match rvd {
             RvdMessage::FrameData(_) => {
-                let cipher = &**wpskka_handler.unreliable_cipher();
+                let cipher = self.wpskka.unreliable_cipher();
                 let wpskka = WpskkaHandler::wrap_unreliable(data, cipher)?;
-                Self::send_wpskka(
-                    io_handle,
-                    sel_handler,
-                    svsc_handler,
-                    WpskkaMessage::TransportDataMessageUnreliable(wpskka),
-                )
+                self.send_wpskka(WpskkaMessage::TransportDataMessageUnreliable(wpskka))
             }
             _ => {
-                let wpskka = wpskka_handler.wrap_reliable(data)?;
-                Self::send_wpskka(
-                    io_handle,
-                    sel_handler,
-                    svsc_handler,
-                    WpskkaMessage::TransportDataMessageReliable(wpskka),
-                )
+                let wpskka = self.wpskka.wrap_reliable(data)?;
+                self.send_wpskka(WpskkaMessage::TransportDataMessageReliable(wpskka))
             }
         }
     }
 
-    fn send_wpskka(
-        io_handle: &mut NativeIoHandle,
-        sel_handler: &SelHandler,
-        svsc_handler: &SvscHandler,
-        wpskka: WpskkaMessage,
-    ) -> Result<(), SendError> {
-        let data = wpskka.to_bytes()?;
+    fn send_wpskka(&self, message: WpskkaMessage) -> Result<(), SendError> {
+        let data = message.to_bytes()?;
         let svsc = SvscHandler::wrap(data);
-        let reliable = !matches!(wpskka, WpskkaMessage::TransportDataMessageUnreliable(_));
-        Self::send_svsc(
-            io_handle,
-            sel_handler,
-            svsc_handler,
-            SvscMessage::SessionDataSend(svsc),
-            reliable,
-        )
+        let reliable = !matches!(message, WpskkaMessage::TransportDataMessageUnreliable(_));
+        self.send_svsc(SvscMessage::SessionDataSend(svsc), reliable)
     }
 
-    fn send_svsc(
-        io_handle: &mut NativeIoHandle,
-        sel_handler: &SelHandler,
-        svsc_handler: &SvscHandler,
-        svsc: SvscMessage,
-        reliable: bool,
-    ) -> Result<(), SendError> {
-        let data = svsc.to_bytes()?;
+    fn send_svsc(&self, message: SvscMessage, reliable: bool) -> Result<(), SendError> {
+        let data = message.to_bytes()?;
 
         let sel = if reliable {
             SelMessage::TransportDataMessageReliable(SelHandler::wrap_reliable(data))
         } else {
-            let cipher = &**sel_handler.unreliable_cipher();
+            let cipher = self.sel.unreliable_cipher();
             SelMessage::TransportDataPeerMessageUnreliable(SelHandler::wrap_unreliable(
                 data,
-                *svsc_handler.peer_id().unwrap(),
+                *self.svsc.peer_id().unwrap(),
                 cipher,
             )?)
         };
 
-        Self::send_sel(io_handle, sel, reliable)
+        self.send_sel(sel)
     }
 
-    fn send_sel(
-        io_handle: &mut NativeIoHandle,
-        sel: SelMessage,
-        reliable: bool,
-    ) -> Result<(), SendError> {
-        let sent = if reliable {
-            io_handle.send_reliable(sel)
-        } else {
-            io_handle.send_unreliable(sel)
+    fn send_sel(&self, sel: SelMessage) -> Result<(), SendError> {
+        let sent = match sel {
+            SelMessage::TransportDataMessageReliable(_) => self.io_handle.send_reliable(sel),
+            SelMessage::TransportDataPeerMessageUnreliable(_) =>
+                self.io_handle.send_unreliable(sel),
+            _ => unreachable!(),
         };
 
         if sent {
@@ -215,4 +167,6 @@ pub enum HandlerError {
     Wpskka(#[from] WpskkaError),
     #[error("RVD handler error: {0}")]
     Rvd(#[from] RvdError),
+    #[error("send error: {0}")]
+    SendError(#[from] SendError),
 }

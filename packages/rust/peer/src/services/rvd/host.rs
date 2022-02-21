@@ -69,8 +69,11 @@ impl RvdHostHandler {
             .contains(AccessMask::CONTROLLABLE))
     }
 
-    pub fn handle<F>(&mut self, msg: RvdMessage, mut write: F) -> Result<(), RvdHostError>
-    where F: FnMut(RvdMessage) -> Result<(), SendError> {
+    pub fn handle(
+        &mut self,
+        msg: RvdMessage,
+        mut write: &mut Vec<RvdMessage>,
+    ) -> Result<(), RvdHostError> {
         match self.state {
             HostState::Handshake => match msg {
                 RvdMessage::ProtocolVersionResponse(msg) => {

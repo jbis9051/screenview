@@ -68,11 +68,8 @@ impl WpskkaClientHandler {
     pub fn process_password<F>(
         &mut self,
         password: &[u8],
-        write: F,
-    ) -> Result<(), WpskkaClientError>
-    where
-        F: Fn(ScreenViewMessage) -> Result<(), SendError>,
-    {
+        write: &mut Vec<WpskkaMessage>,
+    ) -> Result<(), WpskkaClientError> {
         self.password = Some(password.to_vec());
         if let Some(auth) = self.current_auth.as_mut() {
             return match &mut **auth {
@@ -80,13 +77,11 @@ impl WpskkaClientHandler {
                     let outgoing = client
                         .process_password(password)
                         .map_err(|_| WpskkaClientError::BadAuthSchemeMessage)?;
-                    write(ScreenViewMessage::WpskkaMessage(
-                        WpskkaMessage::AuthMessage(AuthMessage {
-                            data: outgoing
-                                .to_bytes()
-                                .map_err(|_| WpskkaClientError::BadAuthSchemeMessage)?,
-                        }),
-                    ))?;
+                    write.push(WpskkaMessage::AuthMessage(AuthMessage {
+                        data: outgoing
+                            .to_bytes()
+                            .map_err(|_| WpskkaClientError::BadAuthSchemeMessage)?,
+                    }));
                     Ok(())
                 }
                 _ => Ok(()),
@@ -95,14 +90,11 @@ impl WpskkaClientHandler {
         Ok(())
     }
 
-    pub fn next_auth<F>(
+    pub fn next_auth(
         &mut self,
-        mut write: F,
+        write: &mut Vec<WpskkaMessage>,
         events: &mut Vec<InformEvent>,
-    ) -> Result<(), WpskkaClientError>
-    where
-        F: FnMut(WpskkaMessage) -> Result<(), SendError>,
-    {
+    ) -> Result<(), WpskkaClientError> {
         while self.current_auth_num < self.available_auth_schemes.len() {
             let current_auth = self.available_auth_schemes[self.current_auth_num];
             self.current_auth_num += 1;
@@ -114,10 +106,10 @@ impl WpskkaClientHandler {
                 self.current_auth = Some(Box::new(AuthScheme::SrpAuthClient(SrpAuthClient::new(
                     self.keys.as_ref().unwrap().1.clone(),
                 ))));
-                write(WpskkaMessage::TryAuth(TryAuth {
+                write.push(WpskkaMessage::TryAuth(TryAuth {
                     public_key: self.keys.as_ref().unwrap().1.as_ref().try_into().unwrap(), // send our public key
                     auth_scheme: current_auth,
-                }))?;
+                }));
                 self.state = State::IsAuthenticating;
                 return Ok(());
             }
@@ -130,15 +122,12 @@ impl WpskkaClientHandler {
         Ok(())
     }
 
-    pub fn handle<F>(
+    pub fn handle(
         &mut self,
         msg: WpskkaMessage,
-        write: F,
+        write: &mut Vec<WpskkaMessage>,
         events: &mut Vec<InformEvent>,
-    ) -> Result<Option<Vec<u8>>, WpskkaClientError>
-    where
-        F: FnMut(WpskkaMessage) -> Result<(), SendError>,
-    {
+    ) -> Result<Option<Vec<u8>>, WpskkaClientError> {
         match self.state {
             State::WaitingForAuthSchemes => match msg {
                 WpskkaMessage::AuthScheme(msg) => {
@@ -266,9 +255,6 @@ pub enum WpskkaClientError {
     BadAuthSchemeType(AuthSchemeType),
     #[error("BadAuthSchemeMessage")]
     BadAuthSchemeMessage,
-
-    #[error("write error")]
-    WriteError(#[from] SendError),
 
     #[error("ring error")]
     RingError,

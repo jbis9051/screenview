@@ -61,14 +61,11 @@ impl WpskkaHostHandler {
         self.unreliable.as_ref().unwrap()
     }
 
-    pub fn handle_try_auth<F>(
+    pub fn handle_try_auth(
         &mut self,
         msg: TryAuth,
-        mut write: F,
-    ) -> Result<(), WpskkaHostError>
-    where
-        F: FnMut(WpskkaMessage) -> Result<(), SendError>,
-    {
+        write: &mut Vec<WpskkaMessage>,
+    ) -> Result<(), WpskkaHostError> {
         match msg.auth_scheme {
             AuthSchemeType::Invalid => Err(WpskkaHostError::BadAuthSchemeType(msg.auth_scheme)),
             // These are basically the same schemes just with different password sources, so we can handle it together
@@ -87,12 +84,11 @@ impl WpskkaHostHandler {
                 let mut srp = SrpAuthHost::new(keys.1.clone());
 
                 let outgoing = srp.init(password);
-                write(WpskkaMessage::AuthMessage(AuthMessage {
+                write.push(WpskkaMessage::AuthMessage(AuthMessage {
                     data: outgoing
                         .to_bytes()
                         .map_err(|_| WpskkaHostError::BadAuthSchemeMessage)?,
-                }))
-                .map_err(WpskkaHostError::WriteError)?;
+                }));
 
                 self.current_auth = Some(Box::new(AuthScheme::SrpAuthHost(srp)));
                 self.keys = Some(Box::new(keys));
@@ -104,15 +100,12 @@ impl WpskkaHostHandler {
         }
     }
 
-    pub fn handle<F>(
+    pub fn handle(
         &mut self,
         msg: WpskkaMessage,
-        mut write: F,
+        write: &mut Vec<WpskkaMessage>,
         events: &mut Vec<InformEvent>,
-    ) -> Result<Option<Vec<u8>>, WpskkaHostError>
-    where
-        F: FnMut(WpskkaMessage) -> Result<(), SendError>,
-    {
+    ) -> Result<Option<Vec<u8>>, WpskkaHostError> {
         match self.state {
             State::PreAuthSelect => match msg {
                 WpskkaMessage::TryAuth(msg) => {
@@ -144,7 +137,7 @@ impl WpskkaHostHandler {
                                         self.current_auth = None; // TODO Security: Look into zeroing out the data here
                                         self.state = State::Authenticated;
                                     }
-                                    write(WpskkaMessage::AuthMessage(AuthMessage { data }))?;
+                                    write.push(WpskkaMessage::AuthMessage(AuthMessage { data }));
                                     Ok(None)
                                 }
                                 Err(err) => match err {
@@ -207,9 +200,6 @@ pub enum WpskkaHostError {
     BadAuthSchemeType(AuthSchemeType),
     #[error("BadAuthSchemeMessage")]
     BadAuthSchemeMessage,
-
-    #[error("write error")]
-    WriteError(#[from] SendError),
 
     #[error("ring error")]
     RingError,

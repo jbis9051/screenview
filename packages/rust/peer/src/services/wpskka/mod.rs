@@ -53,15 +53,12 @@ impl WpskkaHandler {
         })
     }
 
-    pub fn handle<F>(
+    pub fn handle(
         &mut self,
         msg: WpskkaMessage,
-        write: F,
+        write: &mut Vec<WpskkaMessage>,
         events: &mut Vec<InformEvent>,
-    ) -> Result<Option<Vec<u8>>, WpskkaError>
-    where
-        F: FnMut(WpskkaMessage) -> Result<(), SendError>,
-    {
+    ) -> Result<Option<Vec<u8>>, WpskkaError> {
         let data = match self {
             Self::Host(handler) => handler.handle(msg, write, events)?,
             Self::Client(handler) => handler.handle(msg, write, events)?,

@@ -51,22 +51,19 @@ impl RvdClientHandler {
         &self.permissions
     }
 
-    pub fn handle<F>(
+    pub fn handle(
         &mut self,
         msg: RvdMessage,
-        mut write: F,
+        write: &mut Vec<RvdMessage>,
         events: &mut Vec<InformEvent>,
-    ) -> Result<(), RvdClientError>
-    where
-        F: FnMut(RvdMessage) -> Result<(), SendError>,
-    {
+    ) -> Result<(), RvdClientError> {
         match self.state {
             ClientState::Handshake => match msg {
                 RvdMessage::ProtocolVersion(msg) => {
                     let ok = msg.version == SVSC_VERSION;
-                    write(RvdMessage::ProtocolVersionResponse(
+                    write.push(RvdMessage::ProtocolVersionResponse(
                         ProtocolVersionResponse { ok },
-                    ))?;
+                    ));
                     self.state = ClientState::Data;
                     if ok {
                         Ok(())
@@ -85,7 +82,7 @@ impl RvdClientHandler {
                 }
                 RvdMessage::DisplayChange(msg) => {
                     self.current_display_change = msg;
-                    write(RvdMessage::DisplayChangeReceived(DisplayChangeReceived {}))?;
+                    write.push(RvdMessage::DisplayChangeReceived(DisplayChangeReceived {}));
                     Ok(())
                 }
                 RvdMessage::MouseLocation(msg) => {
@@ -115,8 +112,6 @@ pub enum RvdClientError {
     WrongMessageForState(Box<RvdMessage>, ClientState),
     #[error("native error: {0}")]
     NativeError(#[from] NativeApiError),
-    #[error("write error")]
-    WriteError(#[from] SendError),
     #[error("permission error: cannot {0}")]
     PermissionsError(String),
 }
