@@ -1,14 +1,23 @@
 use crate::services::InformEvent;
 use common::messages::svsc::{
+    Cookie,
+    EstablishSessionRequest,
     EstablishSessionStatus,
     ExpirationTime,
+    KeepAlive,
+    LeaseExtensionRequest,
     LeaseExtensionResponse,
+    LeaseId,
+    LeaseRequest,
     LeaseResponseData,
     PeerId,
+    ProtocolVersionResponse,
     SessionData,
     SessionDataSend,
     SvscMessage,
 };
+
+pub const SVSC_VERSION: &str = "0.0.0";
 
 #[derive(Copy, Clone, Debug)]
 pub enum State {
@@ -53,19 +62,44 @@ impl SvscHandler {
         self.session.as_ref()
     }
 
+    pub fn lease_request(&mut self, cookie: Option<Cookie>) -> SvscMessage {
+        self.awaiting_lease_response = true;
+        SvscMessage::LeaseRequest(LeaseRequest { cookie })
+    }
+
+    pub fn lease_extension_request(&mut self, cookie: Cookie) -> SvscMessage {
+        self.awaiting_extension_response = true;
+        SvscMessage::LeaseExtensionRequest(LeaseExtensionRequest { cookie })
+    }
+
+    pub fn establish_session_request(&mut self, lease_id: LeaseId) -> SvscMessage {
+        self.awaiting_session_response = true;
+        SvscMessage::EstablishSessionRequest(EstablishSessionRequest { lease_id })
+    }
+
     pub fn handle(
         &mut self,
         msg: SvscMessage,
+        write: &mut Vec<SvscMessage>,
         event: &mut Vec<InformEvent>,
     ) -> Result<Option<Vec<u8>>, SvscError> {
+        if let SvscMessage::KeepAlive(_) = msg {
+            write.push(SvscMessage::KeepAlive(KeepAlive {}));
+            return Ok(None);
+        }
         match self.state {
             State::Handshake => match msg {
                 // initial message
-                SvscMessage::ProtocolVersionResponse(msg) => {
-                    if !msg.ok {
-                        return Err(SvscError::VersionBad);
+                SvscMessage::ProtocolVersion(msg) => {
+                    let check = msg.version == SVSC_VERSION; // TODO check version
+                    write.push(SvscMessage::ProtocolVersionResponse(
+                        ProtocolVersionResponse { ok: check },
+                    ));
+                    if !check {
+                        event.push(InformEvent::SvscInform(SvscInform::VersionBad));
+                    } else {
+                        self.state = State::PostHandshake;
                     }
-                    self.state = State::PostHandshake;
                     Ok(None)
                 }
                 _ => Err(SvscError::WrongMessageForState(Box::new(msg), self.state)),
@@ -109,8 +143,11 @@ impl SvscHandler {
                 }
 
                 SvscMessage::LeaseExtensionResponse(msg) => {
-                    if self.awaiting_extension_response {
-                        return Err(SvscError::UnexpectedExtension);
+                    if !self.awaiting_extension_response {
+                        return Err(SvscError::WrongMessageForState(
+                            Box::new(SvscMessage::LeaseExtensionResponse(msg)),
+                            self.state,
+                        ));
                     }
                     self.awaiting_extension_response = false;
                     event.push(InformEvent::SvscInform(match msg.new_expiration {
@@ -124,6 +161,29 @@ impl SvscHandler {
                     Ok(None)
                 }
 
+                SvscMessage::EstablishSessionNotification(msg) => {
+                    event.push(InformEvent::SvscInform(SvscInform::SessionUpdate));
+                    self.session = Some(msg.session_data);
+                    Ok(None)
+                }
+
+                SvscMessage::SessionEnd(msg) => {
+                    // TODO should we error if session doesn't exist
+                    event.push(InformEvent::SvscInform(SvscInform::SessionUpdate));
+                    self.session = None;
+                    Ok(None)
+                }
+
+                SvscMessage::SessionDataReceive(msg) => {
+                    if self.session.is_none() {
+                        return Err(SvscError::WrongMessageForState(
+                            Box::new(SvscMessage::SessionDataReceive(msg)),
+                            self.state,
+                        ));
+                    }
+                    Ok(Some(msg.data))
+                }
+
                 _ => Err(SvscError::WrongMessageForState(Box::new(msg), self.state)),
             },
         }
@@ -132,15 +192,13 @@ impl SvscHandler {
 
 #[derive(Debug, thiserror::Error)]
 pub enum SvscError {
-    #[error("server rejected version")]
-    VersionBad,
     #[error("invalid message {0:?} for state {1:?}")]
     WrongMessageForState(Box<SvscMessage>, State),
-    #[error("unexpected extension response")]
-    UnexpectedExtension,
 }
 
 pub enum SvscInform {
+    VersionBad,
+
     LeaseUpdate,
     SessionUpdate,
     SessionEnd,

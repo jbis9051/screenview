@@ -55,11 +55,19 @@ impl ScreenViewHandler {
 
         let svsc_data = self.sel.handle(message)?;
         let svsc_message = SvscMessage::read(&mut Cursor::new(&svsc_data[..]))?;
-
-        let wpskka_data = match self.svsc.handle(svsc_message, &mut events)? {
+        let mut send_svsc = Vec::new();
+        let wpskka_data = match self
+            .svsc
+            .handle(svsc_message, &mut send_svsc, &mut events)?
+        {
             Some(data) => data,
             None => return Ok(events),
         };
+
+        for message in send_svsc {
+            self.send_svsc(message, true)?;
+        }
+
         let wpskka_message = WpskkaMessage::read(&mut Cursor::new(&wpskka_data[..]))?;
         let mut send_wpskka = Vec::new();
         let rvd_data = self
@@ -79,6 +87,7 @@ impl ScreenViewHandler {
         for message in send_rvd {
             self.send_rvd(message)?;
         }
+
         Ok(events)
     }
 

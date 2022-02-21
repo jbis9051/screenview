@@ -96,10 +96,7 @@ fn test_establish_session_request() {
     let bytes = include_bytes!("binary/svsc/establish_session_request.bin");
     let message: EstablishSessionRequest =
         EstablishSessionRequest::read(&mut Cursor::new(bytes)).unwrap();
-    assert_eq!(
-        &message.lease_id,
-        &b"idid".as_slice().read_u32::<LittleEndian>().unwrap()
-    );
+    assert_eq!(&message.lease_id, b"idid");
     test_write(&message, bytes);
 }
 
@@ -108,10 +105,7 @@ fn test_establish_session_response_success() {
     let bytes = include_bytes!("binary/svsc/establish_session_response_success.bin");
     let message: EstablishSessionResponse =
         EstablishSessionResponse::read(&mut Cursor::new(bytes)).unwrap();
-    assert_eq!(
-        &message.lease_id,
-        &b"idid".as_slice().read_u32::<LittleEndian>().unwrap()
-    );
+    assert_eq!(&message.lease_id, b"idid");
     assert_eq!(&message.status, &EstablishSessionStatus::Success);
     assert!(&message.response_data.is_some());
     assert_eq!(
@@ -141,10 +135,7 @@ fn test_establish_session_response_error() {
     let bytes = include_bytes!("binary/svsc/establish_session_response_error.bin");
     let message: EstablishSessionResponse =
         EstablishSessionResponse::read(&mut Cursor::new(bytes)).unwrap();
-    assert_eq!(
-        &message.lease_id,
-        &b"idid".as_slice().read_u32::<LittleEndian>().unwrap()
-    );
+    assert_eq!(&message.lease_id, b"idid");
     assert_eq!(&message.status, &EstablishSessionStatus::IDNotFound);
     assert!(&message.response_data.is_none());
     test_write(&message, bytes);
