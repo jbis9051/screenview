@@ -2,7 +2,7 @@ use crate::services::{
     helpers::{
         cipher_reliable_peer::{CipherError, CipherReliablePeer},
         cipher_unreliable_peer::CipherUnreliablePeer,
-        wpskka_common::keypair,
+        wpskka_common::{keypair, KeyPair},
     },
     wpskka::auth::{
         srp_host::{SrpAuthHost, SrpHostError},
@@ -13,7 +13,13 @@ use crate::services::{
 };
 use common::messages::{
     auth::srp::SrpMessage,
-    wpskka::{AuthMessage, AuthSchemeType, TryAuth, WpskkaMessage},
+    wpskka::{
+        AuthMessage,
+        AuthScheme as AuthSchemeMessage,
+        AuthSchemeType,
+        TryAuth,
+        WpskkaMessage,
+    },
     MessageComponent,
 };
 use ring::agreement::{EphemeralPrivateKey, PublicKey};
@@ -37,8 +43,8 @@ pub struct WpskkaHostHandler {
     reliable: Option<CipherReliablePeer>,
     unreliable: Option<Arc<CipherUnreliablePeer>>,
 
-    keys: Option<Box<(EphemeralPrivateKey, PublicKey)>>,
-    client_public_key: Option<[u8; 16]>,
+    keys: Option<Box<KeyPair>>,
+    client_public_key: Option<[u8; 32]>,
 }
 
 impl WpskkaHostHandler {
@@ -63,6 +69,24 @@ impl WpskkaHostHandler {
         self.unreliable.as_ref().unwrap()
     }
 
+    /// Warning: this erases and regenerates keys on every call
+    pub fn auth_schemes(&mut self) -> Result<WpskkaMessage, WpskkaHostError> {
+        let keys = keypair().map_err(|_| WpskkaHostError::RingError)?;
+        let mut auth_schemes = Vec::new();
+        if self.static_password.is_some() {
+            auth_schemes.push(AuthSchemeType::SrpStatic);
+        }
+        if self.dynamic_password.is_some() {
+            auth_schemes.push(AuthSchemeType::SrpDynamic);
+        }
+        let msg = WpskkaMessage::AuthScheme(AuthSchemeMessage {
+            public_key: keys.public_key.as_ref().try_into().unwrap(),
+            auth_schemes,
+        });
+        self.keys = Some(Box::new(keys));
+        Ok(msg)
+    }
+
     pub fn handle_try_auth(
         &mut self,
         msg: TryAuth,
@@ -83,8 +107,10 @@ impl WpskkaHostHandler {
                         .ok_or(WpskkaHostError::BadAuthSchemeType(msg.auth_scheme))?
                 };
 
-                let keys = keypair().map_err(|_| WpskkaHostError::RingError)?;
-                let mut srp = SrpAuthHost::new(keys.1.clone(), msg.public_key.to_vec());
+                let mut srp = SrpAuthHost::new(
+                    self.keys.as_ref().unwrap().public_key.clone(),
+                    msg.public_key.to_vec(),
+                );
 
                 let outgoing = srp.init(password);
                 write.push(WpskkaMessage::AuthMessage(AuthMessage {
@@ -94,7 +120,6 @@ impl WpskkaHostHandler {
                 }));
 
                 self.current_auth = Some(Box::new(AuthScheme::SrpAuthHost(srp)));
-                self.keys = Some(Box::new(keys));
                 self.state = State::IsAuthenticating;
 
                 Ok(())
@@ -139,6 +164,9 @@ impl WpskkaHostHandler {
                                     if srp_host.is_authenticated() {
                                         self.current_auth = None; // TODO Security: Look into zeroing out the data here
                                         self.state = State::Authenticated;
+                                        events.push(InformEvent::WpskkaHostInform(
+                                            WpskkaHostInform::AuthSuccessful,
+                                        ));
                                     }
                                     write.push(WpskkaMessage::AuthMessage(AuthMessage { data }));
                                     Ok(None)
@@ -192,6 +220,18 @@ impl WpskkaHostHandler {
             },
         }
     }
+
+    pub fn set_dynamic_password(&mut self, dynamic_password: Option<Vec<u8>>) {
+        self.dynamic_password = dynamic_password;
+    }
+
+    pub fn set_static_password(&mut self, static_password: Option<Vec<u8>>) {
+        self.static_password = static_password;
+    }
+
+    pub fn authenticated(&self) -> bool {
+        matches!(self.state, State::Authenticated)
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -211,5 +251,6 @@ pub enum WpskkaHostError {
 }
 
 pub enum WpskkaHostInform {
+    AuthSuccessful,
     AuthFailed,
 }

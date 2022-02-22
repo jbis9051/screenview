@@ -7,6 +7,11 @@ use ring::{
     rand::{SecureRandom, SystemRandom},
 };
 
+pub struct KeyPair {
+    pub public_key: PublicKey,
+    pub ephemeral_private_key: EphemeralPrivateKey,
+}
+
 pub fn random_bytes(bytes: usize) -> Vec<u8> {
     let mut vec = vec![0u8; bytes];
     let rng = SystemRandom::new();
@@ -18,11 +23,14 @@ pub fn random_srp_private_value() -> Vec<u8> {
     random_bytes((SRP_PARAM.n.bits() / 8) as usize)
 }
 
-pub fn keypair() -> Result<(EphemeralPrivateKey, PublicKey), error::Unspecified> {
+pub fn keypair() -> Result<KeyPair, error::Unspecified> {
     let rng = rand::SystemRandom::new();
     let my_private_key = agreement::EphemeralPrivateKey::generate(&agreement::X25519, &rng)?;
     let my_public_key = my_private_key.compute_public_key()?;
-    Ok((my_private_key, my_public_key))
+    Ok(KeyPair {
+        public_key: my_public_key,
+        ephemeral_private_key: my_private_key,
+    })
 }
 
 pub fn kdf1(ikm: &[u8]) -> [u8; 32] {

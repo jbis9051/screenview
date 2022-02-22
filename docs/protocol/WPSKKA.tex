@@ -18,7 +18,7 @@ WPSKKA begins with a handshake to choose an authentication scheme. The goal of a
         \hline
         1                & type             & 1              \\
         \hline
-        16               & public-key       &                \\
+        32               & public-key       &                \\
         \hline
         1                & num-auth-schemes &                \\
         \hline
@@ -60,7 +60,7 @@ The TryAuth messages indicates a Client would to attempt authentication with a p
         \hline
         1              & type               & 2              \\
         \hline
-        16               & public-key       &                \\
+        32               & public-key       &                \\
         \hline
         1              & auth-scheme-number &                \\
         \hline

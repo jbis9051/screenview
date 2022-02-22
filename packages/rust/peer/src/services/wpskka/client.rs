@@ -2,7 +2,7 @@ use crate::services::{
     helpers::{
         cipher_reliable_peer::{CipherError, CipherReliablePeer},
         cipher_unreliable_peer::CipherUnreliablePeer,
-        wpskka_common::keypair,
+        wpskka_common::{keypair, KeyPair},
     },
     wpskka::auth::{
         srp_client::{SrpAuthClient, SrpClientError},
@@ -15,7 +15,6 @@ use common::messages::{
     auth::srp::SrpMessage,
     wpskka::{AuthMessage, AuthSchemeType, TryAuth, WpskkaMessage},
     MessageComponent,
-    ScreenViewMessage,
 };
 use ring::agreement::{EphemeralPrivateKey, PublicKey};
 use std::{cmp::Ordering, io::Cursor, sync::Arc};
@@ -38,8 +37,8 @@ pub struct WpskkaClientHandler {
     reliable: Option<CipherReliablePeer>,
     unreliable: Option<Arc<CipherUnreliablePeer>>,
 
-    keys: Option<Box<(EphemeralPrivateKey, PublicKey)>>,
-    host_public_key: Option<[u8; 16]>,
+    keys: Option<Box<KeyPair>>,
+    host_public_key: Option<[u8; 32]>,
 }
 
 impl WpskkaClientHandler {
@@ -65,7 +64,11 @@ impl WpskkaClientHandler {
         self.unreliable.as_ref().unwrap()
     }
 
-    pub fn process_password<F>(
+    pub fn authenticated(&self) -> bool {
+        matches!(self.state, State::Authenticated)
+    }
+
+    pub fn process_password(
         &mut self,
         password: &[u8],
         write: &mut Vec<WpskkaMessage>,
@@ -104,11 +107,18 @@ impl WpskkaClientHandler {
                 || current_auth == AuthSchemeType::SrpDynamic
             {
                 self.current_auth = Some(Box::new(AuthScheme::SrpAuthClient(SrpAuthClient::new(
-                    self.keys.as_ref().unwrap().1.clone(),
+                    self.keys.as_ref().unwrap().public_key.clone(),
                     self.host_public_key.unwrap().to_vec(),
                 ))));
                 write.push(WpskkaMessage::TryAuth(TryAuth {
-                    public_key: self.keys.as_ref().unwrap().1.as_ref().try_into().unwrap(), // send our public key
+                    public_key: self
+                        .keys
+                        .as_ref()
+                        .unwrap()
+                        .public_key
+                        .as_ref()
+                        .try_into()
+                        .unwrap(), // send our public key
                     auth_scheme: current_auth,
                 }));
                 self.state = State::IsAuthenticating;
@@ -132,7 +142,7 @@ impl WpskkaClientHandler {
         match self.state {
             State::WaitingForAuthSchemes => match msg {
                 WpskkaMessage::AuthScheme(msg) => {
-                    self.available_auth_schemes = msg.num_auth_schemes;
+                    self.available_auth_schemes = msg.auth_schemes;
                     self.available_auth_schemes.dedup();
                     self.available_auth_schemes.sort_by(|a, b| {
                         let a_is_srp =
@@ -173,6 +183,9 @@ impl WpskkaClientHandler {
                                     if srp_client.is_authenticated() {
                                         self.current_auth = None; // TODO Security: Look into zeroing out the data here
                                         self.state = State::Authenticated;
+                                        events.push(InformEvent::WpskkaClientInform(
+                                            WpskkaClientInform::AuthSuccessful,
+                                        ));
                                     }
                                     Ok(None)
                                 }
@@ -267,4 +280,5 @@ pub enum WpskkaClientInform {
     PasswordPrompt,
     OutOfAuthenticationSchemes,
     AuthFailed,
+    AuthSuccessful,
 }
