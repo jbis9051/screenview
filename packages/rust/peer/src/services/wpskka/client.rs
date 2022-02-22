@@ -97,11 +97,11 @@ impl WpskkaClientHandler {
 
     pub fn next_auth<F>(
         &mut self,
-        write: F,
+        mut write: F,
         events: &mut Vec<InformEvent>,
     ) -> Result<(), WpskkaClientError>
     where
-        F: Fn(WpskkaMessage) -> Result<(), SendError>,
+        F: FnMut(WpskkaMessage) -> Result<(), SendError>,
     {
         while self.current_auth_num < self.available_auth_schemes.len() {
             let current_auth = self.available_auth_schemes[self.current_auth_num];
@@ -137,7 +137,7 @@ impl WpskkaClientHandler {
         events: &mut Vec<InformEvent>,
     ) -> Result<Option<Vec<u8>>, WpskkaClientError>
     where
-        F: Fn(WpskkaMessage) -> Result<(), SendError>,
+        F: FnMut(WpskkaMessage) -> Result<(), SendError>,
     {
         match self.state {
             State::WaitingForAuthSchemes => match msg {

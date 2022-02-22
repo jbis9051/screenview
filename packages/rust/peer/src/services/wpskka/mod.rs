@@ -60,7 +60,7 @@ impl WpskkaHandler {
         events: &mut Vec<InformEvent>,
     ) -> Result<Option<Vec<u8>>, WpskkaError>
     where
-        F: Fn(WpskkaMessage) -> Result<(), SendError>,
+        F: FnMut(WpskkaMessage) -> Result<(), SendError>,
     {
         let data = match self {
             Self::Host(handler) => handler.handle(msg, write, events)?,

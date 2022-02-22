@@ -61,8 +61,14 @@ impl WpskkaHostHandler {
         self.unreliable.as_ref().unwrap()
     }
 
-    pub fn handle_try_auth<F>(&mut self, msg: TryAuth, write: F) -> Result<(), WpskkaHostError>
-    where F: Fn(WpskkaMessage) -> Result<(), SendError> {
+    pub fn handle_try_auth<F>(
+        &mut self,
+        msg: TryAuth,
+        mut write: F,
+    ) -> Result<(), WpskkaHostError>
+    where
+        F: FnMut(WpskkaMessage) -> Result<(), SendError>,
+    {
         match msg.auth_scheme {
             AuthSchemeType::Invalid => Err(WpskkaHostError::BadAuthSchemeType(msg.auth_scheme)),
             // These are basically the same schemes just with different password sources, so we can handle it together
@@ -101,11 +107,11 @@ impl WpskkaHostHandler {
     pub fn handle<F>(
         &mut self,
         msg: WpskkaMessage,
-        write: F,
+        mut write: F,
         events: &mut Vec<InformEvent>,
     ) -> Result<Option<Vec<u8>>, WpskkaHostError>
     where
-        F: Fn(WpskkaMessage) -> Result<(), SendError>,
+        F: FnMut(WpskkaMessage) -> Result<(), SendError>,
     {
         match self.state {
             State::PreAuthSelect => match msg {
