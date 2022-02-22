@@ -8,7 +8,7 @@ use ring::{
 };
 
 pub fn random_bytes(bytes: usize) -> Vec<u8> {
-    let mut vec = Vec::with_capacity(bytes);
+    let mut vec = vec![0u8; bytes];
     let rng = SystemRandom::new();
     rng.fill(&mut vec).unwrap();
     vec

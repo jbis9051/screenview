@@ -205,7 +205,7 @@ client.\\
         \hline
         16             & salt          &                \\
         \hline
-        32             & srp-B         &                \\
+        256             & srp-B         &                \\
         \hline
     \end{tabular}
 \end{center}
@@ -229,7 +229,7 @@ client.\\
         \hline
         1              & type          & 2              \\
         \hline
-        32             & srp-A         &                \\
+        256             & srp-A         &                \\
         \hline
         32             & mac           &                \\
         \hline
@@ -242,7 +242,7 @@ client.\\
     & \text{mac} \coloneqq \text{HMAC}(\text{KDF}_1(L_{client}), \text{public-key})\\
 \end{align*}
 
-public-key is the client's public key
+public-key is the Client's public key
 
 The Host validates the mac. If the mac is incorrect a failed AuthResult is sent.
 

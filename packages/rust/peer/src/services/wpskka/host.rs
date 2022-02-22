@@ -38,6 +38,7 @@ pub struct WpskkaHostHandler {
     unreliable: Option<Arc<CipherUnreliablePeer>>,
 
     keys: Option<Box<(EphemeralPrivateKey, PublicKey)>>,
+    client_public_key: Option<[u8; 16]>,
 }
 
 impl WpskkaHostHandler {
@@ -50,6 +51,7 @@ impl WpskkaHostHandler {
             reliable: None,
             unreliable: None,
             keys: None,
+            client_public_key: None,
         }
     }
 
@@ -66,6 +68,7 @@ impl WpskkaHostHandler {
         msg: TryAuth,
         write: &mut Vec<WpskkaMessage>,
     ) -> Result<(), WpskkaHostError> {
+        self.client_public_key = Some(msg.public_key);
         match msg.auth_scheme {
             AuthSchemeType::Invalid => Err(WpskkaHostError::BadAuthSchemeType(msg.auth_scheme)),
             // These are basically the same schemes just with different password sources, so we can handle it together
@@ -81,7 +84,7 @@ impl WpskkaHostHandler {
                 };
 
                 let keys = keypair().map_err(|_| WpskkaHostError::RingError)?;
-                let mut srp = SrpAuthHost::new(keys.1.clone());
+                let mut srp = SrpAuthHost::new(keys.1.clone(), msg.public_key.to_vec());
 
                 let outgoing = srp.init(password);
                 write.push(WpskkaMessage::AuthMessage(AuthMessage {

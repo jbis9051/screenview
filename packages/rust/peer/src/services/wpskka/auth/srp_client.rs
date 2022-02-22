@@ -22,17 +22,19 @@ pub enum State {
 pub struct SrpAuthClient {
     state: State,
     authenticated: bool,
-    public_key: PublicKey,
+    host_public_key: Vec<u8>,
+    our_public_key: PublicKey,
     host_hello: Option<HostHello>,
     hmac_key: Option<[u8; 32]>,
 }
 
 impl SrpAuthClient {
-    pub fn new(public_key: PublicKey) -> Self {
+    pub fn new(our_public_key: PublicKey, host_public_key: Vec<u8>) -> Self {
         Self {
             state: State::PreHello,
             authenticated: false,
-            public_key,
+            host_public_key,
+            our_public_key,
             host_hello: None,
             hmac_key: None,
         }
@@ -44,7 +46,7 @@ impl SrpAuthClient {
 
     pub fn process_password(&mut self, password: &[u8]) -> Result<SrpMessage, SrpClientError> {
         // we've received the password form node we need to do some srp stuff and then send a mac to authenticate our keys
-        let msg = self.host_hello.as_ref().unwrap();
+        let msg = self.host_hello.take().unwrap();
         let a = random_srp_private_value();
         let srp_client = SrpClient::<'static, HashAlgo>::new(SRP_PARAM);
         let verifier = srp_client
@@ -55,7 +57,7 @@ impl SrpAuthClient {
 
         let srp_key_kdf = kdf1(srp_key);
 
-        let mac = hmac(&srp_key_kdf, self.public_key.as_ref());
+        let mac = hmac(&srp_key_kdf, self.our_public_key.as_ref());
 
         // save some stuff we'll need soon
         self.hmac_key = Some(srp_key_kdf);
@@ -85,9 +87,8 @@ impl SrpAuthClient {
             State::PreVerify => match msg {
                 SrpMessage::HostVerify(msg) => {
                     let hmac_key = self.hmac_key.take().unwrap();
-                    let host_hello = self.host_hello.take().unwrap();
 
-                    if !hmac_verify(&hmac_key, &host_hello.b_pub, &msg.mac) {
+                    if !hmac_verify(&hmac_key, self.host_public_key.as_ref(), &msg.mac) {
                         return Err(SrpClientError::AuthFailed);
                     }
                     self.authenticated = true;

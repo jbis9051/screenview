@@ -105,6 +105,7 @@ impl WpskkaClientHandler {
             {
                 self.current_auth = Some(Box::new(AuthScheme::SrpAuthClient(SrpAuthClient::new(
                     self.keys.as_ref().unwrap().1.clone(),
+                    self.host_public_key.unwrap().to_vec(),
                 ))));
                 write.push(WpskkaMessage::TryAuth(TryAuth {
                     public_key: self.keys.as_ref().unwrap().1.as_ref().try_into().unwrap(), // send our public key

@@ -1,4 +1,4 @@
-mod helpers;
+pub mod helpers;
 pub mod rvd;
 pub mod sel_handler;
 pub mod svsc_handler;
