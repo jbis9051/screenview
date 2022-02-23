@@ -57,7 +57,7 @@ fn sel_unreliable() {
 
     assert_eq!(message.peer_id, peer_id);
 
-    // confirm sel does encryption properly
+    // confirm sel does encryption properly by checking decryption
     assert_eq!(
         server_cipher
             .decrypt(&message.data, message.counter)
@@ -65,11 +65,16 @@ fn sel_unreliable() {
         send_data
     );
 
-    let message =
-        SelMessage::TransportDataServerMessageUnreliable(TransportDataServerMessageUnreliable {
-            counter: message.counter,
-            data: message.data,
-        });
+    let message = match SelHandler::wrap_unreliable(send_data.clone(), peer_id, &server_cipher)
+        .unwrap()
+    {
+        SelMessage::TransportDataPeerMessageUnreliable(msg) =>
+            SelMessage::TransportDataServerMessageUnreliable(TransportDataServerMessageUnreliable {
+                data: msg.data,
+                counter: msg.counter,
+            }),
+        _ => panic!("bad message returned"),
+    };
 
     assert_eq!(handler.handle(message).unwrap(), send_data);
 }
