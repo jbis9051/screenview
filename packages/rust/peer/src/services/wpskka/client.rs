@@ -2,7 +2,7 @@ use crate::services::{
     helpers::{
         cipher_reliable_peer::{CipherError, CipherReliablePeer},
         cipher_unreliable_peer::CipherUnreliablePeer,
-        wpskka_common::{keypair, KeyPair},
+        crypto::{keypair, KeyPair},
     },
     wpskka::auth::{
         srp_client::{SrpAuthClient, SrpClientError},
@@ -239,7 +239,7 @@ impl WpskkaClientHandler {
                     let reliable = self.reliable.as_mut().unwrap();
                     Ok(Some(
                         reliable
-                            .decrypt(msg.data)
+                            .decrypt(&msg.data)
                             .map_err(WpskkaClientError::CipherError)?,
                     ))
                 }
@@ -247,7 +247,7 @@ impl WpskkaClientHandler {
                     let unreliable = self.unreliable.as_mut().unwrap();
                     Ok(Some(
                         unreliable
-                            .decrypt(msg.data, msg.counter)
+                            .decrypt(&msg.data, msg.counter)
                             .map_err(WpskkaClientError::CipherError)?,
                     ))
                 }

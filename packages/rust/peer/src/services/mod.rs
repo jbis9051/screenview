@@ -118,14 +118,10 @@ impl ScreenViewHandler {
         let data = message.to_bytes()?;
 
         let sel = if reliable {
-            SelMessage::TransportDataMessageReliable(SelHandler::wrap_reliable(data))
+            SelHandler::wrap_reliable(data)
         } else {
             let cipher = self.sel.unreliable_cipher();
-            SelMessage::TransportDataPeerMessageUnreliable(SelHandler::wrap_unreliable(
-                data,
-                *self.svsc.peer_id().unwrap(),
-                cipher,
-            )?)
+            SelHandler::wrap_unreliable(data, *self.svsc.peer_id().unwrap(), cipher)?
         };
 
         self.send_sel(sel)

@@ -15,6 +15,7 @@ pub struct CipherUnreliablePeer {
 
 impl CipherUnreliablePeer {
     pub fn new(send_key: Vec<u8>, receive_key: Vec<u8>) -> Self {
+        // TODO ensure keys are long enough
         Self {
             send_key,
             send_nonce: AtomicU64::new(0),
@@ -23,7 +24,7 @@ impl CipherUnreliablePeer {
         }
     }
 
-    pub fn encrypt(&self, plainbytes: Vec<u8>) -> Result<(Vec<u8>, u64), CipherError> {
+    pub fn encrypt(&self, plainbytes: &[u8]) -> Result<(Vec<u8>, u64), CipherError> {
         // TODO: choose more lenient memory ordering if possible
         let prev = self.send_nonce.fetch_add(1, Ordering::SeqCst);
 
@@ -38,7 +39,7 @@ impl CipherUnreliablePeer {
         Ok((cipherbytes, prev))
     }
 
-    pub fn decrypt(&self, cipherbytes: Vec<u8>, counter: u64) -> Result<Vec<u8>, CipherError> {
+    pub fn decrypt(&self, cipherbytes: &[u8], counter: u64) -> Result<Vec<u8>, CipherError> {
         let is_valid = self.anti_replay.lock().unwrap().update(counter);
 
         if !is_valid {

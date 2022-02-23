@@ -1,6 +1,6 @@
 use common::messages::auth::srp::SrpMessage;
 use peer::services::{
-    helpers::wpskka_common::keypair,
+    helpers::crypto::keypair,
     wpskka::{
         auth::{
             srp_client::SrpAuthClient,

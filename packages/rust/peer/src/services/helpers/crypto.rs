@@ -40,6 +40,27 @@ pub fn kdf1(ikm: &[u8]) -> [u8; 32] {
     key
 }
 
+pub fn kdf2(ikm: &[u8]) -> ([u8; 32], [u8; 32]) {
+    let kdf = Hkdf::new(None, ikm);
+    let mut key = [0u8; 64];
+    kdf.expand(&[], &mut key).unwrap();
+    let keys = key.split_at(32);
+    // 64 / 2 = 32
+    (keys.0.try_into().unwrap(), keys.1.try_into().unwrap())
+}
+
+
+#[macro_export]
+macro_rules! hash {
+    ($($plaintext:expr),*) => {{
+        let mut h = common::constants::HashAlgo::new();
+        $(
+          h.update($plaintext);
+        )*
+        h.finalize().as_bytes()
+    }};
+}
+
 pub fn hmac(key: &[u8], input: &[u8]) -> Vec<u8> {
     let mut hmac = Hmac::new_from_slice(key).unwrap();
     hmac.update(input);

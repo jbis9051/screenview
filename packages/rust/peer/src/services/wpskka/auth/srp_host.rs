@@ -1,5 +1,5 @@
 use crate::services::{
-    helpers::wpskka_common::{hmac, hmac_verify, kdf1, random_bytes, random_srp_private_value},
+    helpers::crypto::{hmac, hmac_verify, kdf1, random_bytes, random_srp_private_value},
     wpskka::auth::srp_host::State::Done,
 };
 use common::{
