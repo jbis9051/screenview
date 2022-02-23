@@ -271,7 +271,7 @@ impl NativeApiTemplate for MacApi {
         Ok(())
     }
 
-    fn pointer_position(&self) -> Result<MousePosition, Error> {
+    fn pointer_position(&mut self) -> Result<MousePosition, Error> {
         let position = self.pointer_position_impl()?;
         Ok(MousePosition {
             x: (position.point.x - position.monitor.rect.origin.x) as u32,
@@ -282,7 +282,7 @@ impl NativeApiTemplate for MacApi {
         })
     }
 
-    fn set_pointer_position(&self, pos: MousePosition) -> Result<(), Error> {
+    fn set_pointer_position(&mut self, pos: MousePosition) -> Result<(), Error> {
         let source = CGEventSource::new(CGEventSourceStateID::CombinedSessionState)
             .map_err(|_| UnableToCreateCGSource)?;
         let monitor = self
@@ -304,7 +304,7 @@ impl NativeApiTemplate for MacApi {
         Ok(())
     }
 
-    fn toggle_mouse(&self, button: MouseButton, down: bool) -> Result<(), Error> {
+    fn toggle_mouse(&mut self, button: MouseButton, down: bool) -> Result<(), Error> {
         // TODO can we get smooth scrolling?
         let source = CGEventSource::new(CGEventSourceStateID::CombinedSessionState)
             .map_err(|_| UnableToCreateCGSource)?;
@@ -392,7 +392,7 @@ impl NativeApiTemplate for MacApi {
         Ok(())
     }
 
-    fn clipboard_content(&self, type_name: &ClipboardType) -> Result<Vec<u8>, Error> {
+    fn clipboard_content(&mut self, type_name: &ClipboardType) -> Result<Vec<u8>, Error> {
         let paste_board = unsafe { NSPasteboard::generalPasteboard(nil) };
         if paste_board == nil {
             return Err(NSPasteboardError);
@@ -533,7 +533,7 @@ impl NativeApiTemplate for MacApi {
         Ok(windows)
     }
 
-    fn capture_monitor_frame(&self, monitor_id: u32) -> Result<Frame, Error> {
+    fn capture_monitor_frame(&mut self, monitor_id: u32) -> Result<Frame, Error> {
         let core_display = CGDisplay::new(monitor_id);
         let frame = core_display
             .image()
@@ -541,7 +541,7 @@ impl NativeApiTemplate for MacApi {
         MacApi::cgimage_to_frame(&frame).map_err(|_| CaptureDisplayError(monitor_id.to_string()))
     }
 
-    fn capture_window_frame(&self, window_id: u32) -> Result<Frame, Error> {
+    fn capture_window_frame(&mut self, window_id: u32) -> Result<Frame, Error> {
         let image = CGDisplay::screenshot(
             unsafe { CGRectNull },
             kCGWindowListOptionIncludingWindow,

@@ -30,17 +30,18 @@ use crate::{
         wpskka::{WpskkaClientInform, WpskkaHostInform},
     },
 };
+use native::api::NativeApiTemplate;
 use std::io::Cursor;
 
-pub struct ScreenViewHandler {
+pub struct ScreenViewHandler<T: NativeApiTemplate> {
     sel: SelHandler,
     svsc: SvscHandler,
     wpskka: WpskkaHandler,
-    rvd: RvdHandler,
+    rvd: RvdHandler<T>,
     io_handle: NativeIoHandle,
 }
 
-impl ScreenViewHandler {
+impl<T: NativeApiTemplate> ScreenViewHandler<T> {
     pub fn send(&mut self, message: ScreenViewMessage) -> Result<(), SendError> {
         match message {
             ScreenViewMessage::RvdMessage(rvd) => self.send_rvd(rvd),
@@ -50,7 +51,7 @@ impl ScreenViewHandler {
         }
     }
 
-    pub fn handle(&mut self, message: SelMessage) -> Result<Vec<InformEvent>, HandlerError> {
+    pub fn handle(&mut self, message: SelMessage) -> Result<Vec<InformEvent>, HandlerError<T>> {
         let mut events = Vec::new();
 
         let svsc_data = self.sel.handle(message)?;
@@ -161,7 +162,7 @@ pub enum SendError {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum HandlerError {
+pub enum HandlerError<T: NativeApiTemplate> {
     #[error("failed to decode message: {0}")]
     Decode(#[from] MessageComponentError),
     #[error("SEL handler error: {0}")]
@@ -171,7 +172,7 @@ pub enum HandlerError {
     #[error("WPSKKA handler error: {0}")]
     Wpskka(#[from] WpskkaError),
     #[error("RVD handler error: {0}")]
-    Rvd(#[from] RvdError),
+    Rvd(#[from] RvdError<T>),
     #[error("send error: {0}")]
     SendError(#[from] SendError),
 }

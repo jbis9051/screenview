@@ -1,8 +1,8 @@
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 
 use image::RgbImage;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Monitor {
     pub id: u32,
     pub name: String,
@@ -10,7 +10,7 @@ pub struct Monitor {
     pub height: u32,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Window {
     pub id: u32,
     pub name: String,
@@ -59,17 +59,17 @@ impl Display for ClipboardType {
 pub type Frame = RgbImage;
 
 pub trait NativeApiTemplate {
-    type Error;
+    type Error: Debug;
 
     fn key_toggle(&mut self, key: Key, down: bool) -> Result<(), Self::Error>;
 
-    fn pointer_position(&self) -> Result<MousePosition, Self::Error>;
+    fn pointer_position(&mut self) -> Result<MousePosition, Self::Error>;
 
-    fn set_pointer_position(&self, pos: MousePosition) -> Result<(), Self::Error>;
+    fn set_pointer_position(&mut self, pos: MousePosition) -> Result<(), Self::Error>;
 
-    fn toggle_mouse(&self, button: MouseButton, down: bool) -> Result<(), Self::Error>;
+    fn toggle_mouse(&mut self, button: MouseButton, down: bool) -> Result<(), Self::Error>;
 
-    fn clipboard_content(&self, type_name: &ClipboardType) -> Result<Vec<u8>, Self::Error>;
+    fn clipboard_content(&mut self, type_name: &ClipboardType) -> Result<Vec<u8>, Self::Error>;
 
     fn set_clipboard_content(
         &mut self,
@@ -81,16 +81,20 @@ pub trait NativeApiTemplate {
 
     fn windows(&mut self) -> Result<Vec<Window>, Self::Error>;
 
-    fn capture_monitor_frame(&self, monitor_id: u32) -> Result<Frame, Self::Error>;
+    fn capture_monitor_frame(&mut self, monitor_id: u32) -> Result<Frame, Self::Error>;
 
-    fn update_monitor_frame(&self, monitor_id: u32, cap: &mut Frame) -> Result<(), Self::Error> {
+    fn update_monitor_frame(
+        &mut self,
+        monitor_id: u32,
+        cap: &mut Frame,
+    ) -> Result<(), Self::Error> {
         *cap = self.capture_monitor_frame(monitor_id)?;
         Ok(())
     }
 
-    fn capture_window_frame(&self, window_id: u32) -> Result<Frame, Self::Error>;
+    fn capture_window_frame(&mut self, window_id: u32) -> Result<Frame, Self::Error>;
 
-    fn update_window_frame(&self, window_id: u32, cap: &mut Frame) -> Result<(), Self::Error> {
+    fn update_window_frame(&mut self, window_id: u32, cap: &mut Frame) -> Result<(), Self::Error> {
         *cap = self.capture_window_frame(window_id)?;
         Ok(())
     }

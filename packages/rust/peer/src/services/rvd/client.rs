@@ -1,10 +1,7 @@
-use crate::{
-    native::{api::NativeApiTemplate, NativeApi, NativeApiError},
-    services::{
-        helpers::{clipboard_type_map::get_native_clipboard, rvd_common::*},
-        InformEvent,
-        SendError,
-    },
+use crate::services::{
+    helpers::{clipboard_type_map::get_native_clipboard, rvd_common::*},
+    InformEvent,
+    SendError,
 };
 use common::{
     constants::SVSC_VERSION,
@@ -17,6 +14,7 @@ use common::{
         RvdMessage,
     },
 };
+use native::api::NativeApiTemplate;
 
 #[derive(Copy, Clone, Debug)]
 pub enum ClientState {
@@ -30,15 +28,15 @@ struct ClientPermissions {
     pub clipboard_writable: bool,
 }
 
-pub struct RvdClientHandler {
+pub struct RvdClientHandler<T: NativeApiTemplate> {
     state: ClientState,
-    native: NativeApi,
+    native: T,
     permissions: ClientPermissions,
     current_display_change: DisplayChange,
 }
 
-impl RvdClientHandler {
-    pub fn new(native: NativeApi) -> Self {
+impl<T: NativeApiTemplate> RvdClientHandler<T> {
+    pub fn new(native: T) -> Self {
         Self {
             state: ClientState::Handshake,
             native,
@@ -56,7 +54,7 @@ impl RvdClientHandler {
         msg: RvdMessage,
         write: &mut Vec<RvdMessage>,
         events: &mut Vec<InformEvent>,
-    ) -> Result<(), RvdClientError> {
+    ) -> Result<(), RvdClientError<T>> {
         match self.state {
             ClientState::Handshake => match msg {
                 RvdMessage::ProtocolVersion(msg) => {
@@ -64,12 +62,12 @@ impl RvdClientHandler {
                     write.push(RvdMessage::ProtocolVersionResponse(
                         ProtocolVersionResponse { ok },
                     ));
-                    self.state = ClientState::Data;
                     if ok {
-                        Ok(())
+                        self.state = ClientState::Data;
                     } else {
-                        Err(RvdClientError::VersionBad)
+                        events.push(InformEvent::RvdInform(RvdInform::VersionBad));
                     }
+                    Ok(())
                 }
                 _ => Err(RvdClientError::WrongMessageForState(
                     Box::new(msg),
@@ -90,10 +88,10 @@ impl RvdClientHandler {
                     Ok(())
                 }
                 RvdMessage::ClipboardRequest(msg) => {
-                    clipboard_request_impl!(self, msg, write, RvdClientError)
+                    clipboard_request_impl!(self, msg, write, RvdClientError<T>)
                 }
                 RvdMessage::ClipboardNotification(msg) => {
-                    clipboard_notificaiton_impl!(self, msg, RvdClientError)
+                    clipboard_notificaiton_impl!(self, msg, RvdClientError<T>)
                 }
                 _ => Err(RvdClientError::WrongMessageForState(
                     Box::new(msg),
@@ -105,17 +103,17 @@ impl RvdClientHandler {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum RvdClientError {
-    #[error("client rejected version")]
-    VersionBad,
+pub enum RvdClientError<T: NativeApiTemplate> {
     #[error("invalid message {0:?} for state {1:?}")]
     WrongMessageForState(Box<RvdMessage>, ClientState),
-    #[error("native error: {0}")]
-    NativeError(#[from] NativeApiError),
+    #[error("native error: {0:?}")]
+    NativeError(T::Error),
     #[error("permission error: cannot {0}")]
     PermissionsError(String),
 }
 
 pub enum RvdInform {
+    VersionBad,
+
     MouseLocation(MouseLocation),
 }
