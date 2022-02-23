@@ -1,6 +1,16 @@
-use common::messages::wpskka::WpskkaMessage;
+use common::messages::wpskka::{
+    TransportDataMessageReliable,
+    TransportDataMessageUnreliable,
+    WpskkaMessage,
+};
 use peer::services::{
-    wpskka::{WpskkaClientHandler, WpskkaClientInform, WpskkaHostHandler, WpskkaHostInform},
+    wpskka::{
+        WpskkaClientHandler,
+        WpskkaClientInform,
+        WpskkaHandler,
+        WpskkaHostHandler,
+        WpskkaHostInform,
+    },
     InformEvent,
 };
 
@@ -83,6 +93,84 @@ fn srp_authenticate(
     ));
 }
 
+fn test_reliable_communication(host: &mut WpskkaHostHandler, client: &mut WpskkaClientHandler) {
+    let data = vec![9, 0, 5, 1];
+
+    // test host encrypt, client decrypt
+    let host_cipher = host.reliable_cipher_mut();
+    let message = WpskkaMessage::TransportDataMessageReliable(TransportDataMessageReliable {
+        data: host_cipher.encrypt(&data).unwrap(),
+    });
+    let mut write = Vec::new();
+    let mut events = Vec::new();
+    let result = client
+        .handle(message, &mut write, &mut events)
+        .expect("handler failed")
+        .expect("expected data");
+    assert_eq!(write.len(), 0);
+    assert_eq!(events.len(), 0);
+    assert_eq!(&result, &data);
+
+    // test client encrypt, host decrypt
+    let client_cipher = client.reliable_cipher_mut();
+    let message = WpskkaMessage::TransportDataMessageReliable(TransportDataMessageReliable {
+        data: client_cipher.encrypt(&data).unwrap(),
+    });
+    let mut write = Vec::new();
+    let mut events = Vec::new();
+    let result = host
+        .handle(message, &mut write, &mut events)
+        .expect("handler failed")
+        .expect("expected data");
+    assert_eq!(write.len(), 0);
+    assert_eq!(events.len(), 0);
+    assert_eq!(&result, &data);
+}
+
+fn test_unreliable_communication(host: &mut WpskkaHostHandler, client: &mut WpskkaClientHandler) {
+    let data = vec![9, 0, 5, 1];
+
+    // test host encrypt, client decrypt
+    let host_cipher = host.unreliable_cipher();
+    let (ciphertext, counter) = host_cipher.encrypt(&data).unwrap();
+    let message = WpskkaMessage::TransportDataMessageUnreliable(TransportDataMessageUnreliable {
+        data: ciphertext,
+        counter,
+    });
+    let mut write = Vec::new();
+    let mut events = Vec::new();
+    let result = client
+        .handle(message, &mut write, &mut events)
+        .expect("handler failed")
+        .expect("expected data");
+    assert_eq!(write.len(), 0);
+    assert_eq!(events.len(), 0);
+    assert_eq!(&result, &data);
+
+    // test client encrypt, host decrypt
+    let client_cipher = client.unreliable_cipher();
+    let (ciphertext, counter) = client_cipher.encrypt(&data).unwrap();
+    let message = WpskkaMessage::TransportDataMessageUnreliable(TransportDataMessageUnreliable {
+        data: ciphertext,
+        counter,
+    });
+    let mut write = Vec::new();
+    let mut events = Vec::new();
+    let result = host
+        .handle(message, &mut write, &mut events)
+        .expect("handler failed")
+        .expect("expected data");
+    assert_eq!(write.len(), 0);
+    assert_eq!(events.len(), 0);
+    assert_eq!(&result, &data);
+}
+
+
+fn test_communication(host: &mut WpskkaHostHandler, client: &mut WpskkaClientHandler) {
+    test_reliable_communication(host, client);
+    test_unreliable_communication(host, client);
+}
+
 #[test]
 fn wpskka_test_srp_static() {
     let mut host = WpskkaHostHandler::new();
@@ -94,12 +182,7 @@ fn wpskka_test_srp_static() {
 
     srp_authenticate(&mut host, &mut client, &password);
 
-    host.reliable_cipher_mut();
-    host.unreliable_cipher();
-    client.reliable_cipher_mut();
-    client.unreliable_cipher();
-
-    // TODO check send and receive
+    test_communication(&mut host, &mut client);
 }
 
 #[test]
@@ -113,12 +196,7 @@ fn wpskka_test_srp_dynamic() {
 
     srp_authenticate(&mut host, &mut client, &password);
 
-    host.reliable_cipher_mut();
-    host.unreliable_cipher();
-    client.reliable_cipher_mut();
-    client.unreliable_cipher();
-
-    // TODO check send and receive
+    test_communication(&mut host, &mut client);
 }
 
 // TODO test if we have both static and dynamic
