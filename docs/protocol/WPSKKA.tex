@@ -114,12 +114,12 @@ ok indicates whether the authentication method was successful (1) or not (0). If
 \begin{align*}
     & C_{host} = \text{DH}(E_{client}^{pub},\ E_{host}^{priv})\\
     & C_{client} = \text{DH}(E_{host}^{pub},\ E_{client}^{priv})\\
-    & (\mathit{ST}_{peer}^{send} = \mathit{ST}_{serv}^{recv},\ \mathit{ST}_{peer}^{recv} = \mathit{ST}_{serv}^{send}, \mathit{SU}_{peer}^{send} = \mathit{SU}_{serv}^{recv},\ \mathit{SU}_{peer}^{recv} = \mathit{SU}_{serv}^{send}) \coloneqq \text{KDF}_4(C_{host} = C_{client},
+    & (\mathit{ST}_{host}^{send} = \mathit{ST}_{client}^{recv},\ \mathit{ST}_{host}^{recv} = \mathit{ST}_{client}^{send}, \mathit{SU}_{host}^{send} = \mathit{SU}_{client}^{recv},\ \mathit{SU}_{host}^{recv} = \mathit{SU}_{client}^{send}) \coloneqq \text{KDF}_4(C_{host} = C_{client},
     \ \epsilon) \\
     & \mathit{NT}_{host}^{send} = \mathit{NT}_{client}^{recv} = \mathit{NT}_{host}^{recv} = \mathit{NT}_{client}^{send} = \mathit{NU}_{host}^{send} = \mathit{NU}_{client}^{recv} = \mathit{NU}_{host}^{recv} = \mathit{NU}_{client}^{send} \coloneqq 0
 \end{align*}
 
-ST keys and NT nonces are used for TCP. SU keys and NT nonces are using for UDP.
+ST keys and NT nonces are used for TCP. SU keys and TU nonces are using for UDP.
 
 \subsection{Subsequent Messages: Transport Data Messages}
 

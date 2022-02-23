@@ -1,8 +1,9 @@
 use common::constants::{Hkdf, Hmac, Mac, SRP_PARAM};
 use ring::{
     agreement,
-    agreement::{EphemeralPrivateKey, PublicKey},
+    agreement::{EphemeralPrivateKey, PublicKey, UnparsedPublicKey},
     error,
+    error::Unspecified,
     rand,
     rand::{SecureRandom, SystemRandom},
 };
@@ -33,6 +34,10 @@ pub fn keypair() -> Result<KeyPair, error::Unspecified> {
     })
 }
 
+pub fn parse_foreign_public(public_key: &[u8; 32]) -> UnparsedPublicKey<&[u8; 32]> {
+    agreement::UnparsedPublicKey::new(&agreement::X25519, public_key)
+}
+
 pub fn kdf1(ikm: &[u8]) -> [u8; 32] {
     let kdf = Hkdf::new(None, ikm);
     let mut key = [0u8; 32];
@@ -44,9 +49,34 @@ pub fn kdf2(ikm: &[u8]) -> ([u8; 32], [u8; 32]) {
     let kdf = Hkdf::new(None, ikm);
     let mut key = [0u8; 64];
     kdf.expand(&[], &mut key).unwrap();
-    let keys = key.split_at(32);
-    // 64 / 2 = 32
-    (keys.0.try_into().unwrap(), keys.1.try_into().unwrap())
+    (
+        (&key[0 .. 32]).try_into().unwrap(),
+        (&key[32 .. 64]).try_into().unwrap(),
+    )
+}
+
+pub fn kdf4(ikm: &[u8]) -> ([u8; 32], [u8; 32], [u8; 32], [u8; 32]) {
+    let kdf = Hkdf::new(None, ikm);
+    let mut key = [0u8; 128];
+    kdf.expand(&[], &mut key).unwrap();
+    (
+        (&key[0 .. 32]).try_into().unwrap(),
+        (&key[32 .. 64]).try_into().unwrap(),
+        (&key[64 .. 96]).try_into().unwrap(),
+        (&key[96 .. 128]).try_into().unwrap(),
+    )
+}
+
+pub fn diffie_hellman(
+    my_private_key: EphemeralPrivateKey,
+    peer_public_key: UnparsedPublicKey<&[u8; 32]>,
+) -> Result<([u8; 32], [u8; 32], [u8; 32], [u8; 32]), Unspecified> {
+    agreement::agree_ephemeral(
+        my_private_key,
+        &peer_public_key,
+        ring::error::Unspecified,
+        |key_material| Ok(kdf4(key_material)),
+    )
 }
 
 

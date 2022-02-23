@@ -2,7 +2,7 @@ use crate::services::{
     helpers::{
         cipher_reliable_peer::{CipherError, CipherReliablePeer},
         cipher_unreliable_peer::CipherUnreliablePeer,
-        crypto::{keypair, KeyPair},
+        crypto::{diffie_hellman, keypair, parse_foreign_public, KeyPair},
     },
     wpskka::auth::{
         srp_host::{SrpAuthHost, SrpHostError},
@@ -167,6 +167,7 @@ impl WpskkaHostHandler {
                                         events.push(InformEvent::WpskkaHostInform(
                                             WpskkaHostInform::AuthSuccessful,
                                         ));
+                                        self.derive_keys()?;
                                     }
                                     write.push(WpskkaMessage::AuthMessage(AuthMessage { data }));
                                     Ok(None)
@@ -231,6 +232,27 @@ impl WpskkaHostHandler {
 
     pub fn authenticated(&self) -> bool {
         matches!(self.state, State::Authenticated)
+    }
+
+    /// Warning: Steals keys, Overwrites ciphers
+    fn derive_keys(&mut self) -> Result<(), WpskkaHostError> {
+        // TODO zero data
+        let keys = self.keys.take().unwrap();
+        let host_pubkey = self.client_public_key.take().unwrap();
+        let host_pubkey = parse_foreign_public(&host_pubkey);
+        let (send_reliable, receive_reliable, send_unreliable, receive_unreliable) =
+            diffie_hellman(keys.ephemeral_private_key, host_pubkey)
+                .map_err(|_| WpskkaHostError::RingError)?;
+        // TODO zero hella
+        self.reliable = Some(CipherReliablePeer::new(
+            send_reliable.to_vec(),
+            receive_reliable.to_vec(),
+        ));
+        self.unreliable = Some(Arc::new(CipherUnreliablePeer::new(
+            send_unreliable.to_vec(),
+            receive_unreliable.to_vec(),
+        )));
+        Ok(())
     }
 }
 

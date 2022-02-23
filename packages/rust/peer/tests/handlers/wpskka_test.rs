@@ -98,6 +98,8 @@ fn wpskka_test_srp_static() {
     host.unreliable_cipher();
     client.reliable_cipher_mut();
     client.unreliable_cipher();
+
+    // TODO check send and receive
 }
 
 #[test]
@@ -115,6 +117,8 @@ fn wpskka_test_srp_dynamic() {
     host.unreliable_cipher();
     client.reliable_cipher_mut();
     client.unreliable_cipher();
+
+    // TODO check send and receive
 }
 
 // TODO test if we have both static and dynamic
