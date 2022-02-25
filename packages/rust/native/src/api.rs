@@ -25,7 +25,7 @@ pub struct MousePosition {
     pub monitor_id: u8,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum MouseButton {
     Left,
     Center,

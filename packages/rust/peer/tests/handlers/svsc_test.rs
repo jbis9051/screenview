@@ -3,6 +3,7 @@ extern crate core;
 
 use common::{
     chrono::{MAX_DATETIME, MIN_DATETIME},
+    constants::SVSC_VERSION,
     messages::svsc::{
         EstablishSessionNotification,
         EstablishSessionResponse,
@@ -20,7 +21,7 @@ use common::{
     },
 };
 use peer::services::{
-    svsc_handler::{SvscHandler, SvscInform, SVSC_VERSION},
+    svsc_handler::{SvscHandler, SvscInform},
     InformEvent,
 };
 

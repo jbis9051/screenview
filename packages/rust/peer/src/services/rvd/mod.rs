@@ -21,7 +21,7 @@ impl<T: NativeApiTemplate> RvdHandler<T> {
         events: &mut Vec<InformEvent>,
     ) -> Result<(), RvdError<T>> {
         match self {
-            Self::Host(handler) => handler.handle(msg, write)?,
+            Self::Host(handler) => handler.handle(msg, write, events)?,
             Self::Client(handler) => handler.handle(msg, write, events)?,
         }
         Ok(())

@@ -4,7 +4,7 @@ use crate::services::{
     SendError,
 };
 use common::{
-    constants::SVSC_VERSION,
+    constants::RVD_VERSION,
     messages::rvd::{
         ClipboardNotification,
         DisplayChange,
@@ -58,14 +58,14 @@ impl<T: NativeApiTemplate> RvdClientHandler<T> {
         match self.state {
             ClientState::Handshake => match msg {
                 RvdMessage::ProtocolVersion(msg) => {
-                    let ok = msg.version == SVSC_VERSION;
+                    let ok = msg.version == RVD_VERSION;
                     write.push(RvdMessage::ProtocolVersionResponse(
                         ProtocolVersionResponse { ok },
                     ));
                     if ok {
                         self.state = ClientState::Data;
                     } else {
-                        events.push(InformEvent::RvdInform(RvdInform::VersionBad));
+                        events.push(InformEvent::RvdClientInform(RvdClientInform::VersionBad));
                     }
                     Ok(())
                 }
@@ -84,7 +84,9 @@ impl<T: NativeApiTemplate> RvdClientHandler<T> {
                     Ok(())
                 }
                 RvdMessage::MouseLocation(msg) => {
-                    events.push(InformEvent::RvdInform(RvdInform::MouseLocation(msg)));
+                    events.push(InformEvent::RvdClientInform(
+                        RvdClientInform::MouseLocation(msg),
+                    ));
                     Ok(())
                 }
                 RvdMessage::ClipboardRequest(msg) => {
@@ -112,7 +114,7 @@ pub enum RvdClientError<T: NativeApiTemplate> {
     PermissionsError(String),
 }
 
-pub enum RvdInform {
+pub enum RvdClientInform {
     VersionBad,
 
     MouseLocation(MouseLocation),

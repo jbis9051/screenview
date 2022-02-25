@@ -1,23 +1,24 @@
 use crate::services::InformEvent;
-use common::messages::svsc::{
-    Cookie,
-    EstablishSessionRequest,
-    EstablishSessionStatus,
-    ExpirationTime,
-    KeepAlive,
-    LeaseExtensionRequest,
-    LeaseExtensionResponse,
-    LeaseId,
-    LeaseRequest,
-    LeaseResponseData,
-    PeerId,
-    ProtocolVersionResponse,
-    SessionData,
-    SessionDataSend,
-    SvscMessage,
+use common::{
+    constants::SVSC_VERSION,
+    messages::svsc::{
+        Cookie,
+        EstablishSessionRequest,
+        EstablishSessionStatus,
+        ExpirationTime,
+        KeepAlive,
+        LeaseExtensionRequest,
+        LeaseExtensionResponse,
+        LeaseId,
+        LeaseRequest,
+        LeaseResponseData,
+        PeerId,
+        ProtocolVersionResponse,
+        SessionData,
+        SessionDataSend,
+        SvscMessage,
+    },
 };
-
-pub const SVSC_VERSION: &str = "0.0.0";
 
 #[derive(Copy, Clone, Debug)]
 pub enum State {

@@ -1,3 +1,4 @@
+use common::messages::rvd::{ProtocolVersion, RvdMessage};
 use native::api::{
     ClipboardType,
     Frame,
@@ -8,9 +9,13 @@ use native::api::{
     NativeApiTemplate,
     Window,
 };
-use peer::services::rvd::{RvdClientHandler, RvdHostHandler};
+use peer::services::{
+    rvd::{RvdClientHandler, RvdClientInform, RvdHostHandler, RvdHostInform},
+    InformEvent,
+};
 use std::convert::Infallible;
 
+#[derive(Debug)]
 struct TesterNative {
     pub pointer_position: MousePosition,
     pub clipboard_content: Vec<u8>,
@@ -29,8 +34,34 @@ impl TesterNative {
                 monitor_id: 0,
             },
             clipboard_content: vec![],
-            monitors: vec![],
-            windows: vec![],
+            monitors: vec![
+                Monitor {
+                    id: 1,
+                    name: "Mock Display 1".to_string(),
+                    width: 1000,
+                    height: 1000,
+                },
+                Monitor {
+                    id: 2,
+                    name: "Mock Display 2".to_string(),
+                    width: 1980,
+                    height: 1080,
+                },
+            ],
+            windows: vec![
+                Window {
+                    id: 1,
+                    name: "Mock Window 1".to_string(),
+                    width: 100,
+                    height: 100,
+                },
+                Window {
+                    id: 2,
+                    name: "Mock Window 1".to_string(),
+                    width: 100,
+                    height: 100,
+                },
+            ],
             down_keys: vec![],
             mouse_button: None,
         }
@@ -93,12 +124,71 @@ impl NativeApiTemplate for TesterNative {
     }
 }
 
+#[test]
+fn test_rvd_version_mismatch() {
+    let mut write = Vec::new();
+    let mut events = Vec::new();
+
+    let host_native = TesterNative::new();
+    let mut host = RvdHostHandler::new(host_native);
+
+    let client_native = TesterNative::new();
+    let mut client = RvdClientHandler::new(client_native);
+
+
+    let protocol_message = RvdMessage::ProtocolVersion(ProtocolVersion {
+        version: "badversion".to_string(),
+    });
+
+    client
+        .handle(protocol_message, &mut write, &mut events)
+        .expect("handler failed");
+    assert_eq!(events.len(), 1);
+    assert_eq!(write.len(), 1);
+    let event = events.remove(0);
+    assert!(matches!(
+        event,
+        InformEvent::RvdClientInform(RvdClientInform::VersionBad)
+    ));
+    let msg = write.remove(0);
+    assert!(matches!(&msg, &RvdMessage::ProtocolVersionResponse(_)));
+
+    host.handle(msg, &mut write, &mut events)
+        .expect("handler failed");
+    assert_eq!(write.len(), 0);
+    assert_eq!(events.len(), 1);
+    assert!(matches!(
+        events[0],
+        InformEvent::RvdHostInform(RvdHostInform::VersionBad)
+    ));
+}
 
 #[test]
 fn test_rvd_handshake() {
+    let mut write = Vec::new();
+    let mut events = Vec::new();
+
     let host_native = TesterNative::new();
-    let host = RvdHostHandler::new(host_native);
+    let mut host = RvdHostHandler::new(host_native);
 
     let client_native = TesterNative::new();
-    let client = RvdClientHandler::new(client_native);
+    let mut client = RvdClientHandler::new(client_native);
+
+
+    let protocol_message = RvdHostHandler::<TesterNative>::protocol_version();
+
+    client
+        .handle(protocol_message, &mut write, &mut events)
+        .expect("handler failed");
+    assert_eq!(events.len(), 0);
+    assert_eq!(write.len(), 1);
+
+    let msg = write.remove(0);
+
+    assert!(matches!(&msg, &RvdMessage::ProtocolVersionResponse(_)));
+
+    host.handle(msg, &mut write, &mut events)
+        .expect("handler failed");
+    assert_eq!(write.len(), 0);
+    assert_eq!(events.len(), 0);
 }

@@ -24,7 +24,7 @@ use self::{
 use crate::{
     io::NativeIoHandle,
     services::{
-        rvd::{RvdError, RvdInform},
+        rvd::{RvdClientInform, RvdError, RvdHostInform},
         sel_handler::SelError,
         svsc_handler::{SvscHandler, SvscInform},
         wpskka::{WpskkaClientInform, WpskkaHostInform},
@@ -146,7 +146,8 @@ impl<T: NativeApiTemplate> ScreenViewHandler<T> {
 
 pub enum InformEvent {
     SvscInform(SvscInform),
-    RvdInform(RvdInform),
+    RvdClientInform(RvdClientInform),
+    RvdHostInform(RvdHostInform),
     WpskkaClientInform(WpskkaClientInform),
     WpskkaHostInform(WpskkaHostInform),
 }

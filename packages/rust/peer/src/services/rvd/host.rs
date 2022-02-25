@@ -1,14 +1,19 @@
 use crate::services::{
     helpers::{clipboard_type_map::get_native_clipboard, rvd_common::*},
+    InformEvent,
     SendError,
 };
-use common::messages::rvd::{
-    AccessMask,
-    ButtonsMask,
-    ClipboardNotification,
-    DisplayChange,
-    DisplayId,
-    RvdMessage,
+use common::{
+    constants::RVD_VERSION,
+    messages::rvd::{
+        AccessMask,
+        ButtonsMask,
+        ClipboardNotification,
+        DisplayChange,
+        DisplayId,
+        ProtocolVersion,
+        RvdMessage,
+    },
 };
 use native::api::{MouseButton, MousePosition, NativeApiTemplate};
 use std::fmt::Debug;
@@ -41,6 +46,12 @@ impl<T: NativeApiTemplate> RvdHostHandler<T> {
         }
     }
 
+    pub fn protocol_version() -> RvdMessage {
+        RvdMessage::ProtocolVersion(ProtocolVersion {
+            version: RVD_VERSION.to_string(),
+        })
+    }
+
     fn permissions(&self) -> HostPermissions {
         return HostPermissions {
             clipboard_readable: self.current_display_change.clipboard_readable,
@@ -67,13 +78,15 @@ impl<T: NativeApiTemplate> RvdHostHandler<T> {
     pub fn handle(
         &mut self,
         msg: RvdMessage,
-        mut write: &mut Vec<RvdMessage>,
+        write: &mut Vec<RvdMessage>,
+        events: &mut Vec<InformEvent>,
     ) -> Result<(), RvdHostError<T>> {
         match self.state {
             HostState::Handshake => match msg {
                 RvdMessage::ProtocolVersionResponse(msg) => {
                     if !msg.ok {
-                        return Err(RvdHostError::VersionBad);
+                        events.push(InformEvent::RvdHostInform(RvdHostInform::VersionBad));
+                        return Ok(());
                     }
                     self.state = HostState::WaitingForDisplayChangeReceived;
                     Ok(())
@@ -176,16 +189,16 @@ impl<T: NativeApiTemplate> RvdHostHandler<T> {
 
 #[derive(Debug, thiserror::Error)]
 pub enum RvdHostError<T: NativeApiTemplate> {
-    #[error("client rejected version")]
-    VersionBad,
     #[error("invalid message {0:?} for state {1:?}")]
     WrongMessageForState(Box<RvdMessage>, HostState),
     #[error("native error: {0:?}")]
     NativeError(T::Error),
-    #[error("send_error")]
-    WriteError(#[from] SendError),
     #[error("permission error: cannot {0}")]
     PermissionsError(String),
     #[error("display not found: id number {0}")]
     DisplayNotFound(DisplayId),
+}
+
+pub enum RvdHostInform {
+    VersionBad,
 }
