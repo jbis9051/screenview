@@ -5,33 +5,48 @@ pub use client::*;
 pub use host::*;
 
 use crate::services::InformEvent;
-use common::messages::rvd::RvdMessage;
+use common::messages::rvd::{ClipboardMeta, ClipboardNotification, ClipboardType, RvdMessage};
 use native::api::NativeApiTemplate;
 
-pub enum RvdHandler<T: NativeApiTemplate> {
-    Host(RvdHostHandler<T>),
-    Client(RvdClientHandler<T>),
+// most of RVD messages result in purely external changes. As such, RVD emits events for almost all messages. It is the job of the caller to respond to these events
+pub enum RvdHandler {
+    Host(RvdHostHandler),
+    Client(RvdClientHandler),
 }
 
-impl<T: NativeApiTemplate> RvdHandler<T> {
+impl RvdHandler {
     pub fn handle(
         &mut self,
         msg: RvdMessage,
         write: &mut Vec<RvdMessage>,
         events: &mut Vec<InformEvent>,
-    ) -> Result<(), RvdError<T>> {
+    ) -> Result<(), RvdError> {
         match self {
-            Self::Host(handler) => handler.handle(msg, write, events)?,
+            Self::Host(handler) => handler.handle(msg, events)?,
             Self::Client(handler) => handler.handle(msg, write, events)?,
         }
         Ok(())
     }
+
+    pub fn clipboard_data(
+        &mut self,
+        data: Option<Vec<u8>>,
+        clipboard_type: ClipboardType,
+    ) -> RvdMessage {
+        RvdMessage::ClipboardNotification(ClipboardNotification {
+            info: ClipboardMeta {
+                clipboard_type,
+                content_request: data.is_some(),
+            },
+            content: data,
+        })
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum RvdError<T: NativeApiTemplate> {
+pub enum RvdError {
     #[error("host error: {0}")]
-    Host(#[from] RvdHostError<T>),
+    Host(#[from] RvdHostError),
     #[error("client error: {0}")]
-    Client(#[from] RvdClientError<T>),
+    Client(#[from] RvdClientError),
 }

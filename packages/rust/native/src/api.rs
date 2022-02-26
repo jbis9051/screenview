@@ -18,7 +18,7 @@ pub struct Window {
     pub height: u32,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct MousePosition {
     pub x: u32,
     pub y: u32,

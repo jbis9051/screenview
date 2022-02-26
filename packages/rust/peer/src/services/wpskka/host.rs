@@ -235,6 +235,7 @@ impl WpskkaHostHandler {
     }
 
     /// Warning: Steals keys, Overwrites ciphers
+    /// DO NOT CALL THIS FUNCTION WITHOUT AUTHENTICATING THE FOREIGN PUBLIC KEY OR THE WORLD WILL END
     fn derive_keys(&mut self) -> Result<(), WpskkaHostError> {
         // TODO zero data
         let keys = self.keys.take().unwrap();

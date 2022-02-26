@@ -1,5 +1,5 @@
 use crate::services::{
-    helpers::{clipboard_type_map::get_native_clipboard, rvd_common::*},
+    rvd::PermissionError::{ClipboardRead, ClipboardWrite, MouseInput},
     InformEvent,
     SendError,
 };
@@ -8,15 +8,39 @@ use common::{
     messages::rvd::{
         AccessMask,
         ButtonsMask,
+        ClipboardMeta,
         ClipboardNotification,
+        ClipboardType,
         DisplayChange,
         DisplayId,
+        DisplayInformation,
+        KeyInput,
         ProtocolVersion,
         RvdMessage,
     },
 };
 use native::api::{MouseButton, MousePosition, NativeApiTemplate};
 use std::fmt::Debug;
+
+#[derive(PartialEq)]
+pub enum DisplayType {
+    Monitor,
+    Window,
+}
+
+struct DisplayMap {
+    native_id: u32,
+    display_type: DisplayType,
+    information: DisplayInformation,
+}
+
+pub struct RvdDisplay {
+    pub native_id: u32,
+    pub name: String,
+    pub display_type: DisplayType,
+    pub width: u16,
+    pub height: u16,
+}
 
 #[derive(Copy, Clone, Debug)]
 pub enum HostState {
@@ -25,24 +49,23 @@ pub enum HostState {
     SendData,
 }
 
-#[derive(Default)]
-struct HostPermissions {
-    pub clipboard_readable: bool,
-    pub clipboard_writable: bool,
-}
-
-pub struct RvdHostHandler<T: NativeApiTemplate> {
+// While the spec allows for each individual display to be controllable or not we only support all are controllable or none are
+pub struct RvdHostHandler {
     state: HostState,
-    native: T,
-    current_display_change: DisplayChange, // the displays we are sharing
+    clipboard_readable: bool,
+    controllable: bool,
+    shared_displays: Vec<DisplayMap>,
+    share_buffer: Vec<RvdDisplay>,
 }
 
-impl<T: NativeApiTemplate> RvdHostHandler<T> {
-    pub fn new(native: T) -> Self {
+impl RvdHostHandler {
+    pub fn new() -> Self {
         Self {
             state: HostState::Handshake,
-            native,
-            current_display_change: Default::default(),
+            clipboard_readable: false,
+            controllable: false,
+            shared_displays: Vec::new(),
+            share_buffer: Vec::new(),
         }
     }
 
@@ -52,35 +75,86 @@ impl<T: NativeApiTemplate> RvdHostHandler<T> {
         })
     }
 
-    fn permissions(&self) -> HostPermissions {
-        return HostPermissions {
-            clipboard_readable: self.current_display_change.clipboard_readable,
-            clipboard_writable: self.current_display_change.clipboard_readable
-                && self
-                    .current_display_change
-                    .display_information
-                    .iter()
-                    .any(|info| info.access.contains(AccessMask::CONTROLLABLE)),
-        };
+    pub fn set_clipboard_readable(&mut self, is_readable: bool) {
+        if self.clipboard_readable == is_readable {
+            return;
+        }
+        self.clipboard_readable = is_readable;
+        // TODO send update
     }
 
-    fn display_is_controllable(&self, display_id: DisplayId) -> Result<bool, RvdHostError<T>> {
-        Ok(!self
-            .current_display_change
-            .display_information
-            .iter()
-            .find(|info| info.display_id == display_id)
-            .ok_or(RvdHostError::DisplayNotFound(display_id))?
-            .access
-            .contains(AccessMask::CONTROLLABLE))
+    pub fn set_controllable(&mut self, is_controllable: bool) {
+        if self.controllable == is_controllable {
+            return;
+        }
+        self.controllable = is_controllable;
+        // TODO send update
+    }
+
+    pub fn share_display(&mut self, display: RvdDisplay) {
+        self.share_buffer.push(display);
+    }
+
+    /// Add displays using share_display
+    /// This shares all displays in share_display. Updates to displays are handled properly.
+    pub fn display_update(&mut self) -> RvdMessage {
+        self.state = HostState::WaitingForDisplayChangeReceived;
+        let mut access = AccessMask::FLUSH;
+        if self.controllable {
+            access |= AccessMask::CONTROLLABLE;
+        }
+        self.share_buffer
+            .dedup_by(|a, b| a.display_type == b.display_type && a.native_id == b.native_id);
+        self.shared_displays = std::mem::take(&mut self.share_buffer)
+            .into_iter()
+            .map(|d| {
+                let mut access = access;
+
+                if self
+                    .shared_displays
+                    .iter()
+                    .find(|a| {
+                        a.display_type == d.display_type
+                            && a.native_id == d.native_id
+                            && a.information.width == d.width
+                            && a.information.height == d.height
+                    })
+                    .is_some()
+                {
+                    access.remove(AccessMask::FLUSH)
+                }
+
+                DisplayMap {
+                    native_id: d.native_id,
+                    display_type: d.display_type,
+                    information: DisplayInformation {
+                        display_id: 0,
+                        width: d.width,
+                        height: d.height,
+                        cell_width: 0,  // TODO
+                        cell_height: 0, // TODO
+                        access,
+                        name: d.name,
+                    },
+                }
+            })
+            .collect();
+
+        RvdMessage::DisplayChange(DisplayChange {
+            clipboard_readable: self.clipboard_readable && self.controllable,
+            display_information: self
+                .shared_displays
+                .iter()
+                .map(|d| d.information.clone())
+                .collect(),
+        })
     }
 
     pub fn handle(
         &mut self,
         msg: RvdMessage,
-        write: &mut Vec<RvdMessage>,
         events: &mut Vec<InformEvent>,
-    ) -> Result<(), RvdHostError<T>> {
+    ) -> Result<(), RvdHostError> {
         match self.state {
             HostState::Handshake => match msg {
                 RvdMessage::ProtocolVersionResponse(msg) => {
@@ -109,74 +183,49 @@ impl<T: NativeApiTemplate> RvdHostHandler<T> {
             },
             HostState::SendData => match msg {
                 RvdMessage::MouseInput(msg) => {
-                    if self.display_is_controllable(msg.display_id)? {
-                        return Err(RvdHostError::PermissionsError("mouse input".to_string()));
+                    if !self.controllable {
+                        return Err(RvdHostError::PermissionsError(MouseInput));
                     }
-                    self.native
-                        .set_pointer_position(MousePosition {
+                    events.push(InformEvent::RvdHostInform(RvdHostInform::MouseInput(
+                        MousePosition {
                             x: msg.x_location as u32,
                             y: msg.y_location as u32,
                             monitor_id: msg.display_id,
-                        })
-                        .map_err(RvdHostError::NativeError)?;
-                    // TODO macro?
-                    self.native
-                        .toggle_mouse(MouseButton::Left, msg.buttons.contains(ButtonsMask::LEFT))
-                        .map_err(RvdHostError::NativeError)?;
-                    self.native
-                        .toggle_mouse(
-                            MouseButton::Center,
-                            msg.buttons.contains(ButtonsMask::MIDDLE),
-                        )
-                        .map_err(RvdHostError::NativeError)?;
-                    self.native
-                        .toggle_mouse(MouseButton::Right, msg.buttons.contains(ButtonsMask::RIGHT))
-                        .map_err(RvdHostError::NativeError)?;
-                    self.native
-                        .toggle_mouse(
-                            MouseButton::ScrollUp,
-                            msg.buttons.contains(ButtonsMask::SCROLL_UP),
-                        )
-                        .map_err(RvdHostError::NativeError)?;
-                    self.native
-                        .toggle_mouse(
-                            MouseButton::ScrollDown,
-                            msg.buttons.contains(ButtonsMask::SCROLL_DOWN),
-                        )
-                        .map_err(RvdHostError::NativeError)?;
-                    self.native
-                        .toggle_mouse(
-                            MouseButton::ScrollLeft,
-                            msg.buttons.contains(ButtonsMask::SCROLL_LEFT),
-                        )
-                        .map_err(RvdHostError::NativeError)?;
-                    self.native
-                        .toggle_mouse(
-                            MouseButton::ScrollRight,
-                            msg.buttons.contains(ButtonsMask::SCROLL_RIGHT),
-                        )
-                        .map_err(RvdHostError::NativeError)?;
+                        },
+                        msg.buttons,
+                    )));
                     Ok(())
                 }
                 RvdMessage::KeyInput(msg) => {
-                    if self
-                        .current_display_change
-                        .display_information
-                        .iter()
-                        .any(|info| info.access.contains(AccessMask::CONTROLLABLE))
-                    {
-                        return Err(RvdHostError::PermissionsError("key input".to_string()));
+                    if !self.controllable {
+                        return Err(RvdHostError::PermissionsError(PermissionError::KeyInput));
                     }
-                    Ok(self
-                        .native
-                        .key_toggle(msg.key, msg.down)
-                        .map_err(RvdHostError::NativeError)?)
+                    events.push(InformEvent::RvdHostInform(RvdHostInform::KeyboardInput(
+                        KeyInput {
+                            down: msg.down,
+                            key: msg.key,
+                        },
+                    )));
+                    Ok(())
                 }
                 RvdMessage::ClipboardRequest(msg) => {
-                    clipboard_request_impl!(self, msg, write, RvdHostError<T>)
+                    if !self.clipboard_readable {
+                        return Err(RvdHostError::PermissionsError(ClipboardRead));
+                    }
+                    events.push(InformEvent::RvdHostInform(RvdHostInform::ClipboardRequest(
+                        msg.info.content_request,
+                        msg.info.clipboard_type,
+                    )));
+                    Ok(())
                 }
                 RvdMessage::ClipboardNotification(msg) => {
-                    clipboard_notificaiton_impl!(self, msg, RvdHostError<T>)
+                    if !(self.clipboard_readable && self.controllable) {
+                        return Err(RvdHostError::PermissionsError(ClipboardWrite));
+                    }
+                    events.push(InformEvent::RvdHostInform(
+                        RvdHostInform::ClipboardNotification(msg.content, msg.info.clipboard_type),
+                    ));
+                    Ok(())
                 }
                 _ => Err(RvdHostError::WrongMessageForState(
                     Box::new(msg),
@@ -187,18 +236,30 @@ impl<T: NativeApiTemplate> RvdHostHandler<T> {
     }
 }
 
+#[derive(Debug)]
+pub enum PermissionError {
+    MouseInput,
+    KeyInput,
+    ClipboardRead,
+    ClipboardWrite,
+}
+
 #[derive(Debug, thiserror::Error)]
-pub enum RvdHostError<T: NativeApiTemplate> {
+pub enum RvdHostError {
     #[error("invalid message {0:?} for state {1:?}")]
     WrongMessageForState(Box<RvdMessage>, HostState),
-    #[error("native error: {0:?}")]
-    NativeError(T::Error),
-    #[error("permission error: cannot {0}")]
-    PermissionsError(String),
+    #[error("permission error: cannot {0:?}")]
+    PermissionsError(PermissionError),
     #[error("display not found: id number {0}")]
     DisplayNotFound(DisplayId),
 }
 
 pub enum RvdHostInform {
     VersionBad,
+
+    MouseInput(MousePosition, ButtonsMask),
+    KeyboardInput(KeyInput),
+
+    ClipboardRequest(bool, ClipboardType),
+    ClipboardNotification(Option<Vec<u8>>, ClipboardType),
 }

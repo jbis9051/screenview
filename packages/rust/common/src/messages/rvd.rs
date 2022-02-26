@@ -21,7 +21,7 @@ pub struct ProtocolVersionResponse {
     pub ok: bool,
 }
 
-#[derive(MessageComponent, Debug, Default)]
+#[derive(MessageComponent, Debug, Default, Clone, PartialEq)]
 #[message_id(2)]
 pub struct DisplayChange {
     pub clipboard_readable: bool,
@@ -31,9 +31,9 @@ pub struct DisplayChange {
 
 pub type DisplayId = u8;
 
-#[derive(MessageComponent, Debug)]
+#[derive(MessageComponent, Debug, Clone, PartialEq)]
 pub struct DisplayInformation {
-    pub display_id: DisplayId,
+    pub display_id: DisplayId, // Note: this is not the same as the native id of a monitor or window
     pub width: u16,
     pub height: u16,
     pub cell_width: u16,
@@ -56,7 +56,7 @@ impl_bitflags_message_component!(AccessMask);
 #[message_id(3)]
 pub struct DisplayChangeReceived {}
 
-#[derive(MessageComponent, Debug)]
+#[derive(MessageComponent, Debug, Clone, PartialEq)]
 #[message_id(4)]
 pub struct MouseLocation {
     pub display_id: DisplayId,
@@ -87,7 +87,7 @@ bitflags! {
 
 impl_bitflags_message_component!(ButtonsMask);
 
-#[derive(MessageComponent, Debug)]
+#[derive(MessageComponent, Debug, PartialEq, Clone)]
 #[message_id(6)]
 pub struct KeyInput {
     pub down: bool,
@@ -247,7 +247,7 @@ pub struct ClipboardRequest {
     pub info: ClipboardMeta,
 }
 
-#[derive(MessageComponent, Debug)]
+#[derive(MessageComponent, Debug, Clone)]
 #[message_id(8)]
 pub struct ClipboardNotification {
     pub info: ClipboardMeta,
