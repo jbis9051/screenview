@@ -120,19 +120,19 @@ pub(crate) mod dummy {
             unimplemented!()
         }
 
-        fn pointer_position(&self) -> Result<MousePosition, Infallible> {
+        fn pointer_position(&mut self) -> Result<MousePosition, Infallible> {
             unimplemented!()
         }
 
-        fn set_pointer_position(&self, _pos: MousePosition) -> Result<(), Infallible> {
+        fn set_pointer_position(&mut self, _pos: MousePosition) -> Result<(), Infallible> {
             unimplemented!()
         }
 
-        fn toggle_mouse(&self, _button: MouseButton, _down: bool) -> Result<(), Infallible> {
+        fn toggle_mouse(&mut self, _button: MouseButton, _down: bool) -> Result<(), Infallible> {
             unimplemented!()
         }
 
-        fn clipboard_content(&self, _type_name: &ClipboardType) -> Result<Vec<u8>, Infallible> {
+        fn clipboard_content(&mut self, _type_name: &ClipboardType) -> Result<Vec<u8>, Infallible> {
             unimplemented!()
         }
 
@@ -152,11 +152,11 @@ pub(crate) mod dummy {
             unimplemented!()
         }
 
-        fn capture_monitor_frame(&self, _monitor_id: u32) -> Result<Frame, Infallible> {
+        fn capture_monitor_frame(&mut self, _monitor_id: u32) -> Result<Frame, Infallible> {
             unimplemented!()
         }
 
-        fn capture_window_frame(&self, _monitor_id: u32) -> Result<Frame, Infallible> {
+        fn capture_window_frame(&mut self, _monitor_id: u32) -> Result<Frame, Infallible> {
             unimplemented!()
         }
     }
