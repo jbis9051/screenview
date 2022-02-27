@@ -21,7 +21,7 @@ use self::{
     wpskka::{WpskkaError, WpskkaHandler},
 };
 use crate::{
-    io::IoHandle,
+    io::NativeIoHandle,
     services::{
         rvd::{RvdError, RvdInform},
         sel_handler::SelError,
@@ -36,7 +36,7 @@ pub struct ScreenViewHandler {
     svsc: SvscHandler,
     wpskka: WpskkaHandler,
     rvd: RvdHandler,
-    io_handle: IoHandle,
+    io_handle: NativeIoHandle,
 }
 
 impl ScreenViewHandler {
@@ -44,7 +44,7 @@ impl ScreenViewHandler {
         let sel_handler = &self.sel;
         let svsc_handler = &self.svsc;
         let wpskka_handler = &mut self.wpskka;
-        let io_handle = &self.io_handle;
+        let io_handle = &mut self.io_handle;
 
         match message {
             ScreenViewMessage::RvdMessage(rvd) =>
@@ -65,7 +65,7 @@ impl ScreenViewHandler {
         let svsc = &mut self.svsc;
         let wpskka = &mut self.wpskka;
         let rvd = &mut self.rvd;
-        let io_handle = &self.io_handle;
+        let io_handle = &mut self.io_handle;
         let mut events = Vec::new();
 
         let svsc_data = sel.handle(message)?;
@@ -95,7 +95,7 @@ impl ScreenViewHandler {
     }
 
     fn send_rvd(
-        io_handle: &IoHandle,
+        io_handle: &mut NativeIoHandle,
         sel_handler: &SelHandler,
         svsc_handler: &SvscHandler,
         wpskka_handler: &mut WpskkaHandler,
@@ -127,7 +127,7 @@ impl ScreenViewHandler {
     }
 
     fn send_wpskka(
-        io_handle: &IoHandle,
+        io_handle: &mut NativeIoHandle,
         sel_handler: &SelHandler,
         svsc_handler: &SvscHandler,
         wpskka: WpskkaMessage,
@@ -145,7 +145,7 @@ impl ScreenViewHandler {
     }
 
     fn send_svsc(
-        io_handle: &IoHandle,
+        io_handle: &mut NativeIoHandle,
         sel_handler: &SelHandler,
         svsc_handler: &SvscHandler,
         svsc: SvscMessage,
@@ -167,7 +167,11 @@ impl ScreenViewHandler {
         Self::send_sel(io_handle, sel, reliable)
     }
 
-    fn send_sel(io_handle: &IoHandle, sel: SelMessage, reliable: bool) -> Result<(), SendError> {
+    fn send_sel(
+        io_handle: &mut NativeIoHandle,
+        sel: SelMessage,
+        reliable: bool,
+    ) -> Result<(), SendError> {
         let sent = if reliable {
             io_handle.send_reliable(sel)
         } else {
