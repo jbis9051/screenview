@@ -96,7 +96,7 @@ pub trait NativeApiTemplate {
     }
 }
 
-#[cfg(dummy_api)]
+#[cfg(dummy_native)]
 pub(crate) mod dummy {
     use super::*;
     use std::convert::Infallible;
