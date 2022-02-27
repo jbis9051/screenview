@@ -15,19 +15,19 @@ impl NativeApiTemplate for WindowsApi {
         unimplemented!()
     }
 
-    fn pointer_position(&self) -> Result<MousePosition, Error> {
+    fn pointer_position(&mut self) -> Result<MousePosition, Error> {
         unimplemented!()
     }
 
-    fn set_pointer_position(&self, pos: MousePosition) -> Result<(), Error> {
+    fn set_pointer_position(&mut self, pos: MousePosition) -> Result<(), Error> {
         unimplemented!()
     }
 
-    fn toggle_mouse(&self, button: MouseButton, down: bool) -> Result<(), Error> {
+    fn toggle_mouse(&mut self, button: MouseButton, down: bool) -> Result<(), Error> {
         unimplemented!()
     }
 
-    fn clipboard_content(&self, type_name: &ClipboardType) -> Result<Vec<u8>, Error> {
+    fn clipboard_content(&mut self, type_name: &ClipboardType) -> Result<Vec<u8>, Error> {
         unimplemented!()
     }
 
@@ -47,19 +47,19 @@ impl NativeApiTemplate for WindowsApi {
         unimplemented!()
     }
 
-    fn capture_monitor_frame(&self, monitor_id: u32) -> Result<Frame, Error> {
+    fn capture_monitor_frame(&mut self, monitor_id: u32) -> Result<Frame, Error> {
         unimplemented!()
     }
 
-    fn update_monitor_frame(&self, monitor_id: u32, cap: &mut Frame) -> Result<(), Error> {
+    fn update_monitor_frame(&mut self, monitor_id: u32, cap: &mut Frame) -> Result<(), Error> {
         unimplemented!()
     }
 
-    fn capture_window_frame(&self, window_id: u32) -> Result<Frame, Error> {
+    fn capture_window_frame(&mut self, window_id: u32) -> Result<Frame, Error> {
         unimplemented!()
     }
 
-    fn update_window_frame(&self, window_id: u32, cap: &mut Frame) -> Result<(), Error> {
+    fn update_window_frame(&mut self, window_id: u32, cap: &mut Frame) -> Result<(), Error> {
         unimplemented!()
     }
 }
