@@ -4,7 +4,7 @@ pub mod api;
 mod keymaps;
 
 cfg_if! {
-    if #[cfg(dummy_api)] {
+    if #[cfg(dummy_native)] {
         pub use api::dummy::DummyApi as NativeApi;
         pub use std::convert::Infallible as NativeApiError;
     } else if #[cfg(target_os="linux")] {

@@ -98,14 +98,14 @@ impl ScreenViewHandler {
         }
     }
 
-    fn send_wpskka(&self, message: WpskkaMessage) -> Result<(), SendError> {
+    fn send_wpskka(&mut self, message: WpskkaMessage) -> Result<(), SendError> {
         let data = message.to_bytes()?;
         let svsc = SvscHandler::wrap(data);
         let reliable = !matches!(message, WpskkaMessage::TransportDataMessageUnreliable(_));
         self.send_svsc(SvscMessage::SessionDataSend(svsc), reliable)
     }
 
-    fn send_svsc(&self, message: SvscMessage, reliable: bool) -> Result<(), SendError> {
+    fn send_svsc(&mut self, message: SvscMessage, reliable: bool) -> Result<(), SendError> {
         let data = message.to_bytes()?;
 
         let sel = if reliable {
@@ -122,7 +122,7 @@ impl ScreenViewHandler {
         self.send_sel(sel)
     }
 
-    fn send_sel(&self, sel: SelMessage) -> Result<(), SendError> {
+    fn send_sel(&mut self, sel: SelMessage) -> Result<(), SendError> {
         let sent = match sel {
             SelMessage::TransportDataMessageReliable(_) => self.io_handle.send_reliable(sel),
             SelMessage::TransportDataPeerMessageUnreliable(_) =>
