@@ -4,9 +4,11 @@ mod host;
 pub use client::*;
 pub use host::*;
 
-use crate::services::{InformEvent, SendError};
-use common::messages::rvd::RvdMessage;
+use crate::services::InformEvent;
+use common::messages::rvd::{ClipboardMeta, ClipboardNotification, ClipboardType, RvdMessage};
+use native::api::NativeApiTemplate;
 
+// most of RVD messages result in purely external changes. As such, RVD emits events for almost all messages. It is the job of the caller to respond to these events
 pub enum RvdHandler {
     Host(RvdHostHandler),
     Client(RvdClientHandler),
@@ -20,10 +22,24 @@ impl RvdHandler {
         events: &mut Vec<InformEvent>,
     ) -> Result<(), RvdError> {
         match self {
-            Self::Host(handler) => handler.handle(msg, write)?,
+            Self::Host(handler) => handler.handle(msg, events)?,
             Self::Client(handler) => handler.handle(msg, write, events)?,
         }
         Ok(())
+    }
+
+    pub fn clipboard_data(
+        &mut self,
+        data: Option<Vec<u8>>,
+        clipboard_type: ClipboardType,
+    ) -> RvdMessage {
+        RvdMessage::ClipboardNotification(ClipboardNotification {
+            info: ClipboardMeta {
+                clipboard_type,
+                content_request: data.is_some(),
+            },
+            content: data,
+        })
     }
 }
 

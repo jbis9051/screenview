@@ -51,7 +51,7 @@ impl MessageComponent for ExpirationTime {
     }
 }
 
-#[derive(Debug, MessageComponent)]
+#[derive(Debug, MessageComponent, PartialEq, Clone)]
 pub struct LeaseResponseData {
     pub id: u32,
     pub cookie: Cookie,
@@ -71,7 +71,7 @@ pub struct LeaseExtensionResponse {
     pub new_expiration: Option<ExpirationTime>,
 }
 
-pub type LeaseId = u32;
+pub type LeaseId = [u8; 4];
 
 #[derive(Debug, MessageComponent)]
 #[message_id(6)]
@@ -115,17 +115,17 @@ pub type SessionId = [u8; 16];
 pub type PeerId = [u8; 16];
 pub type PeerKey = [u8; 16];
 
-#[derive(Debug, MessageComponent, Clone)]
+#[derive(Debug, MessageComponent, Clone, PartialEq)]
 pub struct SessionData {
     pub session_id: SessionId,
     pub peer_id: PeerId,
     pub peer_key: PeerKey,
 }
 
-#[derive(Debug, MessageComponent)]
+#[derive(Debug, MessageComponent, Clone)]
 #[message_id(7)]
 pub struct EstablishSessionResponse {
-    pub lease_id: u32,
+    pub lease_id: LeaseId,
     pub status: EstablishSessionStatus,
     #[parse(condition = "status == EstablishSessionStatus::Success")]
     pub response_data: Option<SessionData>,

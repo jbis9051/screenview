@@ -1,4 +1,4 @@
-mod auth;
+pub mod auth;
 mod client;
 mod host;
 
@@ -35,7 +35,7 @@ impl WpskkaHandler {
         msg: Vec<u8>,
         cipher: &CipherUnreliablePeer,
     ) -> Result<TransportDataMessageUnreliable, CipherError> {
-        let (data, counter) = cipher.encrypt(msg)?;
+        let (data, counter) = cipher.encrypt(&msg)?;
         Ok(TransportDataMessageUnreliable { counter, data })
     }
 
@@ -49,7 +49,7 @@ impl WpskkaHandler {
         };
 
         Ok(TransportDataMessageReliable {
-            data: cipher.encrypt(msg)?,
+            data: cipher.encrypt(&msg)?,
         })
     }
 

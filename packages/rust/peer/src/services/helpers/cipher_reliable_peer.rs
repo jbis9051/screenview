@@ -17,7 +17,7 @@ impl CipherReliablePeer {
         }
     }
 
-    pub fn encrypt(&mut self, plainbytes: Vec<u8>) -> Result<Vec<u8>, CipherError> {
+    pub fn encrypt(&mut self, plainbytes: &[u8]) -> Result<Vec<u8>, CipherError> {
         let cipherbytes = sel_cipher::encrypt(plainbytes, &self.send_key, self.send_nonce)
             .map_err(|_| CipherError::CipherError)?;
         self.send_nonce = self
@@ -27,7 +27,7 @@ impl CipherReliablePeer {
         Ok(cipherbytes)
     }
 
-    pub fn decrypt(&mut self, cipherbytes: Vec<u8>) -> Result<Vec<u8>, CipherError> {
+    pub fn decrypt(&mut self, cipherbytes: &[u8]) -> Result<Vec<u8>, CipherError> {
         let plainbytes = sel_cipher::decrypt(cipherbytes, &self.receive_key, self.receive_nonce)
             .map_err(|_| CipherError::CipherError)?;
         self.receive_nonce = self

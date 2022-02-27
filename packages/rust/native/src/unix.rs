@@ -136,7 +136,7 @@ impl NativeApiTemplate for X11Api {
         Ok(())
     }
 
-    fn pointer_position(&self) -> Result<MousePosition, Error> {
+    fn pointer_position(&mut self) -> Result<MousePosition, Error> {
         let reply = self
             .conn
             .wait_for_reply(self.conn.send_request(&QueryPointer { window: self.root }))?;
@@ -160,7 +160,7 @@ impl NativeApiTemplate for X11Api {
         })
     }
 
-    fn set_pointer_position(&self, pos: MousePosition) -> Result<(), Error> {
+    fn set_pointer_position(&mut self, pos: MousePosition) -> Result<(), Error> {
         self.conn
             .check_request(self.conn.send_request_checked(&WarpPointer {
                 src_window: Window::none(),
@@ -175,7 +175,7 @@ impl NativeApiTemplate for X11Api {
             .map_err(Into::into)
     }
 
-    fn toggle_mouse(&self, button: MouseButton, down: bool) -> Result<(), Error> {
+    fn toggle_mouse(&mut self, button: MouseButton, down: bool) -> Result<(), Error> {
         let dpy = self.conn.get_raw_dpy();
 
         unsafe {
@@ -186,7 +186,7 @@ impl NativeApiTemplate for X11Api {
         Ok(())
     }
 
-    fn clipboard_content(&self, type_name: &ClipboardType) -> Result<Vec<u8>, Error> {
+    fn clipboard_content(&mut self, type_name: &ClipboardType) -> Result<Vec<u8>, Error> {
         let atoms = &self.clipboard.setter.atoms;
         let target = match type_name {
             ClipboardType::Text => atoms.utf8_string,
@@ -275,7 +275,7 @@ impl NativeApiTemplate for X11Api {
         Ok(api_windows)
     }
 
-    fn capture_monitor_frame(&self, monitor_id: u32) -> Result<Frame, Error> {
+    fn capture_monitor_frame(&mut self, monitor_id: u32) -> Result<Frame, Error> {
         let info = match self.monitors.get(monitor_id as usize) {
             Some(info) => info,
             None => return Err(Error::UnknownMonitor),
@@ -284,7 +284,7 @@ impl NativeApiTemplate for X11Api {
         self.capture(self.root, info.x, info.y, info.width, info.height)
     }
 
-    fn update_monitor_frame(&self, monitor_id: u32, frame: &mut Frame) -> Result<(), Error> {
+    fn update_monitor_frame(&mut self, monitor_id: u32, frame: &mut Frame) -> Result<(), Error> {
         let info = match self.monitors.get(monitor_id as usize) {
             Some(info) => info,
             None => return Err(Error::UnknownMonitor),
@@ -293,7 +293,7 @@ impl NativeApiTemplate for X11Api {
         self.update_frame(self.root, info.x, info.y, info.width, info.height, frame)
     }
 
-    fn capture_window_frame(&self, window_id: u32) -> Result<Frame, Error> {
+    fn capture_window_frame(&mut self, window_id: u32) -> Result<Frame, Error> {
         let x11_window = unsafe { Window::new(window_id) };
         let geometry = self
             .conn
@@ -310,7 +310,7 @@ impl NativeApiTemplate for X11Api {
         )
     }
 
-    fn update_window_frame(&self, window_id: u32, frame: &mut Frame) -> Result<(), Error> {
+    fn update_window_frame(&mut self, window_id: u32, frame: &mut Frame) -> Result<(), Error> {
         let x11_window = unsafe { Window::new(window_id) };
         let geometry = self
             .conn

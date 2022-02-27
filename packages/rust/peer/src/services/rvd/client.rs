@@ -1,15 +1,8 @@
-use crate::{
-    native::{api::NativeApiTemplate, NativeApi, NativeApiError},
-    services::{
-        helpers::{clipboard_type_map::get_native_clipboard, rvd_common::*},
-        InformEvent,
-        SendError,
-    },
-};
+use crate::services::InformEvent;
 use common::{
-    constants::SVSC_VERSION,
+    constants::RVD_VERSION,
     messages::rvd::{
-        ClipboardNotification,
+        ClipboardType,
         DisplayChange,
         DisplayChangeReceived,
         MouseLocation,
@@ -24,31 +17,15 @@ pub enum ClientState {
     Data,
 }
 
-#[derive(Default)]
-struct ClientPermissions {
-    pub clipboard_readable: bool,
-    pub clipboard_writable: bool,
-}
-
 pub struct RvdClientHandler {
     state: ClientState,
-    native: NativeApi,
-    permissions: ClientPermissions,
-    current_display_change: DisplayChange,
 }
 
 impl RvdClientHandler {
-    pub fn new(native: NativeApi) -> Self {
+    pub fn new() -> Self {
         Self {
             state: ClientState::Handshake,
-            native,
-            permissions: Default::default(),
-            current_display_change: Default::default(),
         }
-    }
-
-    fn permissions(&self) -> &ClientPermissions {
-        &self.permissions
     }
 
     pub fn handle(
@@ -60,16 +37,16 @@ impl RvdClientHandler {
         match self.state {
             ClientState::Handshake => match msg {
                 RvdMessage::ProtocolVersion(msg) => {
-                    let ok = msg.version == SVSC_VERSION;
+                    let ok = msg.version == RVD_VERSION;
                     write.push(RvdMessage::ProtocolVersionResponse(
                         ProtocolVersionResponse { ok },
                     ));
-                    self.state = ClientState::Data;
                     if ok {
-                        Ok(())
+                        self.state = ClientState::Data;
                     } else {
-                        Err(RvdClientError::VersionBad)
+                        events.push(InformEvent::RvdClientInform(RvdClientInform::VersionBad));
                     }
+                    Ok(())
                 }
                 _ => Err(RvdClientError::WrongMessageForState(
                     Box::new(msg),
@@ -81,19 +58,26 @@ impl RvdClientHandler {
                     todo!()
                 }
                 RvdMessage::DisplayChange(msg) => {
-                    self.current_display_change = msg;
+                    events.push(InformEvent::RvdClientInform(
+                        RvdClientInform::DisplayChange(msg),
+                    ));
                     write.push(RvdMessage::DisplayChangeReceived(DisplayChangeReceived {}));
                     Ok(())
                 }
                 RvdMessage::MouseLocation(msg) => {
-                    events.push(InformEvent::RvdInform(RvdInform::MouseLocation(msg)));
+                    events.push(InformEvent::RvdClientInform(
+                        RvdClientInform::MouseLocation(msg),
+                    ));
                     Ok(())
                 }
-                RvdMessage::ClipboardRequest(msg) => {
-                    clipboard_request_impl!(self, msg, write, RvdClientError)
-                }
                 RvdMessage::ClipboardNotification(msg) => {
-                    clipboard_notificaiton_impl!(self, msg, RvdClientError)
+                    events.push(InformEvent::RvdClientInform(
+                        RvdClientInform::ClipboardNotification(
+                            msg.content,
+                            msg.info.clipboard_type,
+                        ),
+                    ));
+                    Ok(())
                 }
                 _ => Err(RvdClientError::WrongMessageForState(
                     Box::new(msg),
@@ -106,16 +90,16 @@ impl RvdClientHandler {
 
 #[derive(Debug, thiserror::Error)]
 pub enum RvdClientError {
-    #[error("client rejected version")]
-    VersionBad,
     #[error("invalid message {0:?} for state {1:?}")]
     WrongMessageForState(Box<RvdMessage>, ClientState),
-    #[error("native error: {0}")]
-    NativeError(#[from] NativeApiError),
     #[error("permission error: cannot {0}")]
     PermissionsError(String),
 }
 
-pub enum RvdInform {
+pub enum RvdClientInform {
+    VersionBad,
+
     MouseLocation(MouseLocation),
+    DisplayChange(DisplayChange),
+    ClipboardNotification(Option<Vec<u8>>, ClipboardType),
 }

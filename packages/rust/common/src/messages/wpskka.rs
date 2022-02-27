@@ -54,15 +54,15 @@ impl MessageComponent for AuthSchemeType {
 #[derive(Debug, MessageComponent)]
 #[message_id(1)]
 pub struct AuthScheme {
-    pub public_key: [u8; 16],
+    pub public_key: [u8; 32],
     #[parse(len_prefixed(1))]
-    pub num_auth_schemes: Vec<AuthSchemeType>,
+    pub auth_schemes: Vec<AuthSchemeType>,
 }
 
 #[derive(Debug, MessageComponent)]
 #[message_id(2)]
 pub struct TryAuth {
-    pub public_key: [u8; 16],
+    pub public_key: [u8; 32],
     pub auth_scheme: AuthSchemeType,
 }
 

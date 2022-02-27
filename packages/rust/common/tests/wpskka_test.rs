@@ -8,9 +8,9 @@ use std::io::Cursor;
 fn test_auth_scheme() {
     let bytes = include_bytes!("binary/wpskka/auth_scheme.bin");
     let message: AuthScheme = AuthScheme::read(&mut Cursor::new(bytes)).unwrap();
-    assert_eq!(message.public_key, bytes[0 .. 16]);
-    assert_eq!(message.num_auth_schemes.len(), 1);
-    assert_eq!(message.num_auth_schemes[0], AuthSchemeType::SrpDynamic);
+    assert_eq!(message.public_key, bytes[0 .. 32]);
+    assert_eq!(message.auth_schemes.len(), 1);
+    assert_eq!(message.auth_schemes[0], AuthSchemeType::SrpDynamic);
     test_write(&message, bytes);
 }
 
@@ -18,7 +18,7 @@ fn test_auth_scheme() {
 fn test_try_auth() {
     let bytes = include_bytes!("binary/wpskka/try_auth.bin");
     let message: TryAuth = TryAuth::read(&mut Cursor::new(bytes)).unwrap();
-    assert_eq!(message.public_key, bytes[0 .. 16]);
+    assert_eq!(message.public_key, bytes[0 .. 32]);
     assert_eq!(message.auth_scheme, AuthSchemeType::SrpStatic);
     test_write(&message, bytes);
 }

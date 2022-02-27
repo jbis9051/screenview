@@ -1,4 +1,4 @@
-mod helpers;
+pub mod helpers;
 pub mod rvd;
 pub mod sel_handler;
 pub mod svsc_handler;
@@ -24,12 +24,13 @@ use self::{
 use crate::{
     io::NativeIoHandle,
     services::{
-        rvd::{RvdError, RvdInform},
+        rvd::{RvdClientInform, RvdError, RvdHostInform},
         sel_handler::SelError,
         svsc_handler::{SvscHandler, SvscInform},
         wpskka::{WpskkaClientInform, WpskkaHostInform},
     },
 };
+use native::api::NativeApiTemplate;
 use std::io::Cursor;
 
 pub struct ScreenViewHandler {
@@ -55,11 +56,19 @@ impl ScreenViewHandler {
 
         let svsc_data = self.sel.handle(message)?;
         let svsc_message = SvscMessage::read(&mut Cursor::new(&svsc_data[..]))?;
-
-        let wpskka_data = match self.svsc.handle(svsc_message, &mut events)? {
+        let mut send_svsc = Vec::new();
+        let wpskka_data = match self
+            .svsc
+            .handle(svsc_message, &mut send_svsc, &mut events)?
+        {
             Some(data) => data,
             None => return Ok(events),
         };
+
+        for message in send_svsc {
+            self.send_svsc(message, true)?;
+        }
+
         let wpskka_message = WpskkaMessage::read(&mut Cursor::new(&wpskka_data[..]))?;
         let mut send_wpskka = Vec::new();
         let rvd_data = self
@@ -79,6 +88,7 @@ impl ScreenViewHandler {
         for message in send_rvd {
             self.send_rvd(message)?;
         }
+
         Ok(events)
     }
 
@@ -109,14 +119,10 @@ impl ScreenViewHandler {
         let data = message.to_bytes()?;
 
         let sel = if reliable {
-            SelMessage::TransportDataMessageReliable(SelHandler::wrap_reliable(data))
+            SelHandler::wrap_reliable(data)
         } else {
             let cipher = self.sel.unreliable_cipher();
-            SelMessage::TransportDataPeerMessageUnreliable(SelHandler::wrap_unreliable(
-                data,
-                *self.svsc.peer_id().unwrap(),
-                cipher,
-            )?)
+            SelHandler::wrap_unreliable(data, *self.svsc.peer_id().unwrap(), cipher)?
         };
 
         self.send_sel(sel)
@@ -140,7 +146,8 @@ impl ScreenViewHandler {
 
 pub enum InformEvent {
     SvscInform(SvscInform),
-    RvdInform(RvdInform),
+    RvdClientInform(RvdClientInform),
+    RvdHostInform(RvdHostInform),
     WpskkaClientInform(WpskkaClientInform),
     WpskkaHostInform(WpskkaHostInform),
 }

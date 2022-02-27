@@ -1,5 +1,5 @@
 use crate::services::{
-    helpers::wpskka_common::{hmac, hmac_verify, kdf1, random_bytes, random_srp_private_value},
+    helpers::crypto::{hmac, hmac_verify, kdf1, random_bytes, random_srp_private_value},
     wpskka::auth::srp_host::State::Done,
 };
 use common::{
@@ -22,17 +22,19 @@ pub struct SrpAuthHost {
     state: State,
     authenticated: bool,
     verifier: Option<Vec<u8>>,
-    public_key: PublicKey,
+    client_public_key: Vec<u8>,
+    our_public_key: PublicKey,
     b: Option<Vec<u8>>,
 }
 
 impl SrpAuthHost {
-    pub fn new(public_key: PublicKey) -> Self {
+    pub fn new(our_public_key: PublicKey, client_public_key: Vec<u8>) -> Self {
         Self {
             state: State::PreHostHello,
             authenticated: false,
             verifier: None,
-            public_key,
+            client_public_key,
+            our_public_key,
             b: None,
         }
     }
@@ -80,11 +82,11 @@ impl SrpAuthHost {
                         kdf1(srp_verifier.key())
                     };
 
-                    if !hmac_verify(&srp_key_kdf, self.public_key.as_ref(), &msg.mac) {
+                    if !hmac_verify(&srp_key_kdf, &self.client_public_key, &msg.mac) {
                         return Err(SrpHostError::AuthFailed);
                     }
 
-                    let mac = hmac(&srp_key_kdf, self.public_key.as_ref());
+                    let mac = hmac(&srp_key_kdf, self.our_public_key.as_ref());
 
                     self.state = Done;
                     self.authenticated = true;

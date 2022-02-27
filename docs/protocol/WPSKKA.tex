@@ -18,7 +18,7 @@ WPSKKA begins with a handshake to choose an authentication scheme. The goal of a
         \hline
         1                & type             & 1              \\
         \hline
-        16               & public-key       &                \\
+        32               & public-key       &                \\
         \hline
         1                & num-auth-schemes &                \\
         \hline
@@ -60,7 +60,7 @@ The TryAuth messages indicates a Client would to attempt authentication with a p
         \hline
         1              & type               & 2              \\
         \hline
-        16               & public-key       &                \\
+        32               & public-key       &                \\
         \hline
         1              & auth-scheme-number &                \\
         \hline
@@ -114,12 +114,12 @@ ok indicates whether the authentication method was successful (1) or not (0). If
 \begin{align*}
     & C_{host} = \text{DH}(E_{client}^{pub},\ E_{host}^{priv})\\
     & C_{client} = \text{DH}(E_{host}^{pub},\ E_{client}^{priv})\\
-    & (\mathit{ST}_{peer}^{send} = \mathit{ST}_{serv}^{recv},\ \mathit{ST}_{peer}^{recv} = \mathit{ST}_{serv}^{send}, \mathit{SU}_{peer}^{send} = \mathit{SU}_{serv}^{recv},\ \mathit{SU}_{peer}^{recv} = \mathit{SU}_{serv}^{send}) \coloneqq \text{KDF}_4(C_{host} = C_{client},
+    & (\mathit{ST}_{host}^{send} = \mathit{ST}_{client}^{recv},\ \mathit{ST}_{host}^{recv} = \mathit{ST}_{client}^{send}, \mathit{SU}_{host}^{send} = \mathit{SU}_{client}^{recv},\ \mathit{SU}_{host}^{recv} = \mathit{SU}_{client}^{send}) \coloneqq \text{KDF}_4(C_{host} = C_{client},
     \ \epsilon) \\
     & \mathit{NT}_{host}^{send} = \mathit{NT}_{client}^{recv} = \mathit{NT}_{host}^{recv} = \mathit{NT}_{client}^{send} = \mathit{NU}_{host}^{send} = \mathit{NU}_{client}^{recv} = \mathit{NU}_{host}^{recv} = \mathit{NU}_{client}^{send} \coloneqq 0
 \end{align*}
 
-ST keys and NT nonces are used for TCP. SU keys and NT nonces are using for UDP.
+ST keys and NT nonces are used for TCP. SU keys and TU nonces are using for UDP.
 
 \subsection{Subsequent Messages: Transport Data Messages}
 
@@ -205,7 +205,7 @@ client.\\
         \hline
         16             & salt          &                \\
         \hline
-        32             & srp-B         &                \\
+        256             & srp-B         &                \\
         \hline
     \end{tabular}
 \end{center}
@@ -229,7 +229,7 @@ client.\\
         \hline
         1              & type          & 2              \\
         \hline
-        32             & srp-A         &                \\
+        256             & srp-A         &                \\
         \hline
         32             & mac           &                \\
         \hline
@@ -242,7 +242,7 @@ client.\\
     & \text{mac} \coloneqq \text{HMAC}(\text{KDF}_1(L_{client}), \text{public-key})\\
 \end{align*}
 
-public-key is the client's public key
+public-key is the Client's public key
 
 The Host validates the mac. If the mac is incorrect a failed AuthResult is sent.
 
