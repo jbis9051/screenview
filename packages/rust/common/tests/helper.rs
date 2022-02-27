@@ -8,6 +8,7 @@ pub fn test_write<T: MessageComponent>(message: &T, bytes: &[u8]) {
     assert_eq!(inner, bytes, "write failed");
 }
 
+#[macro_export]
 macro_rules! b_to_u64 {
     ($b:literal) => {
         &u64::from_le_bytes(*$b)

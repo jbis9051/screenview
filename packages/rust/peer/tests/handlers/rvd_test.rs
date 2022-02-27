@@ -15,7 +15,7 @@ use common::messages::rvd::{
     ProtocolVersionResponse,
     RvdMessage,
 };
-use native::api::{Key, Monitor, MouseButton, MousePosition, NativeApiTemplate, Window};
+use native::api::MousePosition;
 use peer::services::{
     rvd::{
         DisplayType,

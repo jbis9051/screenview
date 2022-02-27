@@ -1,15 +1,12 @@
 use crate::services::{
     rvd::PermissionError::{ClipboardRead, ClipboardWrite, MouseInput},
     InformEvent,
-    SendError,
 };
 use common::{
     constants::RVD_VERSION,
     messages::rvd::{
         AccessMask,
         ButtonsMask,
-        ClipboardMeta,
-        ClipboardNotification,
         ClipboardType,
         DisplayChange,
         DisplayId,
@@ -19,7 +16,7 @@ use common::{
         RvdMessage,
     },
 };
-use native::api::{MouseButton, MousePosition, NativeApiTemplate};
+use native::api::MousePosition;
 use std::fmt::Debug;
 
 #[derive(PartialEq)]

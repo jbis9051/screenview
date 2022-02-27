@@ -1,5 +1,5 @@
 use chacha20poly1305::{
-    aead::{Aead, AeadMut, Error, NewAead},
+    aead::{Aead, Error, NewAead},
     ChaCha20Poly1305,
     Key,
     Nonce,

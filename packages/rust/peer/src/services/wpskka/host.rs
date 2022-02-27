@@ -9,7 +9,6 @@ use crate::services::{
         AuthScheme,
     },
     InformEvent,
-    SendError,
 };
 use common::messages::{
     auth::srp::SrpMessage,
@@ -22,7 +21,6 @@ use common::messages::{
     },
     MessageComponent,
 };
-use ring::agreement::{EphemeralPrivateKey, PublicKey};
 use std::{io::Cursor, sync::Arc};
 
 

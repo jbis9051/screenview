@@ -1,8 +1,4 @@
-use common::messages::sel::{
-    SelMessage,
-    TransportDataMessageReliable,
-    TransportDataServerMessageUnreliable,
-};
+use common::messages::sel::{SelMessage, TransportDataServerMessageUnreliable};
 use peer::{
     hash,
     services::{
@@ -24,7 +20,7 @@ fn sel_reliable() {
 #[test]
 #[should_panic]
 fn sel_try_reliable_before_ready() {
-    let mut handler = SelHandler::new();
+    let handler = SelHandler::new();
     handler.unreliable_cipher();
 }
 

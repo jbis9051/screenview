@@ -6,11 +6,7 @@ pub use client::*;
 pub use host::*;
 
 use super::helpers::cipher_reliable_peer::CipherError;
-use crate::services::{
-    helpers::cipher_unreliable_peer::CipherUnreliablePeer,
-    InformEvent,
-    SendError,
-};
+use crate::services::{helpers::cipher_unreliable_peer::CipherUnreliablePeer, InformEvent};
 use common::messages::wpskka::{
     TransportDataMessageReliable,
     TransportDataMessageUnreliable,

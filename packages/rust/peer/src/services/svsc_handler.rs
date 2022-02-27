@@ -5,10 +5,8 @@ use common::{
         Cookie,
         EstablishSessionRequest,
         EstablishSessionStatus,
-        ExpirationTime,
         KeepAlive,
         LeaseExtensionRequest,
-        LeaseExtensionResponse,
         LeaseId,
         LeaseRequest,
         LeaseResponseData,
@@ -168,7 +166,7 @@ impl SvscHandler {
                     Ok(None)
                 }
 
-                SvscMessage::SessionEnd(msg) => {
+                SvscMessage::SessionEnd(_msg) => {
                     // TODO should we error if session doesn't exist
                     event.push(InformEvent::SvscInform(SvscInform::SessionUpdate));
                     self.session = None;

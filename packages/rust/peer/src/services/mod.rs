@@ -4,7 +4,10 @@ pub mod sel_handler;
 pub mod svsc_handler;
 pub mod wpskka;
 
-use crate::services::helpers::cipher_reliable_peer::CipherError;
+use crate::{
+    io::{IoHandle, Reliable, Unreliable},
+    services::helpers::cipher_reliable_peer::CipherError,
+};
 use common::messages::{
     rvd::RvdMessage,
     sel::SelMessage,
@@ -21,27 +24,23 @@ use self::{
     svsc_handler::SvscError,
     wpskka::{WpskkaError, WpskkaHandler},
 };
-use crate::{
-    io::NativeIoHandle,
-    services::{
-        rvd::{RvdClientInform, RvdError, RvdHostInform},
-        sel_handler::SelError,
-        svsc_handler::{SvscHandler, SvscInform},
-        wpskka::{WpskkaClientInform, WpskkaHostInform},
-    },
+use crate::services::{
+    rvd::{RvdClientInform, RvdError, RvdHostInform},
+    sel_handler::SelError,
+    svsc_handler::{SvscHandler, SvscInform},
+    wpskka::{WpskkaClientInform, WpskkaHostInform},
 };
-use native::api::NativeApiTemplate;
 use std::io::Cursor;
 
-pub struct ScreenViewHandler {
+pub struct ScreenViewHandler<R, U> {
     sel: SelHandler,
     svsc: SvscHandler,
     wpskka: WpskkaHandler,
     rvd: RvdHandler,
-    io_handle: NativeIoHandle,
+    io_handle: IoHandle<R, U>,
 }
 
-impl ScreenViewHandler {
+impl<R: Reliable, U: Unreliable> ScreenViewHandler<R, U> {
     pub fn send(&mut self, message: ScreenViewMessage) -> Result<(), SendError> {
         match message {
             ScreenViewMessage::RvdMessage(rvd) => self.send_rvd(rvd),

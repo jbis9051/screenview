@@ -6,7 +6,6 @@ pub use host::*;
 
 use crate::services::InformEvent;
 use common::messages::rvd::{ClipboardMeta, ClipboardNotification, ClipboardType, RvdMessage};
-use native::api::NativeApiTemplate;
 
 // most of RVD messages result in purely external changes. As such, RVD emits events for almost all messages. It is the job of the caller to respond to these events
 pub enum RvdHandler {

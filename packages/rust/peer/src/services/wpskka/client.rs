@@ -9,14 +9,12 @@ use crate::services::{
         AuthScheme,
     },
     InformEvent,
-    SendError,
 };
 use common::messages::{
     auth::srp::SrpMessage,
     wpskka::{AuthMessage, AuthSchemeType, TryAuth, WpskkaMessage},
     MessageComponent,
 };
-use ring::agreement::{EphemeralPrivateKey, PublicKey};
 use std::{cmp::Ordering, io::Cursor, sync::Arc};
 
 #[derive(Copy, Clone, Debug)]

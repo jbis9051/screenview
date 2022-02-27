@@ -4,13 +4,7 @@ use common::messages::wpskka::{
     WpskkaMessage,
 };
 use peer::services::{
-    wpskka::{
-        WpskkaClientHandler,
-        WpskkaClientInform,
-        WpskkaHandler,
-        WpskkaHostHandler,
-        WpskkaHostInform,
-    },
+    wpskka::{WpskkaClientHandler, WpskkaClientInform, WpskkaHostHandler, WpskkaHostInform},
     InformEvent,
 };
 
