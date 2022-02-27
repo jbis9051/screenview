@@ -13,15 +13,12 @@ pub enum RvdHandler {
 }
 
 impl RvdHandler {
-    pub fn handle<F>(
+    pub fn handle(
         &mut self,
         msg: RvdMessage,
-        write: F,
+        write: &mut Vec<RvdMessage>,
         events: &mut Vec<InformEvent>,
-    ) -> Result<(), RvdError>
-    where
-        F: FnMut(RvdMessage) -> Result<(), SendError>,
-    {
+    ) -> Result<(), RvdError> {
         match self {
             Self::Host(handler) => handler.handle(msg, write)?,
             Self::Client(handler) => handler.handle(msg, write, events)?,
