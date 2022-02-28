@@ -29,7 +29,7 @@ const SidebarItem: React.FunctionComponent<SidebarItemProps> = observer(
             })}
         >
             <div className={styles.icon}>
-                <FontAwesomeIcon icon={faDesktop} />
+                <FontAwesomeIcon icon={icon} />
             </div>
             <div className={styles.content}>{children}</div>
         </div>
