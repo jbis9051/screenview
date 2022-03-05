@@ -154,7 +154,7 @@ pub(crate) mod dummy {
     impl NativeApiTemplate for DummyApi {
         type Error = Infallible;
 
-        fn key_toggle(&mut self, key: Key, down: bool) -> Result<(), Self::Error> {
+        fn key_toggle(&mut self, _key: Key, _down: bool) -> Result<(), Self::Error> {
             unimplemented!()
         }
 
@@ -173,33 +173,33 @@ pub(crate) mod dummy {
 
         fn set_pointer_position_relative(
             &mut self,
-            x: u32,
-            y: u32,
-            window_id: WindowId,
+            _x: u32,
+            _y: u32,
+            _window_id: WindowId,
         ) -> Result<(), Self::Error> {
             unimplemented!()
         }
 
         fn toggle_mouse(
             &mut self,
-            button: MouseButton,
-            down: bool,
-            window_id: Option<WindowId>,
+            _button: MouseButton,
+            _down: bool,
+            _window_id: Option<WindowId>,
         ) -> Result<(), Self::Error> {
             unimplemented!()
         }
 
         fn clipboard_content(
             &mut self,
-            type_name: &ClipboardType,
+            _type_name: &ClipboardType,
         ) -> Result<Option<Vec<u8>>, Self::Error> {
             unimplemented!()
         }
 
         fn set_clipboard_content(
             &mut self,
-            type_name: &ClipboardType,
-            content: &[u8],
+            _type_name: &ClipboardType,
+            _content: &[u8],
         ) -> Result<(), Self::Error> {
             unimplemented!()
         }
@@ -212,11 +212,11 @@ pub(crate) mod dummy {
             unimplemented!()
         }
 
-        fn capture_monitor_frame(&mut self, monitor_id: MonitorId) -> Result<Frame, Self::Error> {
+        fn capture_monitor_frame(&mut self, _monitor_id: MonitorId) -> Result<Frame, Self::Error> {
             unimplemented!()
         }
 
-        fn capture_window_frame(&mut self, window_id: WindowId) -> Result<Frame, Self::Error> {
+        fn capture_window_frame(&mut self, _window_id: WindowId) -> Result<Frame, Self::Error> {
             unimplemented!()
         }
     }
