@@ -27,15 +27,20 @@ impl RvdHandler {
         Ok(())
     }
 
+    /// Option < // is it a content request
+    ///   Option< // is there content
+    ///       Vec<u8> // the content
+    ///   >
+    /// >
     pub fn clipboard_data(
-        &mut self,
         data: Option<Vec<u8>>,
+        is_content: bool,
         clipboard_type: ClipboardType,
     ) -> RvdMessage {
         RvdMessage::ClipboardNotification(ClipboardNotification {
             info: ClipboardMeta {
                 clipboard_type,
-                content_request: data.is_some(),
+                content_request: is_content,
             },
             content: data,
         })

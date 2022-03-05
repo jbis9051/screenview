@@ -65,11 +65,15 @@ pub trait NativeApiTemplate {
 
     fn pointer_position(&mut self) -> Result<MousePosition, Self::Error>;
 
-    fn set_pointer_position(&mut self, pos: MousePosition) -> Result<(), Self::Error>;
+    fn set_pointer_position(&mut self, pos: &MousePosition) -> Result<(), Self::Error>;
 
     fn toggle_mouse(&mut self, button: MouseButton, down: bool) -> Result<(), Self::Error>;
 
-    fn clipboard_content(&mut self, type_name: &ClipboardType) -> Result<Vec<u8>, Self::Error>;
+    /// Returns Option<> representing if the type was found and Vec containing the content if it was found. Some(empty vec) is possible.
+    fn clipboard_content(
+        &mut self,
+        type_name: &ClipboardType,
+    ) -> Result<Option<Vec<u8>>, Self::Error>;
 
     fn set_clipboard_content(
         &mut self,
@@ -132,7 +136,10 @@ pub(crate) mod dummy {
             unimplemented!()
         }
 
-        fn clipboard_content(&mut self, _type_name: &ClipboardType) -> Result<Vec<u8>, Infallible> {
+        fn clipboard_content(
+            &mut self,
+            _type_name: &ClipboardType,
+        ) -> Result<Option<Vec<u8>>, Infallible> {
             unimplemented!()
         }
 

@@ -1,0 +1,114 @@
+use crate::services::{
+    helpers::clipboard_type_map::get_native_clipboard,
+    rvd::{
+        RvdClientError,
+        RvdClientHandler,
+        RvdClientInform,
+        RvdHandler,
+        RvdHostError,
+        RvdHostHandler,
+        RvdHostInform,
+    },
+    InformEvent,
+};
+use common::messages::rvd::RvdMessage;
+use native::api::NativeApiTemplate;
+
+pub fn rvd_client_native_helper<T: NativeApiTemplate>(
+    msg: RvdMessage,
+    write: &mut Vec<RvdMessage>,
+    events: &mut Vec<InformEvent>,
+    rvd: &mut RvdClientHandler,
+    native: &mut T,
+) -> Result<(), ClientError<T>> {
+    let mut local_events = Vec::new();
+    rvd.handle(msg, write, &mut local_events)?;
+    for inform in local_events {
+        match &inform {
+            InformEvent::RvdClientInform(event) => match event {
+                RvdClientInform::ClipboardNotification(data, clip_type) => {
+                    if let Some(data) = data {
+                        native
+                            .set_clipboard_content(&get_native_clipboard(clip_type), data)
+                            .map_err(ClientError::NativeError)?;
+                    }
+                }
+                _ => {
+                    events.push(inform);
+                }
+            },
+            _ => panic!("RVD Client gave a bad inform"),
+        }
+    }
+    Ok(())
+}
+
+pub enum ClientError<T: NativeApiTemplate> {
+    RvdClientError(RvdClientError),
+    NativeError(T::Error),
+}
+
+impl<T: NativeApiTemplate> From<RvdClientError> for ClientError<T> {
+    fn from(e: RvdClientError) -> Self {
+        ClientError::RvdClientError(e)
+    }
+}
+
+pub fn rvd_host_native_helper<T: NativeApiTemplate>(
+    msg: RvdMessage,
+    write: &mut Vec<RvdMessage>,
+    events: &mut Vec<InformEvent>,
+    rvd: &mut RvdHostHandler,
+    native: &mut T,
+) -> Result<(), HostError<T>> {
+    let mut local_events = Vec::new();
+    rvd.handle(msg, &mut local_events)?;
+    for inform in local_events {
+        match &inform {
+            InformEvent::RvdHostInform(event) => match event {
+                RvdHostInform::MouseInput(position, mask) => {
+                    native
+                        .set_pointer_position(position)
+                        .map_err(HostError::NativeError)?;
+                    // TODO mask
+                }
+                RvdHostInform::KeyboardInput(input) => {
+                    native
+                        .key_toggle(input.key, input.down)
+                        .map_err(HostError::NativeError)?;
+                }
+                RvdHostInform::ClipboardRequest(is_content, clip_type) => {
+                    write.push(RvdHandler::clipboard_data(
+                        native
+                            .clipboard_content(&get_native_clipboard(clip_type))
+                            .map_err(HostError::NativeError)?,
+                        *is_content,
+                        clip_type.clone(),
+                    ));
+                }
+                RvdHostInform::ClipboardNotification(data, clip_type) =>
+                    if let Some(data) = data {
+                        native
+                            .set_clipboard_content(&get_native_clipboard(clip_type), data)
+                            .map_err(HostError::NativeError)?;
+                    },
+                _ => {
+                    events.push(inform);
+                }
+            },
+            _ => panic!("RVD Host gave a bad inform"),
+        }
+    }
+    Ok(())
+}
+
+pub enum HostError<T: NativeApiTemplate> {
+    RvdHostError(RvdHostError),
+    NativeError(T::Error),
+}
+
+impl<T: NativeApiTemplate> From<RvdHostError> for HostError<T> {
+    fn from(e: RvdHostError) -> Self {
+        HostError::RvdHostError(e)
+    }
+}

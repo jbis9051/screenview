@@ -282,7 +282,7 @@ impl NativeApiTemplate for MacApi {
         })
     }
 
-    fn set_pointer_position(&mut self, pos: MousePosition) -> Result<(), Error> {
+    fn set_pointer_position(&mut self, pos: &MousePosition) -> Result<(), Error> {
         let source = CGEventSource::new(CGEventSourceStateID::CombinedSessionState)
             .map_err(|_| UnableToCreateCGSource)?;
         let monitor = self
@@ -392,7 +392,7 @@ impl NativeApiTemplate for MacApi {
         Ok(())
     }
 
-    fn clipboard_content(&mut self, type_name: &ClipboardType) -> Result<Vec<u8>, Error> {
+    fn clipboard_content(&mut self, type_name: &ClipboardType) -> Result<Option<Vec<u8>>, Error> {
         let paste_board = unsafe { NSPasteboard::generalPasteboard(nil) };
         if paste_board == nil {
             return Err(NSPasteboardError);
@@ -409,9 +409,9 @@ impl NativeApiTemplate for MacApi {
             },
         };
         if data == nil {
-            return Err(ClipboardNotFound(type_name.to_string()));
+            return Ok(None);
         }
-        Ok(Self::nsdata_to_vec(data))
+        Ok(Some(Self::nsdata_to_vec(data)))
     }
 
     fn set_clipboard_content(
@@ -557,8 +557,6 @@ impl NativeApiTemplate for MacApi {
 pub enum Error {
     #[error("Could not get Window Array")]
     CouldNotGetWindowArray,
-    #[error("Could not get pasteboard data for key `{0}`")]
-    ClipboardNotFound(String),
     #[error("Could not set pasteboard data for key `{0}`")]
     ClipboardSetError(String),
     #[error("Could not capture display: `{0}`")]
