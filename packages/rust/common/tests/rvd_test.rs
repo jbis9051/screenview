@@ -75,7 +75,8 @@ fn test_mouse_input() {
     assert_eq!(message.display_id, 1);
     assert_eq!(message.x_location, 200);
     assert_eq!(message.y_location, 200);
-    assert_eq!(message.buttons, ButtonsMask::empty());
+    assert_eq!(message.buttons_delta, ButtonsMask::empty());
+    assert_eq!(message.buttons_state, ButtonsMask::empty());
     test_write(&message, bytes);
 }
 

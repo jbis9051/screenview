@@ -66,7 +66,7 @@ pub fn rvd_host_native_helper<T: NativeApiTemplate>(
     for inform in local_events {
         match &inform {
             InformEvent::RvdHostInform(event) => match event {
-                RvdHostInform::MouseInput(position, mask) => {
+                RvdHostInform::MouseInput(position, delta, state) => {
                     native
                         .set_pointer_position(position)
                         .map_err(HostError::NativeError)?;

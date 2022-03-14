@@ -231,7 +231,8 @@ fn test_rvd_host() {
         display_id: mouse_position.monitor_id,
         x_location: mouse_position.x as u16, // TODO problem conversion
         y_location: mouse_position.y as u16, // TODO problem conversion
-        buttons,
+        buttons_delta: buttons,
+        buttons_state: buttons,
     };
 
     host.handle(RvdMessage::MouseInput(mouse_input), &mut events)
@@ -241,7 +242,7 @@ fn test_rvd_host() {
     let event = events.remove(0);
 
     assert!(
-        matches!(event, InformEvent::RvdHostInform(RvdHostInform::MouseInput(m, mask))  if m == mouse_position && mask == buttons)
+        matches!(event, InformEvent::RvdHostInform(RvdHostInform::MouseInput(m, delta, state))  if m == mouse_position && delta == buttons && state == buttons)
     );
 
     // KeyInput

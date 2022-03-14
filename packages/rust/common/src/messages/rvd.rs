@@ -76,7 +76,8 @@ pub struct MouseInput {
     pub display_id: DisplayId,
     pub x_location: u16,
     pub y_location: u16,
-    pub buttons: ButtonsMask,
+    pub buttons_delta: ButtonsMask,
+    pub buttons_state: ButtonsMask,
 }
 
 bitflags! {

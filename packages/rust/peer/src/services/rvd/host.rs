@@ -190,7 +190,8 @@ impl RvdHostHandler {
                             y: msg.y_location as u32,
                             monitor_id: msg.display_id,
                         },
-                        msg.buttons,
+                        msg.buttons_delta, // TODO stop using tuples Josh
+                        msg.buttons_state,
                     )));
                     Ok(())
                 }
@@ -255,7 +256,7 @@ pub enum RvdHostError {
 pub enum RvdHostInform {
     VersionBad,
 
-    MouseInput(MousePosition, ButtonsMask),
+    MouseInput(MousePosition, ButtonsMask, ButtonsMask),
     KeyboardInput(KeyInput),
 
     ClipboardRequest(bool, ClipboardType),
