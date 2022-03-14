@@ -66,6 +66,12 @@ pub struct MouseLocation {
 
 #[derive(MessageComponent, Debug)]
 #[message_id(5)]
+pub struct MouseHidden {
+    pub display_id: DisplayId,
+}
+
+#[derive(MessageComponent, Debug)]
+#[message_id(6)]
 pub struct MouseInput {
     pub display_id: DisplayId,
     pub x_location: u16,
@@ -88,7 +94,7 @@ bitflags! {
 impl_bitflags_message_component!(ButtonsMask);
 
 #[derive(MessageComponent, Debug, PartialEq, Clone)]
-#[message_id(6)]
+#[message_id(7)]
 pub struct KeyInput {
     pub down: bool,
     pub key: u32, // keysym
@@ -242,13 +248,13 @@ impl MessageComponent for ClipboardMeta {
 }
 
 #[derive(MessageComponent, Debug)]
-#[message_id(7)]
+#[message_id(8)]
 pub struct ClipboardRequest {
     pub info: ClipboardMeta,
 }
 
 #[derive(MessageComponent, Debug, Clone)]
-#[message_id(8)]
+#[message_id(9)]
 pub struct ClipboardNotification {
     pub info: ClipboardMeta,
     #[parse(condition = "info.content_request", len_prefixed(3))]
@@ -256,7 +262,7 @@ pub struct ClipboardNotification {
 }
 
 #[derive(MessageComponent, Debug)]
-#[message_id(9)]
+#[message_id(10)]
 pub struct FrameData {
     pub frame_number: u32,
     pub display_id: u8,
@@ -272,6 +278,7 @@ pub enum RvdMessage {
     DisplayChange(DisplayChange),
     DisplayChangeReceived(DisplayChangeReceived),
     MouseLocation(MouseLocation),
+    MouseHidden(MouseHidden),
     MouseInput(MouseInput),
     KeyInput(KeyInput),
     ClipboardRequest(ClipboardRequest),

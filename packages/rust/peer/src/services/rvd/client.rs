@@ -5,6 +5,7 @@ use common::{
         ClipboardType,
         DisplayChange,
         DisplayChangeReceived,
+        DisplayId,
         MouseLocation,
         ProtocolVersionResponse,
         RvdMessage,
@@ -64,6 +65,12 @@ impl RvdClientHandler {
                     write.push(RvdMessage::DisplayChangeReceived(DisplayChangeReceived {}));
                     Ok(())
                 }
+                RvdMessage::MouseHidden(msg) => {
+                    events.push(InformEvent::RvdClientInform(RvdClientInform::MouseHidden(
+                        msg.display_id,
+                    )));
+                    Ok(())
+                }
                 RvdMessage::MouseLocation(msg) => {
                     events.push(InformEvent::RvdClientInform(
                         RvdClientInform::MouseLocation(msg),
@@ -99,6 +106,7 @@ pub enum RvdClientError {
 pub enum RvdClientInform {
     VersionBad,
 
+    MouseHidden(DisplayId),
     MouseLocation(MouseLocation),
     DisplayChange(DisplayChange),
     ClipboardNotification(Option<Vec<u8>>, ClipboardType),

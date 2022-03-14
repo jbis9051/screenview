@@ -93,7 +93,8 @@ impl RvdHostHandler {
     }
 
     /// Add displays using share_display
-    /// This shares all displays in share_display. Updates to displays are handled properly.
+    /// This shares all displays in share_buffer. Updates to displays are handled properly.
+    /// share_buffer is cleared (set to Vec::default() aka Vec::new() aka [])
     pub fn display_update(&mut self) -> RvdMessage {
         self.state = HostState::WaitingForDisplayChangeReceived;
         let mut access = AccessMask::FLUSH;

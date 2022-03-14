@@ -128,7 +128,7 @@ pub(crate) mod dummy {
             unimplemented!()
         }
 
-        fn set_pointer_position(&mut self, _pos: MousePosition) -> Result<(), Infallible> {
+        fn set_pointer_position(&mut self, _pos: &MousePosition) -> Result<(), Infallible> {
             unimplemented!()
         }
 
