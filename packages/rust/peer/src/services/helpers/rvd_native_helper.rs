@@ -31,11 +31,9 @@ pub fn rvd_client_native_helper<T: NativeApiTemplate>(
         match &inform {
             InformEvent::RvdClientInform(event) => match event {
                 RvdClientInform::ClipboardNotification(data, clip_type) => {
-                    if let Some(data) = data {
-                        native
-                            .set_clipboard_content(&get_native_clipboard(clip_type), data)
-                            .map_err(ClientError::NativeError)?;
-                    }
+                    native
+                        .set_clipboard_content(&get_native_clipboard(clip_type), data)
+                        .map_err(ClientError::NativeError)?;
                 }
                 _ => {
                     events.push(inform);
@@ -116,12 +114,9 @@ pub fn rvd_host_native_helper<T: NativeApiTemplate>(
                         clip_type.clone(),
                     ));
                 }
-                RvdHostInform::ClipboardNotification(data, clip_type) =>
-                    if let Some(data) = data {
-                        native
-                            .set_clipboard_content(&get_native_clipboard(clip_type), data)
-                            .map_err(HostError::NativeError)?;
-                    },
+                RvdHostInform::ClipboardNotification(data, clip_type) => native
+                    .set_clipboard_content(&get_native_clipboard(clip_type), data)
+                    .map_err(HostError::NativeError)?,
                 _ => {
                     events.push(inform);
                 }

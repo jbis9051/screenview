@@ -228,9 +228,12 @@ impl RvdHostHandler {
                     if !(self.clipboard_readable && self.controllable) {
                         return Err(RvdHostError::PermissionsError(ClipboardWrite));
                     }
-                    events.push(InformEvent::RvdHostInform(
-                        RvdHostInform::ClipboardNotification(msg.content, msg.info.clipboard_type),
-                    ));
+                    if let Some(content) = msg.content {
+                        // only emit when theres content
+                        events.push(InformEvent::RvdHostInform(
+                            RvdHostInform::ClipboardNotification(content, msg.info.clipboard_type),
+                        ));
+                    }
                     Ok(())
                 }
                 _ => Err(RvdHostError::WrongMessageForState(
@@ -276,5 +279,5 @@ pub enum RvdHostInform {
     KeyboardInput(KeyInput),
 
     ClipboardRequest(bool, ClipboardType),
-    ClipboardNotification(Option<Vec<u8>>, ClipboardType),
+    ClipboardNotification(Vec<u8>, ClipboardType),
 }

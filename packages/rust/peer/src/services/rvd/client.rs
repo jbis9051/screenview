@@ -78,12 +78,14 @@ impl RvdClientHandler {
                     Ok(())
                 }
                 RvdMessage::ClipboardNotification(msg) => {
-                    events.push(InformEvent::RvdClientInform(
-                        RvdClientInform::ClipboardNotification(
-                            msg.content,
-                            msg.info.clipboard_type,
-                        ),
-                    ));
+                    if let Some(content) = msg.content {
+                        events.push(InformEvent::RvdClientInform(
+                            RvdClientInform::ClipboardNotification(
+                                content,
+                                msg.info.clipboard_type,
+                            ),
+                        ));
+                    }
                     Ok(())
                 }
                 _ => Err(RvdClientError::WrongMessageForState(
@@ -109,5 +111,5 @@ pub enum RvdClientInform {
     MouseHidden(DisplayId),
     MouseLocation(MouseLocation),
     DisplayChange(DisplayChange),
-    ClipboardNotification(Option<Vec<u8>>, ClipboardType),
+    ClipboardNotification(Vec<u8>, ClipboardType), // for now we only care when receive a clipboard notification with content
 }

@@ -165,12 +165,15 @@ fn test_rvd_client() {
     );
 
 
+    let content: Vec<u8> = vec![1, 2, 3];
+
     let notification = ClipboardNotification {
         info: ClipboardMeta {
             clipboard_type: ClipboardType::Text,
-            content_request: false,
+            content_request: true,
         },
-        content: None,
+        type_exists: true,
+        content: Some(content.clone()),
     };
     let msg = RvdMessage::ClipboardNotification(notification.clone());
 
@@ -183,7 +186,7 @@ fn test_rvd_client() {
     let event = events.remove(0);
 
     assert!(
-        matches!(event, InformEvent::RvdClientInform(RvdClientInform::ClipboardNotification(a, b)) if a == notification.content && b == notification.info.clipboard_type)
+        matches!(event, InformEvent::RvdClientInform(RvdClientInform::ClipboardNotification(a, b)) if a == content && b == notification.info.clipboard_type)
     );
 }
 
@@ -284,13 +287,15 @@ fn test_rvd_host() {
     );
 
     // ClipboardNotification
+    let content: Vec<u8> = vec![1, 2, 3];
 
     let notification = ClipboardNotification {
         info: ClipboardMeta {
             clipboard_type: ClipboardType::Text,
-            content_request: false,
+            content_request: true,
         },
-        content: None,
+        type_exists: true,
+        content: Some(content.clone()),
     };
     let msg = RvdMessage::ClipboardNotification(notification.clone());
 
@@ -300,7 +305,7 @@ fn test_rvd_host() {
     let event = events.remove(0);
 
     assert!(
-        matches!(event, InformEvent::RvdHostInform(RvdHostInform::ClipboardNotification(a, b)) if a == notification.content && b == notification.info.clipboard_type)
+        matches!(event, InformEvent::RvdHostInform(RvdHostInform::ClipboardNotification(a, b)) if a == content && b == notification.info.clipboard_type)
     );
 }
 

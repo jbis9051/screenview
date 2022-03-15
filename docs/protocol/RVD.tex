@@ -77,7 +77,7 @@ The ProtocolVersion message consists of 11 bytes interpreted as a string of ASCI
         \hline
         \textbf{Bytes} & \textbf{Name} & \textbf{Value}           \\
         \hline
-        1              & type                 & 0                  \\
+        1              & type          & 0                        \\
         \hline
         11             & version       & ``\texttt{RVD 001.000}'' \\
         \hline
@@ -95,7 +95,7 @@ the Client.
         \hline
         \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
         \hline
-        1              & type                 & 1                  \\
+        1              & type          & 1              \\
         \hline
         1              & ok            & 0 or 1         \\
         \hline
@@ -295,11 +295,11 @@ When a \emph{MouseHidden} message is received, the pointer for the Display is ma
     Host \textrightarrow\ Client\\
     \begin{tabular}{|c|c|c|c|}
         \hline
-        \textbf{Bytes} & \textbf{Name} & \textbf{Value} & \textbf{Description}      \\
+        \textbf{Bytes} & \textbf{Name} & \textbf{Value} & \textbf{Description} \\
         \hline
-        1              & type          & 5              &                           \\
+        1              & type          & 5              &                      \\
         \hline
-        1              & display-id    & 0-255          &                           \\
+        1              & display-id    & 0-255          &                      \\
         \hline
     \end{tabular}
 \end{center}
@@ -316,19 +316,19 @@ used.
     Client \textrightarrow\ Host\\
     \begin{tabular}{|c|c|c|c|}
         \hline
-        \textbf{Bytes} & \textbf{Name} & \textbf{Value} & \textbf{Description}      \\
+        \textbf{Bytes} & \textbf{Name}     & \textbf{Value} & \textbf{Description}      \\
         \hline
-        1              & type          & 6              &                           \\
+        1              & type              & 6              &                           \\
         \hline
-        1              & display-id    & 0-255          &                           \\
+        1              & display-id        & 0-255          &                           \\
         \hline
-        2              & x-position    &                & x coordinate of the mouse \\
+        2              & x-position        &                & x coordinate of the mouse \\
         \hline
-        2              & y-position    &                & y coordinate of the mouse \\
+        2              & y-position        &                & y coordinate of the mouse \\
         \hline
-        1              & button-mask-delta   &                & described below           \\
+        1              & button-mask-delta &                & described below           \\
         \hline
-        1              & button-mask-state   &                & described below           \\
+        1              & button-mask-state &                & described below           \\
         \hline
     \end{tabular}
 \end{center}
@@ -436,7 +436,12 @@ Notifies a Peer of a clipboard update. The receiving Peer should update their cl
         \hline
         type-name-length      & type-name        &                  \\
         \hline
-        \multicolumn{3}{|c|}{\textbf{Below only if clipboard-type's second bit is 1} } \\
+        \multicolumn{3}{|c|}{\textbf{Below always} } \\
+        \hline
+        1                     & type-exists      & 0 or 1           \\
+        \hline
+        \multicolumn{3}{|c|}{\textbf{Below only if clipboard-type's second bit is 1 and type-exists is 1} } \\
+        \hline
         3                     & content-length   &                  \\
         \hline
         \emph{content-length} & data             & zlib'ed raw data \\
@@ -444,6 +449,10 @@ Notifies a Peer of a clipboard update. The receiving Peer should update their cl
     \end{tabular}
 \end{center}
 
+type-exists indicates whether the clipboard type specified exists on sending Peer.
+If the notification is a response to a request type-exists can be 0 to indicate that type was not found, or 1 to indicate that type was found.
+If the notification is not a response type-exists SHOULD be 1.
+type-exists can be 1 and content-length can be 0 if for example the clipboard text type exists, but is currently empty.
 
 clipboard-type, type-name-length, and type-name MUST match a request if the notification is in response. If
 clipboard-readable is 0 and a Host receives a ClipboardRequest, it MUST be ignored. If no Display is Controllable or

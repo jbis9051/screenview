@@ -274,7 +274,8 @@ pub struct ClipboardRequest {
 #[message_id(9)]
 pub struct ClipboardNotification {
     pub info: ClipboardMeta,
-    #[parse(condition = "info.content_request", len_prefixed(3))]
+    pub type_exists: bool,
+    #[parse(condition = "info.content_request && type_exists", len_prefixed(3))]
     pub content: Option<Vec<u8>>,
 }
 
