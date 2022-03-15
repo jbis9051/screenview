@@ -1,6 +1,10 @@
 use crate::services::{
-    helpers::clipboard_type_map::get_native_clipboard,
+    helpers::{
+        clipboard_type_map::get_native_clipboard,
+        network_mouse_button_to_native::network_mouse_button_to_native,
+    },
     rvd::{
+        DisplayType,
         RvdClientError,
         RvdClientHandler,
         RvdClientInform,
@@ -11,7 +15,7 @@ use crate::services::{
     },
     InformEvent,
 };
-use common::messages::rvd::RvdMessage;
+use common::messages::rvd::{ButtonsMask, RvdMessage};
 use native::api::NativeApiTemplate;
 
 pub fn rvd_client_native_helper<T: NativeApiTemplate>(
@@ -66,11 +70,37 @@ pub fn rvd_host_native_helper<T: NativeApiTemplate>(
     for inform in local_events {
         match &inform {
             InformEvent::RvdHostInform(event) => match event {
-                RvdHostInform::MouseInput(position, delta, state) => {
-                    native
-                        .set_pointer_position(position)
-                        .map_err(HostError::NativeError)?;
-                    // TODO mask
+                RvdHostInform::MouseInput(event) => {
+                    match event.display_type {
+                        DisplayType::Monitor => {
+                            native
+                                .set_pointer_position_absolute(
+                                    event.x_location as u32,
+                                    event.y_location as u32,
+                                    event.native_id,
+                                )
+                                .map_err(HostError::NativeError)?;
+                        }
+                        DisplayType::Window => {
+                            native
+                                .set_pointer_position_relative(
+                                    event.x_location as u32,
+                                    event.y_location as u32,
+                                    event.native_id,
+                                )
+                                .map_err(HostError::NativeError)?;
+                        }
+                    }
+                    for mask in ButtonsMask::iter() {
+                        if event.button_delta.contains(*mask) {
+                            native
+                                .toggle_mouse(
+                                    network_mouse_button_to_native(mask),
+                                    event.button_state.contains(*mask),
+                                )
+                                .map_err(HostError::NativeError)?;
+                        }
+                    }
                 }
                 RvdHostInform::KeyboardInput(input) => {
                     native

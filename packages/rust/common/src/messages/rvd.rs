@@ -6,6 +6,7 @@ use parser::{message_id, MessageComponent};
 use std::{
     borrow::Cow,
     io::{Cursor, Read, Write},
+    slice::Iter,
 };
 
 #[derive(MessageComponent, Debug)]
@@ -89,6 +90,21 @@ bitflags! {
         const SCROLL_DOWN   = 0b00010000;
         const SCROLL_LEFT   = 0b00100000;
         const SCROLL_RIGHT  = 0b01000000;
+    }
+}
+
+impl ButtonsMask {
+    pub fn iter() -> Iter<'static, ButtonsMask> {
+        static BUTTONS: [ButtonsMask; 7] = [
+            ButtonsMask::LEFT,
+            ButtonsMask::MIDDLE,
+            ButtonsMask::RIGHT,
+            ButtonsMask::SCROLL_UP,
+            ButtonsMask::SCROLL_DOWN,
+            ButtonsMask::SCROLL_LEFT,
+            ButtonsMask::SCROLL_RIGHT,
+        ];
+        BUTTONS.iter()
     }
 }
 
