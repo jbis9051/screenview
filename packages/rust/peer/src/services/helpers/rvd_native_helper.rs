@@ -45,6 +45,7 @@ pub fn rvd_client_native_helper<T: NativeApiTemplate>(
     Ok(())
 }
 
+#[derive(Debug)]
 pub enum ClientError<T: NativeApiTemplate> {
     RvdClientError(RvdClientError),
     NativeError(T::Error),
@@ -127,6 +128,7 @@ pub fn rvd_host_native_helper<T: NativeApiTemplate>(
     Ok(())
 }
 
+#[derive(Debug)]
 pub enum HostError<T: NativeApiTemplate> {
     RvdHostError(RvdHostError),
     NativeError(T::Error),

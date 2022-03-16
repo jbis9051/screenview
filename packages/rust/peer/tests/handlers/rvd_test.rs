@@ -1,3 +1,4 @@
+use crate::helper::rvd_helper::handshake;
 use common::messages::rvd::{
     AccessMask,
     ButtonsMask,
@@ -15,7 +16,6 @@ use common::messages::rvd::{
     ProtocolVersionResponse,
     RvdMessage,
 };
-use native::api::MousePosition;
 use peer::services::{
     rvd::{
         DisplayType,
@@ -87,24 +87,6 @@ fn test_rvd_handshake() {
 
     host.handle(msg, &mut events).expect("handler failed");
     assert_eq!(events.len(), 0);
-}
-
-fn handshake(host: Option<&mut RvdHostHandler>, client: Option<&mut RvdClientHandler>) {
-    let mut write = Vec::new();
-    let mut events = Vec::new();
-
-    if let Some(client) = client {
-        let protocol_message = RvdHostHandler::protocol_version();
-
-        client
-            .handle(protocol_message, &mut write, &mut events)
-            .expect("handler failed");
-    }
-
-    if let Some(host) = host {
-        let msg = RvdMessage::ProtocolVersionResponse(ProtocolVersionResponse { ok: true });
-        host.handle(msg, &mut events).expect("handler failed");
-    }
 }
 
 #[test]
