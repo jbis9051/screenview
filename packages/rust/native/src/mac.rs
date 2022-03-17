@@ -38,7 +38,7 @@ use cocoa::{
 use core_foundation::{
     base::{CFTypeRef, FromVoid, TCFType},
     number::{kCFNumberIntType, CFNumberGetValue, CFNumberRef},
-    string::{CFString, CFStringGetCStringPtr, CFStringRef},
+    string::{CFString, CFStringRef},
 };
 use core_graphics::{
     display::{

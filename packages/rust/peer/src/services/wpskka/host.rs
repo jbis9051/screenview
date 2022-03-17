@@ -45,6 +45,12 @@ pub struct WpskkaHostHandler {
     client_public_key: Option<[u8; 32]>,
 }
 
+impl Default for WpskkaHostHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WpskkaHostHandler {
     pub fn new() -> Self {
         Self {

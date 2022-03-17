@@ -54,7 +54,7 @@ fn srp_authenticate(
 
     events.clear();
 
-    client.process_password(&password, &mut write).expect("");
+    client.process_password(password, &mut write).expect("");
     assert_eq!(write.len(), 1);
     assert!(matches!(write[0], WpskkaMessage::AuthMessage(_)));
 

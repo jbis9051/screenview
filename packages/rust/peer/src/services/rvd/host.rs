@@ -16,7 +16,6 @@ use common::{
         RvdMessage,
     },
 };
-use native::api::MousePosition;
 use std::fmt::Debug;
 
 #[derive(PartialEq, Copy, Clone)]
@@ -53,6 +52,12 @@ pub struct RvdHostHandler {
     controllable: bool,
     shared_displays: Vec<DisplayMap>,
     share_buffer: Vec<RvdDisplay>,
+}
+
+impl Default for RvdHostHandler {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl RvdHostHandler {
@@ -109,17 +114,12 @@ impl RvdHostHandler {
             .map(|(i, d)| {
                 let mut access = access;
 
-                if self
-                    .shared_displays
-                    .iter()
-                    .find(|a| {
-                        a.display_type == d.display_type
-                            && a.native_id == d.native_id
-                            && a.information.width == d.width
-                            && a.information.height == d.height
-                    })
-                    .is_some()
-                {
+                if self.shared_displays.iter().any(|a| {
+                    a.display_type == d.display_type
+                        && a.native_id == d.native_id
+                        && a.information.width == d.width
+                        && a.information.height == d.height
+                }) {
                     access.remove(AccessMask::FLUSH)
                 }
 

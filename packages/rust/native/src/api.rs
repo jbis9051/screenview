@@ -166,7 +166,7 @@ pub(crate) mod dummy {
             &mut self,
             _x: u32,
             _y: u32,
-            monitor_id: MonitorId,
+            _monitor_id: MonitorId,
         ) -> Result<(), Self::Error> {
             unimplemented!()
         }

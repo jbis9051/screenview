@@ -13,7 +13,6 @@ use common::messages::rvd::{
     MouseInput,
     MouseLocation,
     ProtocolVersion,
-    ProtocolVersionResponse,
     RvdMessage,
 };
 use peer::services::{

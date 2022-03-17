@@ -295,7 +295,7 @@ impl NativeApiTemplate for TesterNative {
         &mut self,
         x: u32,
         y: u32,
-        monitor_id: MonitorId,
+        _monitor_id: MonitorId,
     ) -> Result<(), Self::Error> {
         self.pointer_x = x;
         self.pointer_y = y;
@@ -306,7 +306,7 @@ impl NativeApiTemplate for TesterNative {
         &mut self,
         x: u32,
         y: u32,
-        window_id: WindowId,
+        _window_id: WindowId,
     ) -> Result<(), Self::Error> {
         self.set_pointer_position_absolute(x, y, 0)
     }
@@ -323,14 +323,14 @@ impl NativeApiTemplate for TesterNative {
 
     fn clipboard_content(
         &mut self,
-        type_name: &NativeClipboardType,
+        _type_name: &NativeClipboardType,
     ) -> Result<Option<Vec<u8>>, Self::Error> {
         Ok(Some(self.clipboard_content.clone()))
     }
 
     fn set_clipboard_content(
         &mut self,
-        type_name: &NativeClipboardType,
+        _type_name: &NativeClipboardType,
         content: &[u8],
     ) -> Result<(), Self::Error> {
         self.clipboard_content = content.to_vec();
@@ -345,11 +345,11 @@ impl NativeApiTemplate for TesterNative {
         Ok(self.windows.clone())
     }
 
-    fn capture_monitor_frame(&mut self, monitor_id: MonitorId) -> Result<Frame, Self::Error> {
+    fn capture_monitor_frame(&mut self, _monitor_id: MonitorId) -> Result<Frame, Self::Error> {
         unimplemented!()
     }
 
-    fn capture_window_frame(&mut self, window_id: WindowId) -> Result<Frame, Self::Error> {
+    fn capture_window_frame(&mut self, _window_id: WindowId) -> Result<Frame, Self::Error> {
         unimplemented!()
     }
 }

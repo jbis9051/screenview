@@ -33,6 +33,12 @@ pub struct IoHandle<R, U> {
     unreliable_message_size: usize,
 }
 
+impl<R, U> Default for IoHandle<R, U> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<R, U> IoHandle<R, U> {
     /// Constructs a new `IoHandle`.
     ///
@@ -111,7 +117,9 @@ impl<R: Reliable, U> IoHandle<R, U> {
 
     /// Terminates any existing reliable connection and joins any associated threads.
     pub fn disconnect_reliable(&mut self) {
-        self.reliable.take().map(|mut handle| handle.close());
+        if let Some(mut handle) = self.reliable.take() {
+            handle.close()
+        }
     }
 }
 
@@ -149,7 +157,9 @@ impl<R, U: Unreliable> IoHandle<R, U> {
 
     /// Unbinds any existing unreliable connection and joins any associated threads.
     pub fn disconnect_unreliable(&mut self) {
-        self.unreliable.take().map(|mut handle| handle.close());
+        if let Some(mut handle) = self.unreliable.take() {
+            handle.close()
+        }
     }
 }
 

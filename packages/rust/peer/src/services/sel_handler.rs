@@ -17,6 +17,12 @@ pub struct SelHandler {
     // reliable is TLS and is handled elsewhere
 }
 
+impl Default for SelHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SelHandler {
     pub fn new() -> Self {
         Self { unreliable: None }

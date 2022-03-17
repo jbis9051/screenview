@@ -1,6 +1,6 @@
-mod handle;
-mod tcp;
-mod udp;
+pub mod handle;
+pub mod tcp;
+pub mod udp;
 
 pub use handle::*;
 use std::thread::JoinHandle;

@@ -22,6 +22,12 @@ pub struct RvdClientHandler {
     state: ClientState,
 }
 
+impl Default for RvdClientHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RvdClientHandler {
     pub fn new() -> Self {
         Self {
