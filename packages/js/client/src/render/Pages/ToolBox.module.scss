@@ -1,0 +1,20 @@
+@use 'src/render/components/var';
+
+.wrapper {
+    height: 100%;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+
+    .frame {
+        height: 30px;
+        background: var.$accent-color;
+        -webkit-app-region: drag;
+        border-bottom: 1px solid var.$border-color;
+    }
+
+    .content {
+        flex: 1;
+        display: flex;
+    }
+}
