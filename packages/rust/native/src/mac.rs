@@ -1,7 +1,26 @@
-use std::{ffi::CStr, ops::Deref, os::raw::c_uchar, slice::from_raw_parts};
+use accessibility_sys::{
+    kAXErrorSuccess,
+    kAXRaiseAction,
+    kAXWindowsAttribute,
+    AXError,
+    AXUIElementCopyAttributeValue,
+    AXUIElementCreateApplication,
+    AXUIElementPerformAction,
+    AXUIElementRef,
+};
+use std::{ffi::CStr, ops::Deref, os::raw::c_uchar, ptr, slice::from_raw_parts};
 
 use cocoa::{
-    appkit::{NSApp, NSColorSpace, NSEvent, NSPasteboard, NSPasteboardTypeString, NSScreen},
+    appkit::{
+        NSApp,
+        NSApplicationActivateIgnoringOtherApps,
+        NSColorSpace,
+        NSEvent,
+        NSPasteboard,
+        NSPasteboardTypeString,
+        NSRunningApplication,
+        NSScreen,
+    },
     base::{id, nil},
     foundation::{
         NSArray,
@@ -17,9 +36,9 @@ use cocoa::{
     },
 };
 use core_foundation::{
-    base::{FromVoid, TCFType},
+    base::{CFTypeRef, FromVoid, TCFType},
     number::{kCFNumberIntType, CFNumberGetValue, CFNumberRef},
-    string::{kCFStringEncodingUTF8, CFString, CFStringGetCStringPtr, CFStringRef},
+    string::{CFString, CFStringGetCStringPtr, CFStringRef},
 };
 use core_graphics::{
     display::{
@@ -54,12 +73,14 @@ use core_graphics::{
         kCGWindowName,
         kCGWindowNumber,
         kCGWindowOwnerName,
+        kCGWindowOwnerPID,
+        CGWindowID,
         CGWindowListCopyWindowInfo,
     },
 };
 use core_graphics_types::{base::CGFloat, geometry::CGPoint};
 use image::RgbImage;
-use libc::c_void;
+use libc::{c_void, pid_t};
 use objc::{runtime::BOOL, *};
 
 use crate::{
@@ -79,6 +100,7 @@ struct MacWindow {
     id: u32,
     name: String,
     rect: CGRect,
+    owner_pid: pid_t,
 }
 
 struct MacMousePosition {
@@ -93,6 +115,7 @@ pub struct MacApi {
 
 extern "C" {
     fn NSMouseInRect(aPoint: NSPoint, aRect: NSRect, flipped: BOOL) -> BOOL;
+    fn _AXUIElementGetWindow(element: AXUIElementRef, window_id: *mut CGWindowID) -> AXError;
 }
 
 impl From<MacWindow> for Window {
@@ -273,6 +296,20 @@ impl MacApi {
         Ok(monitors)
     }
 
+    fn cgnumber_to<T: Default>(number: *const libc::c_void) -> Result<T, ()> {
+        let mut value: T = T::default();
+        if unsafe {
+            CFNumberGetValue(
+                number as CFNumberRef,
+                kCFNumberIntType,
+                (&mut value) as *mut _ as *mut c_void,
+            )
+        } {
+            return Ok(value);
+        }
+        Err(())
+    }
+
     fn windows_impl() -> Result<Vec<MacWindow>, Error> {
         let windows_array = unsafe {
             CGWindowListCopyWindowInfo(
@@ -290,6 +327,7 @@ impl MacApi {
             if window.is_null() {
                 continue;
             }
+
             let mut window_id: *const c_void = std::ptr::null();
             if unsafe {
                 CFDictionaryGetValueIfPresent(
@@ -304,19 +342,30 @@ impl MacApi {
             if window_id.is_null() {
                 continue;
             }
-            let window_id = {
-                let mut number: u32 = 0u32;
-                if !unsafe {
-                    CFNumberGetValue(
-                        window_id as CFNumberRef,
-                        kCFNumberIntType,
-                        (&mut number) as *mut _ as *mut c_void,
-                    )
-                } {
-                    continue;
-                };
-                number
+            let window_id = match Self::cgnumber_to::<u32>(window_id) {
+                Ok(num) => num,
+                Err(_) => continue,
             };
+
+
+            let mut owner_pid: *const c_void = std::ptr::null();
+            if unsafe {
+                CFDictionaryGetValueIfPresent(
+                    window,
+                    kCGWindowOwnerPID as *mut c_void,
+                    &mut owner_pid,
+                )
+            } == 0
+            {
+                continue;
+            }
+            if owner_pid.is_null() {
+                continue;
+            }
+            let owner_pid = match Self::cgnumber_to::<pid_t>(owner_pid) {
+                Ok(num) => num,
+                Err(_) => continue,
+            } as pid_t;
 
 
             let mut window_layer: *const c_void = std::ptr::null();
@@ -334,18 +383,9 @@ impl MacApi {
                 continue;
             }
 
-            let window_layer = {
-                let mut number: u32 = 0u32;
-                if !unsafe {
-                    CFNumberGetValue(
-                        window_layer as CFNumberRef,
-                        kCFNumberIntType,
-                        (&mut number) as *mut _ as *mut c_void,
-                    )
-                } {
-                    continue;
-                };
-                number
+            let window_layer = match Self::cgnumber_to::<u32>(window_layer) {
+                Ok(num) => num,
+                Err(_) => continue,
             };
 
             if window_layer != 0 {
@@ -401,6 +441,7 @@ impl MacApi {
                 id: window_id,
                 name,
                 rect,
+                owner_pid,
             });
         }
         Ok(windows)
@@ -426,6 +467,84 @@ impl MacApi {
             CGEvent::new_mouse_event(source, CGEventType::MouseMoved, point, CGMouseButton::Left)
                 .map_err(|_| CGEventError)?;
         event.post(CGEventTapLocation::Session);
+        Ok(())
+    }
+
+    fn focus_window(window: &MacWindow) -> Result<(), Error> {
+        let window_owner = unsafe { AXUIElementCreateApplication(window.owner_pid) };
+        let mut windows_ref: CFTypeRef = ptr::null();
+        if unsafe {
+            let x = AXUIElementCopyAttributeValue(
+                window_owner,
+                CFString::new(kAXWindowsAttribute).as_concrete_TypeRef(),
+                &mut windows_ref as *mut CFTypeRef,
+            );
+            x
+        } != kAXErrorSuccess
+        {
+            return Err(Error::CouldNotGetWindowsAccessibility);
+        }
+
+        if windows_ref.is_null() {
+            return Err(Error::CouldNotGetWindowsAccessibility);
+        }
+
+        let applications_windows_nsarray = windows_ref as id;
+
+        let target_window_ax = {
+            let count = unsafe { NSArray::count(applications_windows_nsarray) };
+            let mut window_ax_option: Option<id> = None;
+            for i in 0 .. count {
+                let window_ax = unsafe { NSArray::objectAtIndex(applications_windows_nsarray, i) };
+
+                let window_id = {
+                    let mut window_id: CGWindowID = 0;
+                    if unsafe { _AXUIElementGetWindow(window_ax as AXUIElementRef, &mut window_id) }
+                        != kAXErrorSuccess
+                    {
+                        continue;
+                    }
+                    window_id
+                };
+
+                if window_id == window.id {
+                    window_ax_option = Some(window_ax);
+                }
+            }
+            window_ax_option
+        }
+        .ok_or(Error::WindowNotFound(window.id))? as AXUIElementRef;
+
+        if unsafe {
+            AXUIElementPerformAction(
+                target_window_ax,
+                CFString::new(kAXRaiseAction).as_concrete_TypeRef(),
+            )
+        } != kAXErrorSuccess
+        {
+            return Err(Error::CouldNotRaiseWindow);
+        }
+
+        Ok(())
+    }
+
+    fn activate_window(window: &MacWindow) -> Result<(), Error> {
+        // TODO: remove when publishes this
+        let app: id = unsafe {
+            msg_send![class!(NSRunningApplication), runningApplicationWithProcessIdentifier:window.owner_pid]
+        };
+        if unsafe {
+            NSRunningApplication::activateWithOptions_(app, NSApplicationActivateIgnoringOtherApps)
+        } {
+            Ok(())
+        } else {
+            Err(Error::CouldNotActivateApplication)
+        }
+    }
+
+    fn focus_and_activate_window(window: &MacWindow) -> Result<(), Error> {
+        Self::activate_window(window)?;
+        Self::focus_window(window)?;
         Ok(())
     }
 }
@@ -693,4 +812,10 @@ pub enum Error {
     MonitorNotFound,
     #[error("Couldn't find a window for the id {0}")]
     WindowNotFound(WindowId),
+    #[error("Couldn't get windows from AXUIElementCopyAttributeValue")]
+    CouldNotGetWindowsAccessibility,
+    #[error("Could not raise window AXUIElementPerformAction")]
+    CouldNotRaiseWindow,
+    #[error("Could not activate")]
+    CouldNotActivateApplication,
 }
