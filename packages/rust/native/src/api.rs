@@ -91,7 +91,13 @@ pub trait NativeApiTemplate {
         window_id: WindowId,
     ) -> Result<(), Self::Error>;
 
-    fn toggle_mouse(&mut self, button: MouseButton, down: bool) -> Result<(), Self::Error>;
+    /// window_id is the id of the window to focus prior to clicking if necessary
+    fn toggle_mouse(
+        &mut self,
+        button: MouseButton,
+        down: bool,
+        window_id: Option<WindowId>,
+    ) -> Result<(), Self::Error>;
 
     /// Returns Option<> representing if the type was found and Vec containing the content if it was found. Some(empty vec) is possible.
     fn clipboard_content(
@@ -174,7 +180,12 @@ pub(crate) mod dummy {
             unimplemented!()
         }
 
-        fn toggle_mouse(&mut self, button: MouseButton, down: bool) -> Result<(), Self::Error> {
+        fn toggle_mouse(
+            &mut self,
+            button: MouseButton,
+            down: bool,
+            window_id: Option<WindowId>,
+        ) -> Result<(), Self::Error> {
             unimplemented!()
         }
 

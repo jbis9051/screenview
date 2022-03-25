@@ -629,7 +629,20 @@ impl NativeApiTemplate for MacApi {
         Self::set_pointer_position_absolute_impl(absolute_mouse)
     }
 
-    fn toggle_mouse(&mut self, button: MouseButton, down: bool) -> Result<(), Error> {
+    fn toggle_mouse(
+        &mut self,
+        button: MouseButton,
+        down: bool,
+        window_id: Option<WindowId>,
+    ) -> Result<(), Error> {
+        if let Some(window_id) = window_id {
+            let window = Self::windows_impl()?
+                .into_iter()
+                .find(|w| w.id == window_id)
+                .ok_or(Error::WindowNotFound(window_id))?;
+            Self::focus_and_activate_window(&window)?;
+        }
+
         // TODO can we get smooth scrolling?
         let source = CGEventSource::new(CGEventSourceStateID::CombinedSessionState)
             .map_err(|_| UnableToCreateCGSource)?;

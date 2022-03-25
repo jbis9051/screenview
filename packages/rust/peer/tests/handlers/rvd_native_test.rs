@@ -311,7 +311,12 @@ impl NativeApiTemplate for TesterNative {
         self.set_pointer_position_absolute(x, y, 0)
     }
 
-    fn toggle_mouse(&mut self, button: MouseButton, down: bool) -> Result<(), Self::Error> {
+    fn toggle_mouse(
+        &mut self,
+        button: MouseButton,
+        down: bool,
+        _window_id: Option<WindowId>,
+    ) -> Result<(), Self::Error> {
         self.mouse_button = if down { Some(button) } else { None };
         Ok(())
     }

@@ -91,11 +91,17 @@ pub fn rvd_host_native_helper<T: NativeApiTemplate>(
                         }
                     }
                     for mask in ButtonsMask::iter() {
+                        let window_id = if event.display_type == DisplayType::Window {
+                            Some(event.native_id)
+                        } else {
+                            None
+                        };
                         if event.button_delta.contains(*mask) {
                             native
                                 .toggle_mouse(
                                     network_mouse_button_to_native(mask),
                                     event.button_state.contains(*mask),
+                                    window_id,
                                 )
                                 .map_err(HostError::NativeError)?;
                         }
