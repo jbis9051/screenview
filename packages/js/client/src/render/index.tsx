@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom';
 import Home from './Pages/Home';
 import PageType from './Pages/PageType';
 import RemoteDisplay from './Pages/RemoteDisplay';
-import Toolbox from './Pages/Toolbox';
+import ToolBox from './Pages/ToolBox';
 
 // we render different pages based on the hash aka # after the URL. This isn't dynamic meaning you can't change pages. This makes sense for our app.
 
@@ -15,7 +15,7 @@ const Page: React.FunctionComponent = () => {
         case PageType.REMOTE_DISPLAY:
             return <RemoteDisplay />;
         case PageType.TOOLBOX:
-            return <Toolbox />;
+            return <ToolBox />;
         default:
             throw new Error('Cannot Find Page');
     }

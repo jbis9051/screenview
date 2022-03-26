@@ -7,10 +7,38 @@
     flex-direction: column;
 
     .frame {
-        height: 30px;
         background: var.$accent-color;
         -webkit-app-region: drag;
-        border-bottom: 1px solid var.$border-color;
+
+        .logoWrapper {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+
+            span {
+                display: block;
+                margin-left: 10px;
+                color: white;
+                font-weight: bolder;
+                font-size: 20px;
+                font-family: 'Source Sans Pro', sans-serif;
+            }
+
+            .logo {
+                width: 50px;
+            }
+
+            .x {
+                margin-left: auto;
+                color: white;
+                padding: 5px 10px;
+                border-radius: 0.25rem;
+            }
+
+            .x:hover {
+                background: rgba(0, 0, 0, 0.1);
+            }
+        }
     }
 
     .content {

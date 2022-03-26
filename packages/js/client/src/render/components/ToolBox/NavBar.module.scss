@@ -1,0 +1,10 @@
+@use '../var';
+
+.container {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    height: 30px;
+    background: var.$accent-color;
+    border-bottom: 1px solid var.$border-color;
+}

@@ -1,0 +1,26 @@
+@use '../var';
+
+.wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    width: 30px;
+    font-size: 15px;
+    cursor: pointer;
+    padding: 10px 20px;
+
+    .icon {
+        height: 100%;
+        width: 22%;
+        font-size: 16px;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+}
+
+.selected {
+    background: darken(var.$accent-color, 5);
+}
