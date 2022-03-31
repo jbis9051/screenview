@@ -33,6 +33,12 @@ pub struct SvscHandler {
     awaiting_session_response: bool,
 }
 
+impl Default for SvscHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SvscHandler {
     pub fn new() -> Self {
         Self {

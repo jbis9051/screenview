@@ -67,6 +67,7 @@ pub fn kdf4(ikm: &[u8]) -> ([u8; 32], [u8; 32], [u8; 32], [u8; 32]) {
     )
 }
 
+#[allow(clippy::type_complexity)]
 pub fn diffie_hellman(
     my_private_key: EphemeralPrivateKey,
     peer_public_key: UnparsedPublicKey<&[u8; 32]>,

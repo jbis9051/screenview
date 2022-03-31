@@ -105,6 +105,6 @@ pub(crate) fn common() -> TokenStream {
             let name = Ident::new(&name, Span::call_site());
             quote! { ::#name }
         }
-        Err(e) => Error::new(Span::call_site(), format!("{}", e)).to_compile_error(),
+        Err(e) => Error::new(Span::call_site(), format!("{:?}", e)).to_compile_error(),
     }
 }
