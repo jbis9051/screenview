@@ -1,3 +1,4 @@
+use crate::helper::rvd_helper::handshake;
 use common::messages::rvd::{
     AccessMask,
     ButtonsMask,
@@ -15,7 +16,6 @@ use common::messages::rvd::{
     ProtocolVersionResponse,
     RvdMessage,
 };
-use native::api::MousePosition;
 use peer::services::{
     rvd::{
         DisplayType,
@@ -89,24 +89,6 @@ fn test_rvd_handshake() {
     assert_eq!(events.len(), 0);
 }
 
-fn handshake(host: Option<&mut RvdHostHandler>, client: Option<&mut RvdClientHandler>) {
-    let mut write = Vec::new();
-    let mut events = Vec::new();
-
-    if let Some(client) = client {
-        let protocol_message = RvdHostHandler::protocol_version();
-
-        client
-            .handle(protocol_message, &mut write, &mut events)
-            .expect("handler failed");
-    }
-
-    if let Some(host) = host {
-        let msg = RvdMessage::ProtocolVersionResponse(ProtocolVersionResponse { ok: true });
-        host.handle(msg, &mut events).expect("handler failed");
-    }
-}
-
 #[test]
 fn test_rvd_client() {
     let mut write = Vec::new();
@@ -165,12 +147,15 @@ fn test_rvd_client() {
     );
 
 
+    let content: Vec<u8> = vec![1, 2, 3];
+
     let notification = ClipboardNotification {
         info: ClipboardMeta {
             clipboard_type: ClipboardType::Text,
-            content_request: false,
+            content_request: true,
         },
-        content: None,
+        type_exists: true,
+        content: Some(content.clone()),
     };
     let msg = RvdMessage::ClipboardNotification(notification.clone());
 
@@ -183,7 +168,7 @@ fn test_rvd_client() {
     let event = events.remove(0);
 
     assert!(
-        matches!(event, InformEvent::RvdClientInform(RvdClientInform::ClipboardNotification(a, b)) if a == notification.content && b == notification.info.clipboard_type)
+        matches!(event, InformEvent::RvdClientInform(RvdClientInform::ClipboardNotification(a, b)) if a == content && b == notification.info.clipboard_type)
     );
 }
 
@@ -219,19 +204,12 @@ fn test_rvd_host() {
 
     // MouseInput
 
-    let mouse_position = MousePosition {
-        x: 1,
-        y: 2,
-        monitor_id: 3,
-    };
-
-    let buttons = ButtonsMask::empty();
-
     let mouse_input = MouseInput {
-        display_id: mouse_position.monitor_id,
-        x_location: mouse_position.x as u16, // TODO problem conversion
-        y_location: mouse_position.y as u16, // TODO problem conversion
-        buttons,
+        display_id: 0,
+        x_location: 1,
+        y_location: 2,
+        buttons_delta: ButtonsMask::empty(),
+        buttons_state: ButtonsMask::empty(),
     };
 
     host.handle(RvdMessage::MouseInput(mouse_input), &mut events)
@@ -240,9 +218,16 @@ fn test_rvd_host() {
 
     let event = events.remove(0);
 
-    assert!(
-        matches!(event, InformEvent::RvdHostInform(RvdHostInform::MouseInput(m, mask))  if m == mouse_position && mask == buttons)
-    );
+    assert!(matches!(
+        event,
+        InformEvent::RvdHostInform(RvdHostInform::MouseInput(event))
+        if  event.button_state == ButtonsMask::empty()
+            && event.button_delta == ButtonsMask::empty()
+            && event.native_id == 10
+            && event.display_type == DisplayType::Monitor
+            && event.x_location == 1
+            && event.y_location == 2
+    ));
 
     // KeyInput
 
@@ -284,13 +269,15 @@ fn test_rvd_host() {
     );
 
     // ClipboardNotification
+    let content: Vec<u8> = vec![1, 2, 3];
 
     let notification = ClipboardNotification {
         info: ClipboardMeta {
             clipboard_type: ClipboardType::Text,
-            content_request: false,
+            content_request: true,
         },
-        content: None,
+        type_exists: true,
+        content: Some(content.clone()),
     };
     let msg = RvdMessage::ClipboardNotification(notification.clone());
 
@@ -300,7 +287,7 @@ fn test_rvd_host() {
     let event = events.remove(0);
 
     assert!(
-        matches!(event, InformEvent::RvdHostInform(RvdHostInform::ClipboardNotification(a, b)) if a == notification.content && b == notification.info.clipboard_type)
+        matches!(event, InformEvent::RvdHostInform(RvdHostInform::ClipboardNotification(a, b)) if a == content && b == notification.info.clipboard_type)
     );
 }
 

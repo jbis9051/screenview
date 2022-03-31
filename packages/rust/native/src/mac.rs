@@ -1,7 +1,26 @@
-use std::{ffi::CStr, ops::Deref, os::raw::c_uchar, slice::from_raw_parts};
+use accessibility_sys::{
+    kAXErrorSuccess,
+    kAXRaiseAction,
+    kAXWindowsAttribute,
+    AXError,
+    AXUIElementCopyAttributeValue,
+    AXUIElementCreateApplication,
+    AXUIElementPerformAction,
+    AXUIElementRef,
+};
+use std::{ffi::CStr, ops::Deref, os::raw::c_uchar, ptr, slice::from_raw_parts};
 
 use cocoa::{
-    appkit::{NSApp, NSColorSpace, NSEvent, NSPasteboard, NSPasteboardTypeString, NSScreen},
+    appkit::{
+        NSApp,
+        NSApplicationActivateIgnoringOtherApps,
+        NSColorSpace,
+        NSEvent,
+        NSPasteboard,
+        NSPasteboardTypeString,
+        NSRunningApplication,
+        NSScreen,
+    },
     base::{id, nil},
     foundation::{
         NSArray,
@@ -17,9 +36,9 @@ use cocoa::{
     },
 };
 use core_foundation::{
-    base::FromVoid,
+    base::{CFTypeRef, FromVoid, TCFType},
     number::{kCFNumberIntType, CFNumberGetValue, CFNumberRef},
-    string::{kCFStringEncodingUTF8, CFStringGetCStringPtr, CFStringRef},
+    string::{CFString, CFStringGetCStringPtr, CFStringRef},
 };
 use core_graphics::{
     display::{
@@ -48,11 +67,20 @@ use core_graphics::{
     },
     event_source::{CGEventSource, CGEventSourceStateID},
     image::CGImage,
-    window::{kCGWindowBounds, kCGWindowName, kCGWindowNumber, CGWindowListCopyWindowInfo},
+    window::{
+        kCGWindowBounds,
+        kCGWindowLayer,
+        kCGWindowName,
+        kCGWindowNumber,
+        kCGWindowOwnerName,
+        kCGWindowOwnerPID,
+        CGWindowID,
+        CGWindowListCopyWindowInfo,
+    },
 };
 use core_graphics_types::{base::CGFloat, geometry::CGPoint};
 use image::RgbImage;
-use libc::c_void;
+use libc::{c_void, pid_t};
 use objc::{runtime::BOOL, *};
 
 use crate::{
@@ -67,6 +95,14 @@ struct MacMonitor {
     rect: NSRect,
 }
 
+#[derive(Debug)]
+struct MacWindow {
+    id: u32,
+    name: String,
+    rect: CGRect,
+    owner_pid: pid_t,
+}
+
 struct MacMousePosition {
     point: NSPoint,
     monitor: MacMonitor,
@@ -79,8 +115,31 @@ pub struct MacApi {
 
 extern "C" {
     fn NSMouseInRect(aPoint: NSPoint, aRect: NSRect, flipped: BOOL) -> BOOL;
+    fn _AXUIElementGetWindow(element: AXUIElementRef, window_id: *mut CGWindowID) -> AXError;
 }
 
+impl From<MacWindow> for Window {
+    fn from(w: MacWindow) -> Self {
+        Self {
+            id: w.id,
+            name: w.name,
+            width: w.rect.size.width as u32,
+            height: w.rect.size.height as u32,
+        }
+    }
+}
+
+
+impl From<MacMonitor> for Monitor {
+    fn from(m: MacMonitor) -> Self {
+        Self {
+            id: m.id,
+            name: m.name,
+            width: m.rect.size.width as u32,
+            height: m.rect.size.height as u32,
+        }
+    }
+}
 
 impl MacApi {
     pub fn new() -> Result<Self, Error> {
@@ -102,12 +161,8 @@ impl MacApi {
         };
     }
 
-    fn cgstring_to_string(cf_ref: CFStringRef) -> Option<String> {
-        let c_ptr = unsafe { CFStringGetCStringPtr(cf_ref, kCFStringEncodingUTF8) };
-        if c_ptr.is_null() {
-            return None;
-        }
-        Some(unsafe { CStr::from_ptr(c_ptr) }.to_str().ok()?.to_owned())
+    fn cgstring_to_string(cf_ref: CFStringRef) -> String {
+        unsafe { CFString::wrap_under_create_rule(cf_ref) }.to_string()
     }
 
     fn nsdata_to_vec(data: id) -> Vec<u8> {
@@ -200,8 +255,8 @@ impl MacApi {
         Err(ClipboardSetError("Generic".to_string()))
     }
 
-    fn monitors_impl(&self) -> Result<Vec<MacMonitor>, Error> {
-        MacApi::run_loop();
+    fn monitors_impl() -> Result<Vec<MacMonitor>, Error> {
+        Self::run_loop();
 
         let display = unsafe { NSScreen::screens(nil) };
         let count = unsafe { NSArray::count(display) };
@@ -241,10 +296,160 @@ impl MacApi {
         Ok(monitors)
     }
 
-    fn pointer_position_impl(&self) -> Result<MacMousePosition, Error> {
+    fn cgnumber_to<T: Default>(number: *const libc::c_void) -> Result<T, ()> {
+        let mut value: T = T::default();
+        if unsafe {
+            CFNumberGetValue(
+                number as CFNumberRef,
+                kCFNumberIntType,
+                (&mut value) as *mut _ as *mut c_void,
+            )
+        } {
+            return Ok(value);
+        }
+        Err(())
+    }
+
+    fn windows_impl() -> Result<Vec<MacWindow>, Error> {
+        let windows_array = unsafe {
+            CGWindowListCopyWindowInfo(
+                kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements,
+                kCGNullWindowID,
+            )
+        };
+        if windows_array.is_null() {
+            return Err(Error::CouldNotGetWindowArray);
+        }
+        let count = unsafe { CFArrayGetCount(windows_array) };
+        let mut windows = Vec::with_capacity(count as usize);
+        for i in 0 .. count {
+            let window = unsafe { CFArrayGetValueAtIndex(windows_array, i) as CFDictionaryRef };
+            if window.is_null() {
+                continue;
+            }
+
+            let mut window_id: *const c_void = std::ptr::null();
+            if unsafe {
+                CFDictionaryGetValueIfPresent(
+                    window,
+                    kCGWindowNumber as *mut c_void,
+                    &mut window_id,
+                )
+            } == 0
+            {
+                continue;
+            }
+            if window_id.is_null() {
+                continue;
+            }
+            let window_id = match Self::cgnumber_to::<u32>(window_id) {
+                Ok(num) => num,
+                Err(_) => continue,
+            };
+
+
+            let mut owner_pid: *const c_void = std::ptr::null();
+            if unsafe {
+                CFDictionaryGetValueIfPresent(
+                    window,
+                    kCGWindowOwnerPID as *mut c_void,
+                    &mut owner_pid,
+                )
+            } == 0
+            {
+                continue;
+            }
+            if owner_pid.is_null() {
+                continue;
+            }
+            let owner_pid = match Self::cgnumber_to::<pid_t>(owner_pid) {
+                Ok(num) => num,
+                Err(_) => continue,
+            } as pid_t;
+
+
+            let mut window_layer: *const c_void = std::ptr::null();
+            if unsafe {
+                CFDictionaryGetValueIfPresent(
+                    window,
+                    kCGWindowLayer as *mut c_void,
+                    &mut window_layer,
+                )
+            } == 0
+            {
+                continue;
+            }
+            if window_layer.is_null() {
+                continue;
+            }
+
+            let window_layer = match Self::cgnumber_to::<u32>(window_layer) {
+                Ok(num) => num,
+                Err(_) => continue,
+            };
+
+            if window_layer != 0 {
+                continue;
+            }
+
+
+            let mut name: *const c_void = std::ptr::null();
+            if unsafe {
+                CFDictionaryGetValueIfPresent(window, kCGWindowName as *mut c_void, &mut name)
+            } == 0
+            {
+                continue;
+            }
+            if name.is_null()
+                && unsafe {
+                    CFDictionaryGetValueIfPresent(
+                        window,
+                        kCGWindowOwnerName as *mut c_void,
+                        &mut name,
+                    )
+                } == 0
+            {
+                continue;
+            }
+            if name.is_null() {
+                continue;
+            }
+            let name = Self::cgstring_to_string(name as CFStringRef);
+
+            let mut window_bounds: *const c_void = std::ptr::null();
+            if unsafe {
+                CFDictionaryGetValueIfPresent(
+                    window,
+                    kCGWindowBounds as *mut c_void,
+                    &mut window_bounds,
+                )
+            } == 0
+            {
+                continue;
+            }
+            if window_bounds.is_null() {
+                continue;
+            }
+            let window_bounds = unsafe { CFDictionary::from_void(window_bounds) };
+            let rect = match CGRect::from_dict_representation(window_bounds.deref()) {
+                None => {
+                    continue;
+                }
+                Some(rect) => rect,
+            };
+            windows.push(MacWindow {
+                id: window_id,
+                name,
+                rect,
+                owner_pid,
+            });
+        }
+        Ok(windows)
+    }
+
+    fn pointer_position_impl() -> Result<MacMousePosition, Error> {
         let nspoint = unsafe { NSEvent::mouseLocation(nil) };
-        let monitor = self
-            .monitors_impl()?
+        let monitor = Self::monitors_impl()?
             .into_iter()
             .find(|m| unsafe { NSMouseInRect(nspoint, m.rect, false) })
             .ok_or(Error::MonitorNotFound)?;
@@ -253,6 +458,94 @@ impl MacApi {
             point: nspoint,
             monitor,
         })
+    }
+
+    fn set_pointer_position_absolute_impl(point: CGPoint) -> Result<(), Error> {
+        let source = CGEventSource::new(CGEventSourceStateID::CombinedSessionState)
+            .map_err(|_| UnableToCreateCGSource)?;
+        let event =
+            CGEvent::new_mouse_event(source, CGEventType::MouseMoved, point, CGMouseButton::Left)
+                .map_err(|_| CGEventError)?;
+        event.post(CGEventTapLocation::Session);
+        Ok(())
+    }
+
+    fn focus_window(window: &MacWindow) -> Result<(), Error> {
+        let window_owner = unsafe { AXUIElementCreateApplication(window.owner_pid) };
+        let mut windows_ref: CFTypeRef = ptr::null();
+        if unsafe {
+            let x = AXUIElementCopyAttributeValue(
+                window_owner,
+                CFString::new(kAXWindowsAttribute).as_concrete_TypeRef(),
+                &mut windows_ref as *mut CFTypeRef,
+            );
+            x
+        } != kAXErrorSuccess
+        {
+            return Err(Error::CouldNotGetWindowsAccessibility);
+        }
+
+        if windows_ref.is_null() {
+            return Err(Error::CouldNotGetWindowsAccessibility);
+        }
+
+        let applications_windows_nsarray = windows_ref as id;
+
+        let target_window_ax = {
+            let count = unsafe { NSArray::count(applications_windows_nsarray) };
+            let mut window_ax_option: Option<id> = None;
+            for i in 0 .. count {
+                let window_ax = unsafe { NSArray::objectAtIndex(applications_windows_nsarray, i) };
+
+                let window_id = {
+                    let mut window_id: CGWindowID = 0;
+                    if unsafe { _AXUIElementGetWindow(window_ax as AXUIElementRef, &mut window_id) }
+                        != kAXErrorSuccess
+                    {
+                        continue;
+                    }
+                    window_id
+                };
+
+                if window_id == window.id {
+                    window_ax_option = Some(window_ax);
+                }
+            }
+            window_ax_option
+        }
+        .ok_or(Error::WindowNotFound(window.id))? as AXUIElementRef;
+
+        if unsafe {
+            AXUIElementPerformAction(
+                target_window_ax,
+                CFString::new(kAXRaiseAction).as_concrete_TypeRef(),
+            )
+        } != kAXErrorSuccess
+        {
+            return Err(Error::CouldNotRaiseWindow);
+        }
+
+        Ok(())
+    }
+
+    fn activate_window(window: &MacWindow) -> Result<(), Error> {
+        // TODO: remove when publishes this
+        let app: id = unsafe {
+            msg_send![class!(NSRunningApplication), runningApplicationWithProcessIdentifier:window.owner_pid]
+        };
+        if unsafe {
+            NSRunningApplication::activateWithOptions_(app, NSApplicationActivateIgnoringOtherApps)
+        } {
+            Ok(())
+        } else {
+            Err(Error::CouldNotActivateApplication)
+        }
+    }
+
+    fn focus_and_activate_window(window: &MacWindow) -> Result<(), Error> {
+        Self::activate_window(window)?;
+        Self::focus_window(window)?;
+        Ok(())
     }
 }
 
@@ -272,39 +565,84 @@ impl NativeApiTemplate for MacApi {
     }
 
     fn pointer_position(&mut self) -> Result<MousePosition, Error> {
-        let position = self.pointer_position_impl()?;
+        let position = Self::pointer_position_impl()?;
+        let normalized_position = NSPoint::new(
+            position.point.x - position.monitor.rect.origin.x,
+            position.monitor.rect.size.height - position.point.y - position.monitor.rect.origin.y,
+        );
+
+        let windows: Vec<MacWindow> = Self::windows_impl()?
+            .into_iter()
+            .filter(|w| unsafe {
+                let nsrect: NSRect = std::mem::transmute(w.rect);
+                NSMouseInRect(normalized_position, nsrect, false)
+            })
+            .collect();
+
         Ok(MousePosition {
-            x: (position.point.x - position.monitor.rect.origin.x) as u32,
-            y: (position.monitor.rect.size.height
-                - position.point.y
-                - position.monitor.rect.origin.y) as u32,
-            monitor_id: position.monitor.id as u8,
+            x: normalized_position.x as u32,
+            y: normalized_position.y as u32,
+            monitor_id: position.monitor.id,
+            window_relatives: windows
+                .iter()
+                .map(|w| PointerPositionRelative {
+                    x: (normalized_position.x - w.rect.origin.x) as u32,
+                    y: (normalized_position.y - w.rect.origin.y) as u32,
+                    window_id: w.id,
+                })
+                .collect(),
         })
     }
 
-    fn set_pointer_position(&mut self, pos: MousePosition) -> Result<(), Error> {
-        let source = CGEventSource::new(CGEventSourceStateID::CombinedSessionState)
-            .map_err(|_| UnableToCreateCGSource)?;
-        let monitor = self
-            .monitors_impl()?
+    fn set_pointer_position_absolute(
+        &mut self,
+        x: u32,
+        y: u32,
+        monitor_id: MonitorId,
+    ) -> Result<(), Self::Error> {
+        let monitor = Self::monitors_impl()?
             .into_iter()
-            .find(|m| m.id == pos.monitor_id as u32)
+            .find(|m| m.id == monitor_id as u32)
             .ok_or(MonitorNotFound)?;
-        let event = CGEvent::new_mouse_event(
-            source,
-            CGEventType::MouseMoved,
-            CGPoint::new(
-                pos.x as CGFloat + monitor.rect.origin.x,
-                pos.y as CGFloat + monitor.rect.origin.y,
-            ), // CGEvent uses origin of upper left I guess
-            CGMouseButton::Left,
-        )
-        .map_err(|_| CGEventError)?;
-        event.post(CGEventTapLocation::Session);
+        let point = CGPoint::new(
+            x as CGFloat + monitor.rect.origin.x,
+            y as CGFloat + monitor.rect.origin.y,
+        ); // CGEvent uses origin of upper left I guess
+        Self::set_pointer_position_absolute_impl(point)?;
         Ok(())
     }
 
-    fn toggle_mouse(&mut self, button: MouseButton, down: bool) -> Result<(), Error> {
+    fn set_pointer_position_relative(
+        &mut self,
+        x: u32,
+        y: u32,
+        window_id: WindowId,
+    ) -> Result<(), Self::Error> {
+        let window = Self::windows_impl()?
+            .into_iter()
+            .find(|w| w.id == window_id)
+            .ok_or(Error::WindowNotFound(window_id))?;
+        let absolute_mouse = CGPoint::new(
+            window.rect.origin.x + x as f64,
+            window.rect.origin.y + y as f64,
+        );
+        Self::set_pointer_position_absolute_impl(absolute_mouse)
+    }
+
+    fn toggle_mouse(
+        &mut self,
+        button: MouseButton,
+        down: bool,
+        window_id: Option<WindowId>,
+    ) -> Result<(), Error> {
+        if let Some(window_id) = window_id {
+            let window = Self::windows_impl()?
+                .into_iter()
+                .find(|w| w.id == window_id)
+                .ok_or(Error::WindowNotFound(window_id))?;
+            Self::focus_and_activate_window(&window)?;
+        }
+
         // TODO can we get smooth scrolling?
         let source = CGEventSource::new(CGEventSourceStateID::CombinedSessionState)
             .map_err(|_| UnableToCreateCGSource)?;
@@ -353,7 +691,7 @@ impl NativeApiTemplate for MacApi {
                 scroll_event.post(CGEventTapLocation::Session);
             }
             _ => {
-                let mouse_position = self.pointer_position_impl()?;
+                let mouse_position = Self::pointer_position_impl()?;
                 let mouse_position = CGPoint::new(
                     mouse_position.point.x as CGFloat,
                     mouse_position.point.y as CGFloat,
@@ -392,7 +730,7 @@ impl NativeApiTemplate for MacApi {
         Ok(())
     }
 
-    fn clipboard_content(&mut self, type_name: &ClipboardType) -> Result<Vec<u8>, Error> {
+    fn clipboard_content(&mut self, type_name: &ClipboardType) -> Result<Option<Vec<u8>>, Error> {
         let paste_board = unsafe { NSPasteboard::generalPasteboard(nil) };
         if paste_board == nil {
             return Err(NSPasteboardError);
@@ -409,9 +747,9 @@ impl NativeApiTemplate for MacApi {
             },
         };
         if data == nil {
-            return Err(ClipboardNotFound(type_name.to_string()));
+            return Ok(None);
         }
-        Ok(Self::nsdata_to_vec(data))
+        Ok(Some(Self::nsdata_to_vec(data)))
     }
 
     fn set_clipboard_content(
@@ -426,122 +764,32 @@ impl NativeApiTemplate for MacApi {
                     NSString::alloc(nil).init_str(type_name.as_str()),
             }
         };
-        MacApi::set_clipboard_content_impl(type_name, content)
+        Self::set_clipboard_content_impl(type_name, content)
     }
 
     fn monitors(&mut self) -> Result<Vec<Monitor>, Error> {
-        Ok(self
-            .monitors_impl()?
+        Ok(Self::monitors_impl()?
             .into_iter()
-            .map(|m| Monitor {
-                id: m.id,
-                name: m.name,
-                width: m.rect.size.width as u32,
-                height: m.rect.size.height as u32,
-            })
+            .map(|m| m.into())
             .collect())
     }
 
     fn windows(&mut self) -> Result<Vec<Window>, Error> {
-        let windows_array = unsafe {
-            CGWindowListCopyWindowInfo(
-                kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements,
-                kCGNullWindowID,
-            )
-        };
-        if windows_array.is_null() {
-            return Err(Error::CouldNotGetWindowArray);
-        }
-        let count = unsafe { CFArrayGetCount(windows_array) };
-        let mut windows = Vec::with_capacity(count as usize);
-        for i in 0 .. count {
-            let window = unsafe { CFArrayGetValueAtIndex(windows_array, i) as CFDictionaryRef };
-            if window.is_null() {
-                continue;
-            }
-            let mut window_id: *const c_void = std::ptr::null();
-            if unsafe {
-                CFDictionaryGetValueIfPresent(
-                    window,
-                    kCGWindowNumber as *mut c_void,
-                    &mut window_id,
-                )
-            } == 0
-            {
-                continue;
-            }
-            if window_id.is_null() {
-                continue;
-            }
-            let window_id = {
-                let mut number: u32 = 0u32;
-                if !unsafe {
-                    CFNumberGetValue(
-                        window_id as CFNumberRef,
-                        kCFNumberIntType,
-                        (&mut number) as *mut _ as *mut c_void,
-                    )
-                } {
-                    continue;
-                };
-                number
-            };
-            let mut name: *const c_void = std::ptr::null();
-            if unsafe {
-                CFDictionaryGetValueIfPresent(window, kCGWindowName as *mut c_void, &mut name)
-            } == 0
-            {
-                continue;
-            }
-            if name.is_null() {
-                continue;
-            }
-            let name = match MacApi::cgstring_to_string(name as CFStringRef) {
-                None => {
-                    continue;
-                }
-                Some(name) => name,
-            };
-            let mut window_bounds: *const c_void = std::ptr::null();
-            if unsafe {
-                CFDictionaryGetValueIfPresent(
-                    window,
-                    kCGWindowBounds as *mut c_void,
-                    &mut window_bounds,
-                )
-            } == 0
-            {
-                continue;
-            }
-            if window_bounds.is_null() {
-                continue;
-            }
-            let window_bounds = unsafe { CFDictionary::from_void(window_bounds) };
-            let rect = match CGRect::from_dict_representation(window_bounds.deref()) {
-                None => {
-                    continue;
-                }
-                Some(rect) => rect,
-            };
-            windows.push(Window {
-                id: window_id,
-                name,
-                width: rect.size.width as u32,
-                height: rect.size.height as u32,
-            });
-        }
-        Ok(windows)
+        Ok(Self::windows_impl()?
+            .into_iter()
+            .map(|w| w.into())
+            .collect())
     }
 
-    fn capture_monitor_frame(&mut self, monitor_id: u32) -> Result<Frame, Error> {
+    fn capture_monitor_frame(&mut self, monitor_id: MonitorId) -> Result<Frame, Error> {
         let core_display = CGDisplay::new(monitor_id);
         let frame = core_display
             .image()
             .ok_or_else(|| CaptureDisplayError(monitor_id.to_string()))?;
-        MacApi::cgimage_to_frame(&frame).map_err(|_| CaptureDisplayError(monitor_id.to_string()))
+        Self::cgimage_to_frame(&frame).map_err(|_| CaptureDisplayError(monitor_id.to_string()))
     }
 
-    fn capture_window_frame(&mut self, window_id: u32) -> Result<Frame, Error> {
+    fn capture_window_frame(&mut self, window_id: WindowId) -> Result<Frame, Error> {
         let image = CGDisplay::screenshot(
             unsafe { CGRectNull },
             kCGWindowListOptionIncludingWindow,
@@ -549,7 +797,7 @@ impl NativeApiTemplate for MacApi {
             kCGWindowImageBoundsIgnoreFraming,
         )
         .ok_or_else(|| CaptureDisplayError(window_id.to_string()))?;
-        MacApi::cgimage_to_frame(&image).map_err(|_| CaptureDisplayError(window_id.to_string()))
+        Self::cgimage_to_frame(&image).map_err(|_| CaptureDisplayError(window_id.to_string()))
     }
 }
 
@@ -557,8 +805,6 @@ impl NativeApiTemplate for MacApi {
 pub enum Error {
     #[error("Could not get Window Array")]
     CouldNotGetWindowArray,
-    #[error("Could not get pasteboard data for key `{0}`")]
-    ClipboardNotFound(String),
     #[error("Could not set pasteboard data for key `{0}`")]
     ClipboardSetError(String),
     #[error("Could not capture display: `{0}`")]
@@ -577,4 +823,12 @@ pub enum Error {
     NSStringError,
     #[error("Couldn't find a matching monitor with the mouse position")]
     MonitorNotFound,
+    #[error("Couldn't find a window for the id {0}")]
+    WindowNotFound(WindowId),
+    #[error("Couldn't get windows from AXUIElementCopyAttributeValue")]
+    CouldNotGetWindowsAccessibility,
+    #[error("Could not raise window AXUIElementPerformAction")]
+    CouldNotRaiseWindow,
+    #[error("Could not activate")]
+    CouldNotActivateApplication,
 }

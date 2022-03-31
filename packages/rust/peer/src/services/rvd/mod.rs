@@ -28,16 +28,17 @@ impl RvdHandler {
     }
 
     pub fn clipboard_data(
-        &mut self,
-        data: Option<Vec<u8>>,
+        data: Option<Vec<u8>>, // on input Option refers to whether the content exists
+        is_content: bool,
         clipboard_type: ClipboardType,
     ) -> RvdMessage {
         RvdMessage::ClipboardNotification(ClipboardNotification {
             info: ClipboardMeta {
                 clipboard_type,
-                content_request: data.is_some(),
+                content_request: is_content,
             },
-            content: data,
+            type_exists: data.is_some(),
+            content: if is_content { data } else { None }, // but here it it's only Some if (a) the type exists AND (b) it is a content request
         })
     }
 }

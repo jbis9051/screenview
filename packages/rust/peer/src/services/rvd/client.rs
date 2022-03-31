@@ -5,6 +5,7 @@ use common::{
         ClipboardType,
         DisplayChange,
         DisplayChangeReceived,
+        DisplayId,
         MouseLocation,
         ProtocolVersionResponse,
         RvdMessage,
@@ -64,6 +65,12 @@ impl RvdClientHandler {
                     write.push(RvdMessage::DisplayChangeReceived(DisplayChangeReceived {}));
                     Ok(())
                 }
+                RvdMessage::MouseHidden(msg) => {
+                    events.push(InformEvent::RvdClientInform(RvdClientInform::MouseHidden(
+                        msg.display_id,
+                    )));
+                    Ok(())
+                }
                 RvdMessage::MouseLocation(msg) => {
                     events.push(InformEvent::RvdClientInform(
                         RvdClientInform::MouseLocation(msg),
@@ -71,12 +78,14 @@ impl RvdClientHandler {
                     Ok(())
                 }
                 RvdMessage::ClipboardNotification(msg) => {
-                    events.push(InformEvent::RvdClientInform(
-                        RvdClientInform::ClipboardNotification(
-                            msg.content,
-                            msg.info.clipboard_type,
-                        ),
-                    ));
+                    if let Some(content) = msg.content {
+                        events.push(InformEvent::RvdClientInform(
+                            RvdClientInform::ClipboardNotification(
+                                content,
+                                msg.info.clipboard_type,
+                            ),
+                        ));
+                    }
                     Ok(())
                 }
                 _ => Err(RvdClientError::WrongMessageForState(
@@ -99,7 +108,8 @@ pub enum RvdClientError {
 pub enum RvdClientInform {
     VersionBad,
 
+    MouseHidden(DisplayId),
     MouseLocation(MouseLocation),
     DisplayChange(DisplayChange),
-    ClipboardNotification(Option<Vec<u8>>, ClipboardType),
+    ClipboardNotification(Vec<u8>, ClipboardType), // for now we only care when receive a clipboard notification with content
 }

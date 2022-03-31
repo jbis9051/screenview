@@ -61,13 +61,22 @@ fn test_mouse_location() {
 }
 
 #[test]
+fn test_mouse_hidden() {
+    let bytes = include_bytes!("binary/rvd/mouse_hidden.bin");
+    let message: MouseHidden = MouseHidden::read(&mut Cursor::new(bytes)).unwrap();
+    assert_eq!(message.display_id, 1);
+    test_write(&message, bytes);
+}
+
+#[test]
 fn test_mouse_input() {
     let bytes = include_bytes!("binary/rvd/mouse_input.bin");
     let message: MouseInput = MouseInput::read(&mut Cursor::new(bytes)).unwrap();
     assert_eq!(message.display_id, 1);
     assert_eq!(message.x_location, 200);
     assert_eq!(message.y_location, 200);
-    assert_eq!(message.buttons, ButtonsMask::empty());
+    assert_eq!(message.buttons_delta, ButtonsMask::empty());
+    assert_eq!(message.buttons_state, ButtonsMask::empty());
     test_write(&message, bytes);
 }
 

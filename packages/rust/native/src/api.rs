@@ -2,9 +2,12 @@ use std::fmt::{Debug, Display, Formatter};
 
 use image::RgbImage;
 
+pub type MonitorId = u32;
+pub type WindowId = u32;
+
 #[derive(Debug, Clone)]
 pub struct Monitor {
-    pub id: u32,
+    pub id: MonitorId,
     pub name: String,
     pub width: u32,
     pub height: u32,
@@ -12,17 +15,25 @@ pub struct Monitor {
 
 #[derive(Debug, Clone)]
 pub struct Window {
-    pub id: u32,
+    pub id: WindowId,
     pub name: String,
     pub width: u32,
     pub height: u32,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
+pub struct PointerPositionRelative {
+    pub x: u32,
+    pub y: u32,
+    pub window_id: WindowId,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct MousePosition {
     pub x: u32,
     pub y: u32,
-    pub monitor_id: u8,
+    pub monitor_id: MonitorId,
+    pub window_relatives: Vec<PointerPositionRelative>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -63,13 +74,36 @@ pub trait NativeApiTemplate {
 
     fn key_toggle(&mut self, key: Key, down: bool) -> Result<(), Self::Error>;
 
+    /// Returns current MousePosition and all Window's the mouse intersect. Intuitively, this should only be one but because Windows can be layered it can be multiple.
     fn pointer_position(&mut self) -> Result<MousePosition, Self::Error>;
 
-    fn set_pointer_position(&mut self, pos: MousePosition) -> Result<(), Self::Error>;
+    fn set_pointer_position_absolute(
+        &mut self,
+        x: u32,
+        y: u32,
+        monitor_id: MonitorId,
+    ) -> Result<(), Self::Error>;
 
-    fn toggle_mouse(&mut self, button: MouseButton, down: bool) -> Result<(), Self::Error>;
+    fn set_pointer_position_relative(
+        &mut self,
+        x: u32,
+        y: u32,
+        window_id: WindowId,
+    ) -> Result<(), Self::Error>;
 
-    fn clipboard_content(&mut self, type_name: &ClipboardType) -> Result<Vec<u8>, Self::Error>;
+    /// window_id is the id of the window to focus prior to clicking if necessary
+    fn toggle_mouse(
+        &mut self,
+        button: MouseButton,
+        down: bool,
+        window_id: Option<WindowId>,
+    ) -> Result<(), Self::Error>;
+
+    /// Returns Option<> representing if the type was found and Vec containing the content if it was found. Some(empty vec) is possible.
+    fn clipboard_content(
+        &mut self,
+        type_name: &ClipboardType,
+    ) -> Result<Option<Vec<u8>>, Self::Error>;
 
     fn set_clipboard_content(
         &mut self,
@@ -81,7 +115,7 @@ pub trait NativeApiTemplate {
 
     fn windows(&mut self) -> Result<Vec<Window>, Self::Error>;
 
-    fn capture_monitor_frame(&mut self, monitor_id: u32) -> Result<Frame, Self::Error>;
+    fn capture_monitor_frame(&mut self, monitor_id: MonitorId) -> Result<Frame, Self::Error>;
 
     fn update_monitor_frame(
         &mut self,
@@ -92,9 +126,13 @@ pub trait NativeApiTemplate {
         Ok(())
     }
 
-    fn capture_window_frame(&mut self, window_id: u32) -> Result<Frame, Self::Error>;
+    fn capture_window_frame(&mut self, window_id: WindowId) -> Result<Frame, Self::Error>;
 
-    fn update_window_frame(&mut self, window_id: u32, cap: &mut Frame) -> Result<(), Self::Error> {
+    fn update_window_frame(
+        &mut self,
+        window_id: WindowId,
+        cap: &mut Frame,
+    ) -> Result<(), Self::Error> {
         *cap = self.capture_window_frame(window_id)?;
         Ok(())
     }
@@ -116,47 +154,69 @@ pub(crate) mod dummy {
     impl NativeApiTemplate for DummyApi {
         type Error = Infallible;
 
-        fn key_toggle(&mut self, _key: Key, _down: bool) -> Result<(), Infallible> {
+        fn key_toggle(&mut self, key: Key, down: bool) -> Result<(), Self::Error> {
             unimplemented!()
         }
 
-        fn pointer_position(&mut self) -> Result<MousePosition, Infallible> {
+        fn pointer_position(&mut self) -> Result<MousePosition, Self::Error> {
             unimplemented!()
         }
 
-        fn set_pointer_position(&mut self, _pos: MousePosition) -> Result<(), Infallible> {
+        fn set_pointer_position_absolute(
+            &mut self,
+            x: u32,
+            y: u32,
+            monitor_id: MonitorId,
+        ) -> Result<(), Self::Error> {
             unimplemented!()
         }
 
-        fn toggle_mouse(&mut self, _button: MouseButton, _down: bool) -> Result<(), Infallible> {
+        fn set_pointer_position_relative(
+            &mut self,
+            x: u32,
+            y: u32,
+            window_id: WindowId,
+        ) -> Result<(), Self::Error> {
             unimplemented!()
         }
 
-        fn clipboard_content(&mut self, _type_name: &ClipboardType) -> Result<Vec<u8>, Infallible> {
+        fn toggle_mouse(
+            &mut self,
+            button: MouseButton,
+            down: bool,
+            window_id: Option<WindowId>,
+        ) -> Result<(), Self::Error> {
+            unimplemented!()
+        }
+
+        fn clipboard_content(
+            &mut self,
+            type_name: &ClipboardType,
+        ) -> Result<Option<Vec<u8>>, Self::Error> {
             unimplemented!()
         }
 
         fn set_clipboard_content(
             &mut self,
-            _type_name: &ClipboardType,
-            _content: &[u8],
-        ) -> Result<(), Infallible> {
+            type_name: &ClipboardType,
+            content: &[u8],
+        ) -> Result<(), Self::Error> {
             unimplemented!()
         }
 
-        fn monitors(&mut self) -> Result<Vec<Monitor>, Infallible> {
+        fn monitors(&mut self) -> Result<Vec<Monitor>, Self::Error> {
             unimplemented!()
         }
 
-        fn windows(&mut self) -> Result<Vec<Window>, Infallible> {
+        fn windows(&mut self) -> Result<Vec<Window>, Self::Error> {
             unimplemented!()
         }
 
-        fn capture_monitor_frame(&mut self, _monitor_id: u32) -> Result<Frame, Infallible> {
+        fn capture_monitor_frame(&mut self, monitor_id: MonitorId) -> Result<Frame, Self::Error> {
             unimplemented!()
         }
 
-        fn capture_window_frame(&mut self, _monitor_id: u32) -> Result<Frame, Infallible> {
+        fn capture_window_frame(&mut self, window_id: WindowId) -> Result<Frame, Self::Error> {
             unimplemented!()
         }
     }

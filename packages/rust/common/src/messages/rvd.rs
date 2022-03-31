@@ -6,6 +6,7 @@ use parser::{message_id, MessageComponent};
 use std::{
     borrow::Cow,
     io::{Cursor, Read, Write},
+    slice::Iter,
 };
 
 #[derive(MessageComponent, Debug)]
@@ -66,11 +67,18 @@ pub struct MouseLocation {
 
 #[derive(MessageComponent, Debug)]
 #[message_id(5)]
+pub struct MouseHidden {
+    pub display_id: DisplayId,
+}
+
+#[derive(MessageComponent, Debug)]
+#[message_id(6)]
 pub struct MouseInput {
     pub display_id: DisplayId,
     pub x_location: u16,
     pub y_location: u16,
-    pub buttons: ButtonsMask,
+    pub buttons_delta: ButtonsMask,
+    pub buttons_state: ButtonsMask,
 }
 
 bitflags! {
@@ -85,10 +93,25 @@ bitflags! {
     }
 }
 
+impl ButtonsMask {
+    pub fn iter() -> Iter<'static, ButtonsMask> {
+        static BUTTONS: [ButtonsMask; 7] = [
+            ButtonsMask::LEFT,
+            ButtonsMask::MIDDLE,
+            ButtonsMask::RIGHT,
+            ButtonsMask::SCROLL_UP,
+            ButtonsMask::SCROLL_DOWN,
+            ButtonsMask::SCROLL_LEFT,
+            ButtonsMask::SCROLL_RIGHT,
+        ];
+        BUTTONS.iter()
+    }
+}
+
 impl_bitflags_message_component!(ButtonsMask);
 
 #[derive(MessageComponent, Debug, PartialEq, Clone)]
-#[message_id(6)]
+#[message_id(7)]
 pub struct KeyInput {
     pub down: bool,
     pub key: u32, // keysym
@@ -242,21 +265,22 @@ impl MessageComponent for ClipboardMeta {
 }
 
 #[derive(MessageComponent, Debug)]
-#[message_id(7)]
+#[message_id(8)]
 pub struct ClipboardRequest {
     pub info: ClipboardMeta,
 }
 
 #[derive(MessageComponent, Debug, Clone)]
-#[message_id(8)]
+#[message_id(9)]
 pub struct ClipboardNotification {
     pub info: ClipboardMeta,
-    #[parse(condition = "info.content_request", len_prefixed(3))]
+    pub type_exists: bool,
+    #[parse(condition = "info.content_request && type_exists", len_prefixed(3))]
     pub content: Option<Vec<u8>>,
 }
 
 #[derive(MessageComponent, Debug)]
-#[message_id(9)]
+#[message_id(10)]
 pub struct FrameData {
     pub frame_number: u32,
     pub display_id: u8,
@@ -272,6 +296,7 @@ pub enum RvdMessage {
     DisplayChange(DisplayChange),
     DisplayChangeReceived(DisplayChangeReceived),
     MouseLocation(MouseLocation),
+    MouseHidden(MouseHidden),
     MouseInput(MouseInput),
     KeyInput(KeyInput),
     ClipboardRequest(ClipboardRequest),

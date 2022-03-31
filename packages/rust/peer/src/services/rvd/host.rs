@@ -19,7 +19,7 @@ use common::{
 use native::api::MousePosition;
 use std::fmt::Debug;
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Copy, Clone)]
 pub enum DisplayType {
     Monitor,
     Window,
@@ -93,7 +93,8 @@ impl RvdHostHandler {
     }
 
     /// Add displays using share_display
-    /// This shares all displays in share_display. Updates to displays are handled properly.
+    /// This shares all displays in share_buffer. Updates to displays are handled properly.
+    /// share_buffer is cleared (set to Vec::default() aka Vec::new() aka [])
     pub fn display_update(&mut self) -> RvdMessage {
         self.state = HostState::WaitingForDisplayChangeReceived;
         let mut access = AccessMask::FLUSH;
@@ -104,7 +105,8 @@ impl RvdHostHandler {
             .dedup_by(|a, b| a.display_type == b.display_type && a.native_id == b.native_id);
         self.shared_displays = std::mem::take(&mut self.share_buffer)
             .into_iter()
-            .map(|d| {
+            .enumerate()
+            .map(|(i, d)| {
                 let mut access = access;
 
                 if self
@@ -125,7 +127,7 @@ impl RvdHostHandler {
                     native_id: d.native_id,
                     display_type: d.display_type,
                     information: DisplayInformation {
-                        display_id: 0,
+                        display_id: i as DisplayId,
                         width: d.width,
                         height: d.height,
                         cell_width: 0,  // TODO
@@ -183,13 +185,20 @@ impl RvdHostHandler {
                     if !self.controllable {
                         return Err(RvdHostError::PermissionsError(MouseInput));
                     }
+                    let display = self
+                        .shared_displays
+                        .iter()
+                        .find(|d| d.information.display_id == msg.display_id)
+                        .ok_or(RvdHostError::DisplayNotFound(msg.display_id))?;
                     events.push(InformEvent::RvdHostInform(RvdHostInform::MouseInput(
-                        MousePosition {
-                            x: msg.x_location as u32,
-                            y: msg.y_location as u32,
-                            monitor_id: msg.display_id,
+                        MouseInputEvent {
+                            x_location: msg.x_location,
+                            y_location: msg.y_location,
+                            button_delta: msg.buttons_delta,
+                            button_state: msg.buttons_state,
+                            display_type: display.display_type,
+                            native_id: display.native_id,
                         },
-                        msg.buttons,
                     )));
                     Ok(())
                 }
@@ -219,9 +228,12 @@ impl RvdHostHandler {
                     if !(self.clipboard_readable && self.controllable) {
                         return Err(RvdHostError::PermissionsError(ClipboardWrite));
                     }
-                    events.push(InformEvent::RvdHostInform(
-                        RvdHostInform::ClipboardNotification(msg.content, msg.info.clipboard_type),
-                    ));
+                    if let Some(content) = msg.content {
+                        // only emit when theres content
+                        events.push(InformEvent::RvdHostInform(
+                            RvdHostInform::ClipboardNotification(content, msg.info.clipboard_type),
+                        ));
+                    }
                     Ok(())
                 }
                 _ => Err(RvdHostError::WrongMessageForState(
@@ -251,12 +263,21 @@ pub enum RvdHostError {
     DisplayNotFound(DisplayId),
 }
 
+pub struct MouseInputEvent {
+    pub x_location: u16,
+    pub y_location: u16,
+    pub button_delta: ButtonsMask,
+    pub button_state: ButtonsMask,
+    pub display_type: DisplayType,
+    pub native_id: u32,
+}
+
 pub enum RvdHostInform {
     VersionBad,
 
-    MouseInput(MousePosition, ButtonsMask),
+    MouseInput(MouseInputEvent),
     KeyboardInput(KeyInput),
 
     ClipboardRequest(bool, ClipboardType),
-    ClipboardNotification(Option<Vec<u8>>, ClipboardType),
+    ClipboardNotification(Vec<u8>, ClipboardType),
 }
