@@ -151,16 +151,23 @@ impl NativeApiTemplate for X11Api {
                     && (x - info.x) < info.width
                     && (y - info.y) < info.height
             })
-            .unwrap_or(0) as u8;
+            .unwrap_or(0);
 
         Ok(MousePosition {
             x: reply.root_x() as _,
             y: reply.root_y() as _,
-            monitor_id,
+            monitor_id: monitor_id as _,
+            window_relatives: vec![], // TODO: fill
         })
     }
 
-    fn set_pointer_position(&mut self, pos: MousePosition) -> Result<(), Error> {
+    // TODO: figure out how to use monitor_id
+    fn set_pointer_position_absolute(
+        &mut self,
+        x: u32,
+        y: u32,
+        _monitor_id: MonitorId,
+    ) -> Result<(), Self::Error> {
         self.conn
             .check_request(self.conn.send_request_checked(&WarpPointer {
                 src_window: Window::none(),
@@ -169,13 +176,39 @@ impl NativeApiTemplate for X11Api {
                 src_y: 0,
                 src_width: 0,
                 src_height: 0,
-                dst_x: pos.x as _,
-                dst_y: pos.y as _,
+                dst_x: x as _,
+                dst_y: y as _,
             }))
             .map_err(Into::into)
     }
 
-    fn toggle_mouse(&mut self, button: MouseButton, down: bool) -> Result<(), Error> {
+    // TODO: convert window_id into XCB Window
+    fn set_pointer_position_relative(
+        &mut self,
+        x: u32,
+        y: u32,
+        _window_id: WindowId,
+    ) -> Result<(), Self::Error> {
+        self.conn
+            .check_request(self.conn.send_request_checked(&WarpPointer {
+                src_window: Window::none(),
+                dst_window: self.root,
+                src_x: 0,
+                src_y: 0,
+                src_width: 0,
+                src_height: 0,
+                dst_x: x as _,
+                dst_y: y as _,
+            }))
+            .map_err(Into::into)
+    }
+
+    fn toggle_mouse(
+        &mut self,
+        button: MouseButton,
+        down: bool,
+        _window_id: Option<WindowId>,
+    ) -> Result<(), Error> {
         let dpy = self.conn.get_raw_dpy();
 
         unsafe {
@@ -186,7 +219,7 @@ impl NativeApiTemplate for X11Api {
         Ok(())
     }
 
-    fn clipboard_content(&mut self, type_name: &ClipboardType) -> Result<Vec<u8>, Error> {
+    fn clipboard_content(&mut self, type_name: &ClipboardType) -> Result<Option<Vec<u8>>, Error> {
         let atoms = &self.clipboard.setter.atoms;
         let target = match type_name {
             ClipboardType::Text => atoms.utf8_string,
@@ -200,6 +233,7 @@ impl NativeApiTemplate for X11Api {
                 atoms.property,
                 Duration::from_secs(1),
             )
+            .map(Some)
             .map_err(Into::into)
     }
 

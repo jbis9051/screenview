@@ -4,6 +4,8 @@ pub mod udp;
 
 pub use handle::*;
 use std::thread::JoinHandle;
+pub use tcp::*;
+pub use udp::*;
 
 const INIT_BUFFER_CAPACITY: usize = 4096;
 const UDP_READ_SIZE: usize = 65507;

@@ -40,6 +40,28 @@ pub struct ScreenViewHandler<R, U> {
     io_handle: IoHandle<R, U>,
 }
 
+impl<R, U> ScreenViewHandler<R, U> {
+    pub fn new_host() -> Self {
+        Self {
+            sel: SelHandler::new(),
+            svsc: SvscHandler::new(),
+            wpskka: WpskkaHandler::new_host(),
+            rvd: RvdHandler::new_host(),
+            io_handle: IoHandle::new(),
+        }
+    }
+
+    pub fn new_client() -> Self {
+        Self {
+            sel: SelHandler::new(),
+            svsc: SvscHandler::new(),
+            wpskka: WpskkaHandler::new_client(),
+            rvd: RvdHandler::new_client(),
+            io_handle: IoHandle::new(),
+        }
+    }
+}
+
 impl<R: Reliable, U: Unreliable> ScreenViewHandler<R, U> {
     pub fn send(&mut self, message: ScreenViewMessage) -> Result<(), SendError> {
         match message {

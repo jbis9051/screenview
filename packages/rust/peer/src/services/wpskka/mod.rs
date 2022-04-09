@@ -20,6 +20,14 @@ pub enum WpskkaHandler {
 }
 
 impl WpskkaHandler {
+    pub fn new_host() -> Self {
+        Self::Host(WpskkaHostHandler::new())
+    }
+
+    pub fn new_client() -> Self {
+        Self::Client(WpskkaClientHandler::new())
+    }
+
     pub fn unreliable_cipher(&self) -> &Arc<CipherUnreliablePeer> {
         match self {
             WpskkaHandler::Host(handler) => handler.unreliable_cipher(),

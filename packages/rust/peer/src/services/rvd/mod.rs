@@ -14,6 +14,14 @@ pub enum RvdHandler {
 }
 
 impl RvdHandler {
+    pub fn new_host() -> Self {
+        Self::Host(RvdHostHandler::new())
+    }
+
+    pub fn new_client() -> Self {
+        Self::Client(RvdClientHandler::new())
+    }
+
     pub fn handle(
         &mut self,
         msg: RvdMessage,
