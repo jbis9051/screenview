@@ -113,6 +113,8 @@ pub struct MacApi {
     _nsapplication: id,
 }
 
+unsafe impl Send for MacApi {} // TODO make it thread-safe
+
 extern "C" {
     fn NSMouseInRect(aPoint: NSPoint, aRect: NSRect, flipped: BOOL) -> BOOL;
     fn _AXUIElementGetWindow(element: AXUIElementRef, window_id: *mut CGWindowID) -> AXError;
