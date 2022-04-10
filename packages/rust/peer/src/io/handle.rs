@@ -1,5 +1,8 @@
 use super::DEFAULT_UNRELIABLE_MESSAGE_SIZE;
-use common::messages::{sel::*, Error};
+use common::{
+    event_loop::ThreadWaker,
+    messages::{sel::*, Error},
+};
 use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
 use std::{
     error::Error as StdError,
@@ -12,6 +15,7 @@ pub trait Reliable: Sized {
     fn new<A: ToSocketAddrs>(
         addr: A,
         result_sender: Sender<TransportResult>,
+        waker: ThreadWaker,
     ) -> Result<Self, io::Error>;
 
     fn send(&mut self, message: SelMessage) -> bool;
@@ -23,6 +27,7 @@ pub trait Unreliable: Sized {
     fn new<A: ToSocketAddrs>(
         addr: A,
         result_sender: Sender<TransportResult>,
+        waker: ThreadWaker,
     ) -> Result<Self, io::Error>;
 
     fn send(&mut self, message: SelMessage, max_len: usize) -> bool;
@@ -98,9 +103,13 @@ impl<R: Reliable, U> IoHandle<R, U> {
     ///
     /// This function will return an error if the channel it constructs fails to bind to the
     /// given address.
-    pub fn connect_reliable<A: ToSocketAddrs>(&mut self, addr: A) -> Result<(), io::Error> {
+    pub fn connect_reliable<A: ToSocketAddrs>(
+        &mut self,
+        addr: A,
+        waker: ThreadWaker,
+    ) -> Result<(), io::Error> {
         self.disconnect_reliable();
-        let handle = R::new(addr, self.result_sender.clone())?;
+        let handle = R::new(addr, self.result_sender.clone(), waker)?;
         self.reliable = Some(handle);
         Ok(())
     }
@@ -135,9 +144,13 @@ impl<R, U: Unreliable> IoHandle<R, U> {
     /// # Errors
     ///
     /// This function will return an error if it fails to bind to the given remote address.
-    pub fn connect_unreliable<A: ToSocketAddrs>(&mut self, addr: A) -> Result<(), io::Error> {
+    pub fn connect_unreliable<A: ToSocketAddrs>(
+        &mut self,
+        addr: A,
+        waker: ThreadWaker,
+    ) -> Result<(), io::Error> {
         self.disconnect_unreliable();
-        let handle = U::new(addr, self.result_sender.clone())?;
+        let handle = U::new(addr, self.result_sender.clone(), waker)?;
         self.unreliable = Some(handle);
         Ok(())
     }

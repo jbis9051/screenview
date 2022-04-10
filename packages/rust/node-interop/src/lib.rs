@@ -19,9 +19,8 @@ fn send_request<'a>(
     content: RequestContent,
 ) -> JsResult<'a, JsPromise> {
     let (deferred, promise) = cx.promise();
-    let channel = cx.channel();
 
-    if handle.send(Message::request(content, deferred, channel)) {
+    if handle.send(Message::request(content, deferred)) {
         Ok(promise)
     } else {
         panic!("Failed to send node request to handler: broken pipe");
@@ -30,10 +29,11 @@ fn send_request<'a>(
 
 fn new_instance(mut cx: FunctionContext) -> JsResult<JsBox<InstanceHandle>> {
     let instance_type = cx.argument::<JsString>(0)?;
+    let channel = cx.channel();
 
     let handle = match instance_type.value(&mut cx).as_str() {
-        "host" => Instance::new_host(),
-        "client" => Instance::new_client(),
+        "host" => Instance::new_host(channel),
+        "client" => Instance::new_client(channel),
         _ => {
             return throw!(
                 cx,

@@ -1,26 +1,18 @@
-use neon::{event::Channel, types::Deferred};
+use neon::types::Deferred;
 use std::convert::TryFrom;
 
 pub enum Message {
     Request {
         content: RequestContent,
-        promise: PromiseHandle,
+        promise: Deferred,
     },
     Shutdown,
 }
 
 impl Message {
-    pub fn request(content: RequestContent, deferred: Deferred, channel: Channel) -> Self {
-        Self::Request {
-            content,
-            promise: PromiseHandle { deferred, channel },
-        }
+    pub fn request(content: RequestContent, promise: Deferred) -> Self {
+        Self::Request { content, promise }
     }
-}
-
-pub struct PromiseHandle {
-    pub deferred: Deferred,
-    pub channel: Channel,
 }
 
 pub enum RequestContent {

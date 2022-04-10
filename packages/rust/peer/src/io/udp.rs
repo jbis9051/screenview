@@ -3,7 +3,10 @@ use crate::{
     io::{TransportError, TransportResponse},
     return_if_err,
 };
-use common::messages::{sel::*, MessageComponent};
+use common::{
+    event_loop::ThreadWaker,
+    messages::{sel::*, MessageComponent},
+};
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use futures_executor::block_on;
 use futures_util::{future::FutureExt, pin_mut, select_biased};
@@ -20,6 +23,7 @@ impl Unreliable for UdpHandle {
     fn new<A: ToSocketAddrs>(
         addr: A,
         result_sender: Sender<TransportResult>,
+        waker: ThreadWaker,
     ) -> Result<Self, io::Error> {
         let socket = std::net::UdpSocket::bind(addr)?;
         let socket = Arc::new(UdpSocket::from_std(socket)?);
@@ -29,11 +33,17 @@ impl Unreliable for UdpHandle {
         let read_handle = thread::spawn({
             let socket = Arc::clone(&socket);
             let result_sender = result_sender.clone();
-            move || block_on(read_unreliable(socket, result_sender, shutdown_rx))
+            let waker = waker.clone();
+            move || {
+                block_on(read_unreliable(socket, result_sender, shutdown_rx, &waker));
+                waker.wake();
+            }
         });
 
-        let write_handle =
-            thread::spawn(move || block_on(write_unreliable(socket, result_sender, write_rx)));
+        let write_handle = thread::spawn(move || {
+            block_on(write_unreliable(socket, result_sender, write_rx, &waker));
+            waker.wake();
+        });
 
         Ok(Self {
             write: write_tx,
@@ -61,6 +71,7 @@ async fn read_unreliable(
     socket: Arc<UdpSocket>,
     sender: Sender<TransportResult>,
     shutdown: oneshot::Receiver<()>,
+    waker: &ThreadWaker,
 ) {
     let mut buffer = vec![0u8; UDP_READ_SIZE];
     let shutdown = shutdown.fuse();
@@ -102,6 +113,7 @@ async fn read_unreliable(
         };
 
         return_if_err!(sender.send(transport_result));
+        waker.wake();
     }
 }
 
@@ -109,6 +121,7 @@ async fn write_unreliable(
     socket: Arc<UdpSocket>,
     sender: Sender<TransportResult>,
     receiver: Receiver<(SelMessage, usize)>,
+    waker: &ThreadWaker,
 ) {
     let mut buffer = Vec::with_capacity(1500);
 
@@ -120,6 +133,8 @@ async fn write_unreliable(
 
         if buffer.len() > max_len {
             return_if_err!(sender.send(Err(TransportError::TooLarge(message))));
+            waker.wake();
+            continue;
         }
 
         match res {
@@ -137,6 +152,7 @@ async fn write_unreliable(
                     error,
                 }));
                 return_if_err!(res);
+                waker.wake();
             }
         }
 

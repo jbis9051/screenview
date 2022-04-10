@@ -8,7 +8,10 @@ use super::{
     INIT_BUFFER_CAPACITY,
 };
 use crate::return_if_err;
-use common::messages::{sel::*, Error, MessageComponent, MessageID};
+use common::{
+    event_loop::ThreadWaker,
+    messages::{sel::*, Error, MessageComponent, MessageID},
+};
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use std::{
     io,
@@ -29,6 +32,7 @@ impl Reliable for TcpHandle {
     fn new<A: ToSocketAddrs>(
         addr: A,
         result_sender: Sender<TransportResult>,
+        waker: ThreadWaker,
     ) -> Result<Self, io::Error> {
         let stream = Arc::new(TcpStream::connect(addr)?);
         let (write_tx, write_rx) = unbounded();
@@ -36,12 +40,19 @@ impl Reliable for TcpHandle {
         let read_handle = thread::spawn({
             let stream = Arc::clone(&stream);
             let result_sender = result_sender.clone();
-            move || read_reliable(stream, result_sender)
+            let waker = waker.clone();
+            move || {
+                read_reliable(stream, result_sender, &waker);
+                waker.wake();
+            }
         });
 
         let write_handle = thread::spawn({
             let stream = Arc::clone(&stream);
-            move || write_reliable(stream, result_sender, write_rx)
+            move || {
+                write_reliable(stream, result_sender, write_rx, &waker);
+                waker.wake();
+            }
         });
 
         Ok(Self {
@@ -67,7 +78,7 @@ impl Drop for TcpHandle {
 }
 
 
-fn read_reliable(stream: Arc<TcpStream>, sender: Sender<TransportResult>) {
+fn read_reliable(stream: Arc<TcpStream>, sender: Sender<TransportResult>, waker: &ThreadWaker) {
     // While reading:
     // - If no data is present, wait for more data
     // - If data is present, collect the message and parse it, otherwise return
@@ -114,6 +125,9 @@ fn read_reliable(stream: Arc<TcpStream>, sender: Sender<TransportResult>) {
                 data_end
             }
         };
+
+        // Notify the handler thread that a message is ready
+        waker.wake();
 
         // If there are more messages in the buffer, move their data to the beginning of the buffer
         if data_parsed < data_end {
@@ -184,6 +198,7 @@ fn write_reliable(
     stream: Arc<TcpStream>,
     sender: Sender<TransportResult>,
     receiver: Receiver<SelMessage>,
+    waker: &ThreadWaker,
 ) {
     let mut buffer = Vec::with_capacity(INIT_BUFFER_CAPACITY);
 
@@ -208,6 +223,7 @@ fn write_reliable(
                     error,
                 }));
                 return_if_err!(res);
+                waker.wake();
             }
         }
 
