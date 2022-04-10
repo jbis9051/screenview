@@ -2,6 +2,7 @@
 members = [
     "common",
     "native",
+    "node-interop",
     "parser",
     "peer",
     "server"

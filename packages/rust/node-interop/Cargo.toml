@@ -1,0 +1,20 @@
+[package]
+name = "node-interop"
+version = "0.1.0"
+edition = "2021"
+exclude = ["index.node"]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+anyhow = "1.0.56"
+common = { path = "../common" }
+native = { path = "../native" }
+peer = { path = "../peer" }
+crossbeam-channel = "0.5.2"
+
+[dependencies.neon]
+version = "0.10.0"
+default-features = false
+features = ["napi-6", "promise-api", "channel-api"]

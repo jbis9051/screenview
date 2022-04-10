@@ -1,7 +1,12 @@
 use super::DEFAULT_UNRELIABLE_MESSAGE_SIZE;
 use common::messages::{sel::*, Error};
 use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
-use std::{io, net::ToSocketAddrs};
+use std::{
+    error::Error as StdError,
+    fmt::{self, Display, Formatter},
+    io,
+    net::ToSocketAddrs,
+};
 
 pub trait Reliable: Sized {
     fn new<A: ToSocketAddrs>(
@@ -58,7 +63,7 @@ impl<R, U> IoHandle<R, U> {
     }
 
     /// Tries to receive a [`TransportResult`] from either the reliable channel or unreliiable
-    /// socket without blocking, returning it if it exists.
+    /// socket according to the method provided.
     ///
     /// [`TransportResult`]: crate::io::TransportResult
     pub fn recv(&self) -> Option<TransportResult> {
@@ -163,14 +168,37 @@ impl<R, U: Unreliable> IoHandle<R, U> {
     }
 }
 
-pub enum TransportResult {
-    Ok(SelMessage),
-    TooLarge(SelMessage),
-    Recoverable { source: Source, error: Error },
-    Fatal { source: Source, error: io::Error },
+pub enum TransportResponse {
+    Message(SelMessage),
     Shutdown(Source),
 }
 
+#[derive(Debug)]
+pub enum TransportError {
+    TooLarge(SelMessage),
+    Recoverable { source: Source, error: Error },
+    Fatal { source: Source, error: io::Error },
+}
+
+impl Display for TransportError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::TooLarge(_) => write!(
+                f,
+                "attempted to send too large of a message through unreliable channel"
+            ),
+            Self::Recoverable { source, error } =>
+                write!(f, "recoverable error in {:?}: {}", source, error),
+            Self::Fatal { source, error } => write!(f, "fatal error in {:?}: {}", source, error),
+        }
+    }
+}
+
+impl StdError for TransportError {}
+
+pub type TransportResult = Result<TransportResponse, TransportError>;
+
+#[derive(Debug)]
 pub enum Source {
     ReadReliable,
     WriteReliable,

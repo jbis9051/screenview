@@ -4,9 +4,21 @@ pub mod sel_handler;
 pub mod svsc_handler;
 pub mod wpskka;
 
+use self::{
+    rvd::RvdHandler,
+    sel_handler::SelHandler,
+    svsc_handler::SvscError,
+    wpskka::{WpskkaError, WpskkaHandler},
+};
 use crate::{
-    io::{IoHandle, Reliable, Unreliable},
-    services::helpers::cipher_reliable_peer::CipherError,
+    io::{IoHandle, Reliable, Source, TransportError, TransportResponse, Unreliable},
+    services::{
+        helpers::cipher_reliable_peer::CipherError,
+        rvd::{RvdClientInform, RvdError, RvdHostInform},
+        sel_handler::SelError,
+        svsc_handler::{SvscHandler, SvscInform},
+        wpskka::{WpskkaClientInform, WpskkaHostInform},
+    },
 };
 use common::messages::{
     rvd::RvdMessage,
@@ -16,19 +28,6 @@ use common::messages::{
     Error as MessageComponentError,
     MessageComponent,
     ScreenViewMessage,
-};
-
-use self::{
-    rvd::RvdHandler,
-    sel_handler::SelHandler,
-    svsc_handler::SvscError,
-    wpskka::{WpskkaError, WpskkaHandler},
-};
-use crate::services::{
-    rvd::{RvdClientInform, RvdError, RvdHostInform},
-    sel_handler::SelError,
-    svsc_handler::{SvscHandler, SvscInform},
-    wpskka::{WpskkaClientInform, WpskkaHostInform},
 };
 use std::io::Cursor;
 
@@ -60,6 +59,10 @@ impl<R, U> ScreenViewHandler<R, U> {
             io_handle: IoHandle::new(),
         }
     }
+
+    pub fn io_handle(&mut self) -> &mut IoHandle<R, U> {
+        &mut self.io_handle
+    }
 }
 
 impl<R: Reliable, U: Unreliable> ScreenViewHandler<R, U> {
@@ -70,6 +73,16 @@ impl<R: Reliable, U: Unreliable> ScreenViewHandler<R, U> {
             ScreenViewMessage::SvscMessage(svsc) => self.send_svsc(svsc, true),
             ScreenViewMessage::SelMessage(sel) => self.send_sel(sel),
         }
+    }
+
+    pub fn handle_next_message(&mut self) -> Option<Result<Vec<InformEvent>, HandlerError>> {
+        let result = self.io_handle.recv()?;
+        Some(match result {
+            Ok(TransportResponse::Message(message)) => self.handle(message),
+            Ok(TransportResponse::Shutdown(source)) =>
+                Ok(vec![InformEvent::TransportShutdown(source)]),
+            Err(error) => Err(error.into()),
+        })
     }
 
     pub fn handle(&mut self, message: SelMessage) -> Result<Vec<InformEvent>, HandlerError> {
@@ -166,6 +179,7 @@ impl<R: Reliable, U: Unreliable> ScreenViewHandler<R, U> {
 }
 
 pub enum InformEvent {
+    TransportShutdown(Source),
     SvscInform(SvscInform),
     RvdClientInform(RvdClientInform),
     RvdHostInform(RvdHostInform),
@@ -187,6 +201,8 @@ pub enum SendError {
 pub enum HandlerError {
     #[error("failed to decode message: {0}")]
     Decode(#[from] MessageComponentError),
+    #[error("transport-layer error: {0}")]
+    Transport(#[from] TransportError),
     #[error("SEL handler error: {0}")]
     Sel(#[from] SelError),
     #[error("SVSC handler error: {0}")]

@@ -1,5 +1,8 @@
 use super::{JoinOnDrop, Source, TransportResult, Unreliable, UDP_READ_SIZE};
-use crate::return_if_err;
+use crate::{
+    io::{TransportError, TransportResponse},
+    return_if_err,
+};
 use common::messages::{sel::*, MessageComponent};
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use futures_executor::block_on;
@@ -73,10 +76,10 @@ async fn read_unreliable(
                 res = read_fut => match res {
                     Ok(read) => read,
                     Err(error) => {
-                        let _ = sender.send(TransportResult::Fatal {
+                        let _ = sender.send(Err(TransportError::Fatal {
                             source: Source::ReadUnreliable,
                             error,
-                        });
+                        }));
                         return;
                     }
                 },
@@ -84,18 +87,18 @@ async fn read_unreliable(
         };
 
         if read == 0 {
-            let _ = sender.send(TransportResult::Shutdown(Source::ReadUnreliable));
+            let _ = sender.send(Ok(TransportResponse::Shutdown(Source::ReadUnreliable)));
             return;
         }
 
         let mut cursor = Cursor::new(&buffer[.. read]);
 
         let transport_result = match SelMessage::read(&mut cursor) {
-            Ok(message) => TransportResult::Ok(message),
-            Err(error) => TransportResult::Recoverable {
+            Ok(message) => Ok(TransportResponse::Message(message)),
+            Err(error) => Err(TransportError::Recoverable {
                 source: Source::ReadUnreliable,
                 error,
-            },
+            }),
         };
 
         return_if_err!(sender.send(transport_result));
@@ -116,23 +119,23 @@ async fn write_unreliable(
         buffer = cursor.into_inner();
 
         if buffer.len() > max_len {
-            return_if_err!(sender.send(TransportResult::TooLarge(message)));
+            return_if_err!(sender.send(Err(TransportError::TooLarge(message))));
         }
 
         match res {
             Ok(_) =>
                 if let Err(error) = socket.send(&buffer[..]).await {
-                    let _ = sender.send(TransportResult::Fatal {
+                    let _ = sender.send(Err(TransportError::Fatal {
                         source: Source::WriteUnreliable,
                         error,
-                    });
+                    }));
                     return;
                 },
             Err(error) => {
-                let res = sender.send(TransportResult::Recoverable {
+                let res = sender.send(Err(TransportError::Recoverable {
                     source: Source::WriteUnreliable,
                     error,
-                });
+                }));
                 return_if_err!(res);
             }
         }

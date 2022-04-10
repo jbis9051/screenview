@@ -1,4 +1,12 @@
-use super::{JoinOnDrop, Reliable, Source, TransportResult, INIT_BUFFER_CAPACITY};
+use super::{
+    JoinOnDrop,
+    Reliable,
+    Source,
+    TransportError,
+    TransportResponse,
+    TransportResult,
+    INIT_BUFFER_CAPACITY,
+};
 use crate::return_if_err;
 use common::messages::{sel::*, Error, MessageComponent, MessageID};
 use crossbeam_channel::{unbounded, Receiver, Sender};
@@ -73,17 +81,17 @@ fn read_reliable(stream: Arc<TcpStream>, sender: Sender<TransportResult>) {
             data_end = match Read::read(&mut (&*stream), &mut buffer[..]) {
                 Ok(data_end) => data_end,
                 Err(error) => {
-                    let _ = sender.send(TransportResult::Fatal {
+                    let _ = sender.send(Err(TransportError::Fatal {
                         source: Source::ReadReliable,
                         error,
-                    });
+                    }));
                     return;
                 }
             };
 
             // The syscall exited successfully, but no data remained, meaning the stream closed
             if data_end == 0 {
-                let _ = sender.send(TransportResult::Shutdown(Source::ReadReliable));
+                let _ = sender.send(Ok(TransportResponse::Shutdown(Source::ReadReliable)));
                 return;
             }
         }
@@ -91,15 +99,15 @@ fn read_reliable(stream: Arc<TcpStream>, sender: Sender<TransportResult>) {
         // Collect and parse the message
         let data_parsed = match collect_and_parse_reliable(&*stream, &mut buffer, &mut data_end) {
             Ok((message, data_parsed)) => {
-                return_if_err!(sender.send(TransportResult::Ok(message)));
+                return_if_err!(sender.send(Ok(TransportResponse::Message(message))));
 
                 data_parsed
             }
             Err(error) => {
-                let res = sender.send(TransportResult::Recoverable {
+                let res = sender.send(Err(TransportError::Recoverable {
                     source: Source::ReadReliable,
                     error,
-                });
+                }));
                 return_if_err!(res);
 
                 // If we hit a recoverable, we disregard the rest of the bytes in the buffer
@@ -188,17 +196,17 @@ fn write_reliable(
         match res {
             Ok(_) =>
                 if let Err(error) = (&*stream).write_all(&buffer) {
-                    let _ = sender.send(TransportResult::Fatal {
+                    let _ = sender.send(Err(TransportError::Fatal {
                         source: Source::WriteReliable,
                         error,
-                    });
+                    }));
                     return;
                 },
             Err(error) => {
-                let res = sender.send(TransportResult::Recoverable {
+                let res = sender.send(Err(TransportError::Recoverable {
                     source: Source::WriteReliable,
                     error,
-                });
+                }));
                 return_if_err!(res);
             }
         }
