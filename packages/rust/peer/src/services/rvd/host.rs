@@ -1,6 +1,9 @@
-use crate::services::{
-    rvd::PermissionError::{ClipboardRead, ClipboardWrite, MouseInput},
-    InformEvent,
+use crate::{
+    debug,
+    services::{
+        rvd::PermissionError::{ClipboardRead, ClipboardWrite, MouseInput},
+        InformEvent,
+    },
 };
 use common::{
     constants::RVD_VERSION,
@@ -164,10 +167,7 @@ impl RvdHostHandler {
                     self.state = HostState::WaitingForDisplayChangeReceived;
                     Ok(())
                 }
-                _ => Err(RvdHostError::WrongMessageForState(
-                    Box::new(msg),
-                    self.state,
-                )),
+                _ => Err(RvdHostError::WrongMessageForState(debug(&msg), self.state)),
             },
             HostState::WaitingForDisplayChangeReceived => match msg {
                 // TODO edge: Wait for display change and we receive a message
@@ -175,10 +175,7 @@ impl RvdHostHandler {
                     self.state = HostState::SendData;
                     Ok(())
                 }
-                _ => Err(RvdHostError::WrongMessageForState(
-                    Box::new(msg),
-                    self.state,
-                )),
+                _ => Err(RvdHostError::WrongMessageForState(debug(&msg), self.state)),
             },
             HostState::SendData => match msg {
                 RvdMessage::MouseInput(msg) => {
@@ -236,10 +233,7 @@ impl RvdHostHandler {
                     }
                     Ok(())
                 }
-                _ => Err(RvdHostError::WrongMessageForState(
-                    Box::new(msg),
-                    self.state,
-                )),
+                _ => Err(RvdHostError::WrongMessageForState(debug(&msg), self.state)),
             },
         }
     }
@@ -255,8 +249,8 @@ pub enum PermissionError {
 
 #[derive(Debug, thiserror::Error)]
 pub enum RvdHostError {
-    #[error("invalid message {0:?} for state {1:?}")]
-    WrongMessageForState(Box<RvdMessage>, HostState),
+    #[error("invalid message {0} for state {1:?}")]
+    WrongMessageForState(String, HostState),
     #[error("permission error: cannot {0:?}")]
     PermissionsError(PermissionError),
     #[error("display not found: id number {0}")]

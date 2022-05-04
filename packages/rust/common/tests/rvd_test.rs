@@ -154,6 +154,6 @@ fn frame_data() {
     assert_eq!(message.frame_number, 16);
     assert_eq!(message.display_id, 5);
     assert_eq!(message.cell_number, 6);
-    assert_eq!(message.data, b"abc");
+    assert_eq!(&message.data, b"abc");
     test_write(&message, bytes);
 }

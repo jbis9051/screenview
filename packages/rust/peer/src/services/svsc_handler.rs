@@ -1,24 +1,26 @@
-use std::fmt::Debug;
-
 use crate::{debug, services::InformEvent};
 use common::{
     constants::SVSC_VERSION,
-    messages::svsc::{
-        Cookie,
-        EstablishSessionRequest,
-        EstablishSessionStatus,
-        KeepAlive,
-        LeaseExtensionRequest,
-        LeaseId,
-        LeaseRequest,
-        LeaseResponseData,
-        PeerId,
-        ProtocolVersionResponse,
-        SessionData,
-        SessionDataSend,
-        SvscMessage,
+    messages::{
+        svsc::{
+            Cookie,
+            EstablishSessionRequest,
+            EstablishSessionStatus,
+            KeepAlive,
+            LeaseExtensionRequest,
+            LeaseId,
+            LeaseRequest,
+            LeaseResponseData,
+            PeerId,
+            ProtocolVersionResponse,
+            SessionData,
+            SessionDataSend,
+            SvscMessage,
+        },
+        Data,
     },
 };
+use std::{borrow::Cow, fmt::Debug};
 
 #[derive(Copy, Clone, Debug)]
 pub enum State {
@@ -29,7 +31,7 @@ pub enum State {
 pub struct SvscHandler {
     state: State,
     lease: Option<LeaseResponseData>,
-    session: Option<SessionData>,
+    session: Option<Box<SessionData>>,
     awaiting_lease_response: bool,
     awaiting_extension_response: bool,
     awaiting_session_response: bool,
@@ -53,8 +55,10 @@ impl SvscHandler {
         }
     }
 
-    pub fn wrap(msg: Vec<u8>) -> SessionDataSend {
-        SessionDataSend { data: msg }
+    pub fn wrap(msg: Vec<u8>) -> SessionDataSend<'static> {
+        SessionDataSend {
+            data: Data(Cow::Owned(msg)),
+        }
     }
 
     pub fn peer_id(&self) -> Option<&PeerId> {
@@ -66,7 +70,7 @@ impl SvscHandler {
     }
 
     pub fn session(&self) -> Option<&SessionData> {
-        self.session.as_ref()
+        self.session.as_deref()
     }
 
     pub fn lease_request(&mut self, cookie: Option<Cookie>) -> SvscMessage {
@@ -89,7 +93,7 @@ impl SvscHandler {
         msg: SvscMessage<'a>,
         write: &mut Vec<SvscMessage>,
         event: &mut Vec<InformEvent>,
-    ) -> Result<Option<&'a [u8]>, SvscError> {
+    ) -> Result<Option<Cow<'a, [u8]>>, SvscError> {
         if let SvscMessage::KeepAlive(_) = msg {
             write.push(SvscMessage::KeepAlive(KeepAlive {}));
             return Ok(None);
@@ -170,7 +174,7 @@ impl SvscHandler {
 
                 SvscMessage::EstablishSessionNotification(msg) => {
                     event.push(InformEvent::SvscInform(SvscInform::SessionUpdate));
-                    self.session = Some(msg.session_data);
+                    self.session = Some(Box::new(msg.session_data));
                     Ok(None)
                 }
 

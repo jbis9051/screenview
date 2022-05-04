@@ -46,7 +46,8 @@ impl RvdHandler {
                 content_request: is_content,
             },
             type_exists: data.is_some(),
-            content: if is_content { data } else { None }, // but here it it's only Some if (a) the type exists AND (b) it is a content request
+            // but here it it's only Some if (a) the type exists AND (b) it is a content request
+            content: if is_content { data } else { None },
         })
     }
 }

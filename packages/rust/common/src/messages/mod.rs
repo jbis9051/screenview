@@ -34,7 +34,7 @@ use wpskka::WpskkaMessage;
 pub enum ScreenViewMessage<'a> {
     SelMessage(SelMessage),
     SvscMessage(SvscMessage<'a>),
-    WpskkaMessage(WpskkaMessage),
+    WpskkaMessage(WpskkaMessage<'a>),
     RvdMessage(RvdMessage),
 }
 
@@ -50,8 +50,8 @@ impl<'a> From<SvscMessage<'a>> for ScreenViewMessage<'a> {
     }
 }
 
-impl From<WpskkaMessage> for ScreenViewMessage<'_> {
-    fn from(msg: WpskkaMessage) -> Self {
+impl<'a> From<WpskkaMessage<'a>> for ScreenViewMessage<'a> {
+    fn from(msg: WpskkaMessage<'a>) -> Self {
         Self::WpskkaMessage(msg)
     }
 }

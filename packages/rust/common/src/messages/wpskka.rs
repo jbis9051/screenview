@@ -1,3 +1,4 @@
+use super::Data;
 use crate::messages::{Error, MessageComponent};
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use parser::{message_id, MessageComponent};
@@ -81,27 +82,26 @@ pub struct AuthResult {
 
 #[derive(Debug, MessageComponent)]
 #[message_id(5)]
-// #[lifetime('a)]
-pub struct TransportDataMessageReliable {
-    #[parse(len_prefixed(2))]
-    pub data: Vec<u8>,
+#[lifetime('a)]
+pub struct TransportDataMessageReliable<'a> {
+    pub data: Data<'a, 2>,
 }
 
 #[derive(Debug, MessageComponent)]
 #[message_id(6)]
-pub struct TransportDataMessageUnreliable {
+#[lifetime('a)]
+pub struct TransportDataMessageUnreliable<'a> {
     pub counter: u64,
-    #[parse(len_prefixed(2))]
-    pub data: Vec<u8>,
+    pub data: Data<'a, 2>,
 }
 
 #[derive(MessageComponent, Debug)]
-// #[lifetime('a)]
-pub enum WpskkaMessage {
+#[lifetime('a)]
+pub enum WpskkaMessage<'a> {
     AuthScheme(AuthScheme),
     TryAuth(TryAuth),
     AuthMessage(AuthMessage),
     AuthResult(AuthResult),
-    TransportDataMessageReliable(TransportDataMessageReliable),
-    TransportDataMessageUnreliable(TransportDataMessageUnreliable),
+    TransportDataMessageReliable(TransportDataMessageReliable<'a>),
+    TransportDataMessageUnreliable(TransportDataMessageUnreliable<'a>),
 }

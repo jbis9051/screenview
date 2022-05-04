@@ -7,12 +7,11 @@ pub use host::*;
 
 use super::helpers::cipher_reliable_peer::CipherError;
 use crate::services::{helpers::cipher_unreliable_peer::CipherUnreliablePeer, InformEvent};
-use common::messages::wpskka::{
-    TransportDataMessageReliable,
-    TransportDataMessageUnreliable,
-    WpskkaMessage,
+use common::messages::{
+    wpskka::{TransportDataMessageReliable, TransportDataMessageUnreliable, WpskkaMessage},
+    Data,
 };
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 
 pub enum WpskkaHandler {
     Host(WpskkaHostHandler),
@@ -38,22 +37,25 @@ impl WpskkaHandler {
     pub fn wrap_unreliable(
         msg: Vec<u8>,
         cipher: &CipherUnreliablePeer,
-    ) -> Result<TransportDataMessageUnreliable, CipherError> {
+    ) -> Result<TransportDataMessageUnreliable<'static>, CipherError> {
         let (data, counter) = cipher.encrypt(&msg)?;
-        Ok(TransportDataMessageUnreliable { counter, data })
+        Ok(TransportDataMessageUnreliable {
+            counter,
+            data: Data(Cow::Owned(data)),
+        })
     }
 
-    pub fn wrap_reliable<'a>(
+    pub fn wrap_reliable(
         &mut self,
         msg: Vec<u8>,
-    ) -> Result<TransportDataMessageReliable, CipherError> {
+    ) -> Result<TransportDataMessageReliable<'static>, CipherError> {
         let cipher = match self {
             WpskkaHandler::Host(handler) => handler.reliable_cipher_mut(),
             WpskkaHandler::Client(handler) => handler.reliable_cipher_mut(),
         };
 
         Ok(TransportDataMessageReliable {
-            data: cipher.encrypt(&msg)?,
+            data: Data(Cow::Owned(cipher.encrypt(&msg)?)),
         })
     }
 

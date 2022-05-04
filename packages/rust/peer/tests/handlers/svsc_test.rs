@@ -26,6 +26,7 @@ use peer::services::{
     svsc_handler::{SvscHandler, SvscInform},
     InformEvent,
 };
+use std::borrow::Cow;
 
 #[test]
 fn test_protocol_mismatch() {
@@ -183,7 +184,7 @@ fn test_establish_session() {
     let message = SvscMessage::EstablishSessionResponse(EstablishSessionResponse {
         lease_id,
         status: EstablishSessionStatus::Success,
-        response_data: Some(session_data.clone()),
+        response_data: Some(Box::new(session_data.clone())),
     });
 
     assert!(handler
@@ -305,7 +306,9 @@ fn test_session_data() {
 
     // test
     let data = vec![1, 2, 3, 4, 5, 6];
-    let message = SvscMessage::SessionDataReceive(SessionDataReceive { data: Data(&data) });
+    let message = SvscMessage::SessionDataReceive(SessionDataReceive {
+        data: Data(Cow::Owned(data.clone())),
+    });
 
     let inner = handler
         .handle(message, &mut write, &mut events)
@@ -313,7 +316,7 @@ fn test_session_data() {
         .expect("expected data");
     assert_eq!(events.len(), 0);
     assert_eq!(write.len(), 0);
-    assert_eq!(data, inner);
+    assert_eq!(data, &*inner);
 }
 
 

@@ -1,6 +1,9 @@
-use crate::services::{
-    helpers::crypto::{hmac, hmac_verify, kdf1, random_bytes, random_srp_private_value},
-    wpskka::auth::srp_host::State::Done,
+use crate::{
+    debug,
+    services::{
+        helpers::crypto::{hmac, hmac_verify, kdf1, random_bytes, random_srp_private_value},
+        wpskka::auth::srp_host::State::Done,
+    },
 };
 use common::{
     constants::{HashAlgo, SRP_PARAM},
@@ -61,7 +64,7 @@ impl SrpAuthHost {
         SrpMessage::HostHello(HostHello {
             username: username.try_into().unwrap(),
             salt: salt.try_into().unwrap(),
-            b_pub: b_pub.try_into().unwrap(),
+            b_pub: b_pub.try_into().map(Box::new).unwrap(),
         })
     }
 
@@ -76,7 +79,7 @@ impl SrpAuthHost {
                             .process_reply(
                                 &self.b.take().unwrap(),
                                 &self.verifier.take().unwrap(),
-                                &msg.a_pub,
+                                &*msg.a_pub,
                             )
                             .map_err(SrpHostError::SrpAuthError)?;
                         kdf1(srp_verifier.key())
@@ -95,9 +98,9 @@ impl SrpAuthHost {
                         mac: mac.try_into().unwrap(),
                     }))
                 }
-                _ => Err(SrpHostError::WrongMessageForState(msg, self.state)),
+                _ => Err(SrpHostError::WrongMessageForState(debug(&msg), self.state)),
             },
-            _ => Err(SrpHostError::WrongMessageForState(msg, self.state)),
+            _ => Err(SrpHostError::WrongMessageForState(debug(&msg), self.state)),
         }
     }
 }
@@ -108,6 +111,6 @@ pub enum SrpHostError {
     SrpAuthError(SrpAuthError),
     #[error("auth failed")]
     AuthFailed,
-    #[error("invalid message {0:?} for state {1:?}")]
-    WrongMessageForState(SrpMessage, State),
+    #[error("invalid message {0} for state {1:?}")]
+    WrongMessageForState(String, State),
 }

@@ -1,12 +1,12 @@
-use common::messages::wpskka::{
-    TransportDataMessageReliable,
-    TransportDataMessageUnreliable,
-    WpskkaMessage,
+use common::messages::{
+    wpskka::{TransportDataMessageReliable, TransportDataMessageUnreliable, WpskkaMessage},
+    Data,
 };
 use peer::services::{
     wpskka::{WpskkaClientHandler, WpskkaClientInform, WpskkaHostHandler, WpskkaHostInform},
     InformEvent,
 };
+use std::borrow::Cow;
 
 
 fn srp_authenticate(
@@ -93,7 +93,7 @@ fn test_reliable_communication(host: &mut WpskkaHostHandler, client: &mut Wpskka
     // test host encrypt, client decrypt
     let host_cipher = host.reliable_cipher_mut();
     let message = WpskkaMessage::TransportDataMessageReliable(TransportDataMessageReliable {
-        data: host_cipher.encrypt(&data).unwrap(),
+        data: Data(Cow::Owned(host_cipher.encrypt(&data).unwrap())),
     });
     let mut write = Vec::new();
     let mut events = Vec::new();
@@ -108,7 +108,7 @@ fn test_reliable_communication(host: &mut WpskkaHostHandler, client: &mut Wpskka
     // test client encrypt, host decrypt
     let client_cipher = client.reliable_cipher_mut();
     let message = WpskkaMessage::TransportDataMessageReliable(TransportDataMessageReliable {
-        data: client_cipher.encrypt(&data).unwrap(),
+        data: Data(Cow::Owned(client_cipher.encrypt(&data).unwrap())),
     });
     let mut write = Vec::new();
     let mut events = Vec::new();
@@ -128,7 +128,7 @@ fn test_unreliable_communication(host: &mut WpskkaHostHandler, client: &mut Wpsk
     let host_cipher = host.unreliable_cipher();
     let (ciphertext, counter) = host_cipher.encrypt(&data).unwrap();
     let message = WpskkaMessage::TransportDataMessageUnreliable(TransportDataMessageUnreliable {
-        data: ciphertext,
+        data: Data(Cow::Owned(ciphertext)),
         counter,
     });
     let mut write = Vec::new();
@@ -145,7 +145,7 @@ fn test_unreliable_communication(host: &mut WpskkaHostHandler, client: &mut Wpsk
     let client_cipher = client.unreliable_cipher();
     let (ciphertext, counter) = client_cipher.encrypt(&data).unwrap();
     let message = WpskkaMessage::TransportDataMessageUnreliable(TransportDataMessageUnreliable {
-        data: ciphertext,
+        data: Data(Cow::Owned(ciphertext)),
         counter,
     });
     let mut write = Vec::new();

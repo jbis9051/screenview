@@ -1,6 +1,9 @@
-use crate::services::{
-    helpers::crypto::{hmac, hmac_verify, kdf1, random_srp_private_value},
-    wpskka::WpskkaClientInform,
+use crate::{
+    debug,
+    services::{
+        helpers::crypto::{hmac, hmac_verify, kdf1, random_srp_private_value},
+        wpskka::WpskkaClientInform,
+    },
 };
 use common::{
     constants::{HashAlgo, SRP_PARAM},
@@ -24,8 +27,8 @@ pub struct SrpAuthClient {
     authenticated: bool,
     host_public_key: Vec<u8>,
     our_public_key: PublicKey,
-    host_hello: Option<HostHello>,
-    hmac_key: Option<[u8; 32]>,
+    host_hello: Option<Box<HostHello>>,
+    hmac_key: Option<Box<[u8; 32]>>,
 }
 
 impl SrpAuthClient {
@@ -50,7 +53,7 @@ impl SrpAuthClient {
         let a = random_srp_private_value();
         let srp_client = SrpClient::<'static, HashAlgo>::new(SRP_PARAM);
         let verifier = srp_client
-            .process_reply(&a, &msg.username, password, &msg.salt, &msg.b_pub)
+            .process_reply(&a, &msg.username, password, &msg.salt, &*msg.b_pub)
             .map_err(SrpClientError::SrpAuthError)?;
         let a_pub = srp_client.compute_public_ephemeral(&a);
         let srp_key = verifier.key();
@@ -60,12 +63,12 @@ impl SrpAuthClient {
         let mac = hmac(&srp_key_kdf, self.our_public_key.as_ref());
 
         // save some stuff we'll need soon
-        self.hmac_key = Some(srp_key_kdf);
+        self.hmac_key = Some(Box::new(srp_key_kdf));
         self.state = State::PreVerify;
 
 
         Ok(SrpMessage::ClientHello(ClientHello {
-            a_pub: a_pub.try_into().unwrap(),
+            a_pub: a_pub.try_into().map(Box::new).unwrap(),
             mac: mac.try_into().unwrap(),
         }))
     }
@@ -78,26 +81,35 @@ impl SrpAuthClient {
             State::PreHello => match msg {
                 SrpMessage::HostHello(msg) => {
                     // We need to prompt for user input here, so we dispatch the PasswordPrompt event. Once the user has entered the password someone should call self.process_password
-                    self.host_hello = Some(msg);
+                    self.host_hello = Some(Box::new(msg));
                     self.state = State::WaitingUserInputForPassword;
                     Ok(Some(WpskkaClientInform::PasswordPrompt))
                 }
-                _ => Err(SrpClientError::WrongMessageForState(msg, self.state)),
+                _ => Err(SrpClientError::WrongMessageForState(
+                    debug(&msg),
+                    self.state,
+                )),
             },
             State::PreVerify => match msg {
                 SrpMessage::HostVerify(msg) => {
                     let hmac_key = self.hmac_key.take().unwrap();
 
-                    if !hmac_verify(&hmac_key, self.host_public_key.as_ref(), &msg.mac) {
+                    if !hmac_verify(&*hmac_key, self.host_public_key.as_ref(), &msg.mac) {
                         return Err(SrpClientError::AuthFailed);
                     }
                     self.authenticated = true;
                     self.state = State::Done;
                     Ok(None)
                 }
-                _ => Err(SrpClientError::WrongMessageForState(msg, self.state)),
+                _ => Err(SrpClientError::WrongMessageForState(
+                    debug(&msg),
+                    self.state,
+                )),
             },
-            _ => Err(SrpClientError::WrongMessageForState(msg, self.state)),
+            _ => Err(SrpClientError::WrongMessageForState(
+                debug(&msg),
+                self.state,
+            )),
         }
     }
 }
@@ -108,6 +120,6 @@ pub enum SrpClientError {
     SrpAuthError(SrpAuthError),
     #[error("auth failed")]
     AuthFailed,
-    #[error("invalid message {0:?} for state {1:?}")]
-    WrongMessageForState(SrpMessage, State),
+    #[error("invalid message {0} for state {1:?}")]
+    WrongMessageForState(String, State),
 }

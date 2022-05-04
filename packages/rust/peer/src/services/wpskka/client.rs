@@ -247,7 +247,7 @@ impl WpskkaClientHandler {
                     let reliable = self.reliable.as_mut().unwrap();
                     Ok(Some(
                         reliable
-                            .decrypt(&msg.data)
+                            .decrypt(msg.data.0.as_ref())
                             .map_err(WpskkaClientError::CipherError)?,
                     ))
                 }
@@ -255,7 +255,7 @@ impl WpskkaClientHandler {
                     let unreliable = self.unreliable.as_mut().unwrap();
                     Ok(Some(
                         unreliable
-                            .decrypt(&msg.data, msg.counter)
+                            .decrypt(msg.data.0.as_ref(), msg.counter)
                             .map_err(WpskkaClientError::CipherError)?,
                     ))
                 }

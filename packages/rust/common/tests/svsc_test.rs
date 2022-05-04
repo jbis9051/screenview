@@ -171,7 +171,7 @@ fn test_establish_session_end_notification() {
 fn test_session_data_send() {
     let bytes = include_bytes!("binary/svsc/session_data_send.bin");
     let message: SessionDataSend = SessionDataSend::read(&mut Cursor::new(bytes)).unwrap();
-    assert_eq!(message.data, b"YELLOW SUBMARINE");
+    assert_eq!(message.data.0.as_ref(), b"YELLOW SUBMARINE");
     test_write(&message, bytes);
 }
 
@@ -179,7 +179,7 @@ fn test_session_data_send() {
 fn test_session_data_receive() {
     let bytes = include_bytes!("binary/svsc/session_data_receive.bin");
     let message: SessionDataSend = SessionDataSend::read(&mut Cursor::new(bytes)).unwrap();
-    assert_eq!(message.data, b"YELLOW SUBMARINE");
+    assert_eq!(message.data.0.as_ref(), b"YELLOW SUBMARINE");
     test_write(&message, bytes);
 }
 

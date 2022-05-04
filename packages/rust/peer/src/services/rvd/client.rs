@@ -1,4 +1,4 @@
-use crate::services::InformEvent;
+use crate::{debug, services::InformEvent};
 use common::{
     constants::RVD_VERSION,
     messages::rvd::{
@@ -56,7 +56,7 @@ impl RvdClientHandler {
                     Ok(())
                 }
                 _ => Err(RvdClientError::WrongMessageForState(
-                    Box::new(msg),
+                    debug(&msg),
                     self.state,
                 )),
             },
@@ -95,7 +95,7 @@ impl RvdClientHandler {
                     Ok(())
                 }
                 _ => Err(RvdClientError::WrongMessageForState(
-                    Box::new(msg),
+                    debug(&msg),
                     self.state,
                 )),
             },
@@ -105,8 +105,8 @@ impl RvdClientHandler {
 
 #[derive(Debug, thiserror::Error)]
 pub enum RvdClientError {
-    #[error("invalid message {0:?} for state {1:?}")]
-    WrongMessageForState(Box<RvdMessage>, ClientState),
+    #[error("invalid message {0} for state {1:?}")]
+    WrongMessageForState(String, ClientState),
     #[error("permission error: cannot {0}")]
     PermissionsError(String),
 }

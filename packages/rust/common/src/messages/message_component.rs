@@ -1,5 +1,6 @@
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use std::{
+    borrow::Cow,
     convert::Infallible,
     io::{self, Cursor, Read, Write},
     num::TryFromIntError,
@@ -51,6 +52,16 @@ pub enum Error {
 impl From<Infallible> for Error {
     fn from(_: Infallible) -> Self {
         unreachable!()
+    }
+}
+
+impl<'a, T: MessageComponent<'a>> MessageComponent<'a> for Box<T> {
+    fn read(cursor: &mut Cursor<&'a [u8]>) -> Result<Self, Error> {
+        T::read(cursor).map(Box::new)
+    }
+
+    fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> Result<(), Error> {
+        T::write(&**self, cursor)
     }
 }
 
@@ -120,8 +131,8 @@ impl MessageComponent<'_> for u64 {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct Data<'a, const LEN_WIDTH: usize>(pub &'a [u8]);
+#[derive(Clone, Debug)]
+pub struct Data<'a, const LEN_WIDTH: usize>(pub Cow<'a, [u8]>);
 
 impl<'a, const LEN_WIDTH: usize> MessageComponent<'a> for Data<'a, LEN_WIDTH> {
     fn read(cursor: &mut Cursor<&'a [u8]>) -> Result<Self, Error> {
@@ -152,16 +163,17 @@ impl<'a, const LEN_WIDTH: usize> MessageComponent<'a> for Data<'a, LEN_WIDTH> {
         let new_position = u64::try_from(data_end)?;
         cursor.set_position(new_position);
 
-        Ok(Self(data))
+        Ok(Self(Cow::Borrowed(data)))
     }
 
     fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> Result<(), Error> {
-        let len = self.0.len().to_le_bytes();
+        let bytes = &*self.0;
+        let len = bytes.len().to_le_bytes();
         cursor.write_all(&len[.. LEN_WIDTH])?;
-        cursor.write_all(self.0).map_err(Into::into)
+        cursor.write_all(bytes).map_err(Into::into)
     }
 
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        Ok(self.0.to_vec())
+        Ok((*self.0).to_owned())
     }
 }

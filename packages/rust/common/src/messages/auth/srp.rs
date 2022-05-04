@@ -5,13 +5,13 @@ use parser::{message_id, MessageComponent};
 pub struct HostHello {
     pub username: [u8; 16],
     pub salt: [u8; 16],
-    pub b_pub: [u8; 256],
+    pub b_pub: Box<[u8; 256]>,
 }
 
 #[derive(Debug, MessageComponent)]
 #[message_id(2)]
 pub struct ClientHello {
-    pub a_pub: [u8; 256],
+    pub a_pub: Box<[u8; 256]>,
     pub mac: [u8; 32],
 }
 

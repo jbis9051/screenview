@@ -128,7 +128,7 @@ pub struct EstablishSessionResponse {
     pub lease_id: LeaseId,
     pub status: EstablishSessionStatus,
     #[parse(condition = "status == EstablishSessionStatus::Success")]
-    pub response_data: Option<SessionData>,
+    pub response_data: Option<Box<SessionData>>,
 }
 
 #[derive(Debug, MessageComponent)]
@@ -147,9 +147,10 @@ pub struct SessionEndNotification {}
 
 #[derive(Debug, MessageComponent)]
 #[message_id(11)]
-pub struct SessionDataSend {
-    #[parse(len_prefixed(3))]
-    pub data: Vec<u8>,
+#[lifetime('a)]
+pub struct SessionDataSend<'a> {
+    // #[parse(len_prefixed(3))]
+    pub data: Data<'a, 3>,
 }
 
 #[derive(Debug, MessageComponent)]
@@ -178,7 +179,7 @@ pub enum SvscMessage<'a> {
     EstablishSessionNotification(EstablishSessionNotification),
     SessionEnd(SessionEnd),
     SessionEndNotification(SessionEndNotification),
-    SessionDataSend(SessionDataSend),
+    SessionDataSend(SessionDataSend<'a>),
     SessionDataReceive(SessionDataReceive<'a>),
     KeepAlive(KeepAlive),
 }
