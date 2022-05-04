@@ -10,8 +10,8 @@ pub trait MessageID {
     const ID: u8;
 }
 
-pub trait MessageComponent: Sized {
-    fn read(cursor: &mut Cursor<&[u8]>) -> Result<Self, Error>;
+pub trait MessageComponent<'a>: Sized {
+    fn read(cursor: &mut Cursor<&'a [u8]>) -> Result<Self, Error>;
 
     fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> Result<(), Error>;
 
@@ -42,6 +42,10 @@ pub enum Error {
     BadMessageID(u8),
     #[error("encountered bad or malformed SEL message")]
     BadSelMessage,
+    #[error("data cursor reached an invalid state (position > data len)")]
+    BadCursorState,
+    #[error("encountered invalid data length")]
+    BadDataLength,
 }
 
 impl From<Infallible> for Error {
@@ -50,7 +54,7 @@ impl From<Infallible> for Error {
     }
 }
 
-impl MessageComponent for bool {
+impl MessageComponent<'_> for bool {
     fn read(cursor: &mut Cursor<&[u8]>) -> Result<Self, Error> {
         match cursor.read_u8()? {
             0 => Ok(false),
@@ -64,7 +68,7 @@ impl MessageComponent for bool {
     }
 }
 
-impl MessageComponent for u8 {
+impl MessageComponent<'_> for u8 {
     fn read(cursor: &mut Cursor<&[u8]>) -> Result<Self, Error> {
         cursor.read_u8().map_err(Into::into)
     }
@@ -74,7 +78,7 @@ impl MessageComponent for u8 {
     }
 }
 
-impl MessageComponent for u16 {
+impl MessageComponent<'_> for u16 {
     fn read(cursor: &mut Cursor<&[u8]>) -> Result<Self, Error> {
         cursor.read_u16::<LittleEndian>().map_err(Into::into)
     }
@@ -84,7 +88,7 @@ impl MessageComponent for u16 {
     }
 }
 
-impl<const N: usize> MessageComponent for [u8; N] {
+impl<const N: usize> MessageComponent<'_> for [u8; N] {
     fn read(cursor: &mut Cursor<&[u8]>) -> Result<Self, Error> {
         let mut dest = [0u8; N];
         cursor.read_exact(&mut dest)?;
@@ -96,7 +100,7 @@ impl<const N: usize> MessageComponent for [u8; N] {
     }
 }
 
-impl MessageComponent for u32 {
+impl MessageComponent<'_> for u32 {
     fn read(cursor: &mut Cursor<&[u8]>) -> Result<Self, Error> {
         cursor.read_u32::<LittleEndian>().map_err(Into::into)
     }
@@ -106,12 +110,58 @@ impl MessageComponent for u32 {
     }
 }
 
-impl MessageComponent for u64 {
+impl MessageComponent<'_> for u64 {
     fn read(cursor: &mut Cursor<&[u8]>) -> Result<Self, Error> {
         cursor.read_u64::<LittleEndian>().map_err(Into::into)
     }
 
     fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> Result<(), Error> {
         cursor.write_u64::<LittleEndian>(*self).map_err(Into::into)
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Data<'a, const LEN_WIDTH: usize>(pub &'a [u8]);
+
+impl<'a, const LEN_WIDTH: usize> MessageComponent<'a> for Data<'a, LEN_WIDTH> {
+    fn read(cursor: &mut Cursor<&'a [u8]>) -> Result<Self, Error> {
+        let bytes = *cursor.get_ref();
+        let mut position = usize::try_from(cursor.position())?;
+
+        let len = match LEN_WIDTH {
+            0 => bytes
+                .len()
+                .checked_sub(position)
+                .ok_or(Error::BadCursorState)?,
+            1 => usize::from(cursor.read_u8()?),
+            2 => usize::from(cursor.read_u16::<LittleEndian>()?),
+            3 => usize::try_from(cursor.read_u24::<LittleEndian>()?)?,
+            4 => usize::try_from(cursor.read_u32::<LittleEndian>()?)?,
+            _ => panic!("Invalid LEN_WIDTH in Data type: LEN_WIDTH cannot exceed 4 bytes"),
+        };
+
+        position = position
+            .checked_add(LEN_WIDTH)
+            .ok_or(Error::BadDataLength)?;
+
+        let data_end = position.checked_add(len).ok_or(Error::BadDataLength)?;
+        let data = bytes
+            .get(position .. data_end)
+            .ok_or(Error::BadDataLength)?;
+
+        let new_position = u64::try_from(data_end)?;
+        cursor.set_position(new_position);
+
+        Ok(Self(data))
+    }
+
+    fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> Result<(), Error> {
+        let len = self.0.len().to_le_bytes();
+        cursor.write_all(&len[.. LEN_WIDTH])?;
+        cursor.write_all(self.0).map_err(Into::into)
+    }
+
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        Ok(self.0.to_vec())
     }
 }

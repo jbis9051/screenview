@@ -1,5 +1,4 @@
 use super::{
-    JoinOnDrop,
     Reliable,
     Source,
     TransportError,
@@ -9,7 +8,7 @@ use super::{
 };
 use crate::return_if_err;
 use common::{
-    event_loop::ThreadWaker,
+    event_loop::{JoinOnDrop, ThreadWaker},
     messages::{sel::*, Error, MessageComponent, MessageID},
 };
 use crossbeam_channel::{unbounded, Receiver, Sender};

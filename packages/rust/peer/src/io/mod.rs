@@ -3,7 +3,6 @@ pub mod tcp;
 pub mod udp;
 
 pub use handle::*;
-use std::thread::JoinHandle;
 pub use tcp::*;
 pub use udp::*;
 
@@ -18,23 +17,4 @@ macro_rules! return_if_err {
             return;
         }
     };
-}
-
-struct JoinOnDrop<T> {
-    handle: Option<JoinHandle<T>>,
-}
-
-impl<T> JoinOnDrop<T> {
-    fn new(handle: JoinHandle<T>) -> Self {
-        Self {
-            handle: Some(handle),
-        }
-    }
-}
-
-impl<T> Drop for JoinOnDrop<T> {
-    fn drop(&mut self) {
-        // Drop can only ever be called once so unwrap will never fail
-        drop(self.handle.take().unwrap().join());
-    }
 }

@@ -1,14 +1,17 @@
-use crate::services::{
-    helpers::{
-        cipher_reliable_peer::{CipherError, CipherReliablePeer},
-        cipher_unreliable_peer::CipherUnreliablePeer,
-        crypto::{diffie_hellman, keypair, parse_foreign_public, KeyPair},
+use crate::{
+    debug,
+    services::{
+        helpers::{
+            cipher_reliable_peer::{CipherError, CipherReliablePeer},
+            cipher_unreliable_peer::CipherUnreliablePeer,
+            crypto::{diffie_hellman, keypair, parse_foreign_public, KeyPair},
+        },
+        wpskka::auth::{
+            srp_client::{SrpAuthClient, SrpClientError},
+            AuthScheme,
+        },
+        InformEvent,
     },
-    wpskka::auth::{
-        srp_client::{SrpAuthClient, SrpClientError},
-        AuthScheme,
-    },
-    InformEvent,
 };
 use common::messages::{
     auth::srp::SrpMessage,
@@ -169,7 +172,7 @@ impl WpskkaClientHandler {
                     Ok(None)
                 }
                 _ => Err(WpskkaClientError::WrongMessageForState(
-                    Box::new(msg),
+                    debug(&msg),
                     self.state,
                 )),
             },
@@ -226,7 +229,7 @@ impl WpskkaClientHandler {
                     // TODO maybe check if we are authenticated here. We shouldn't need it for SRP but in future, other auth methods may
                 }
                 _ => Err(WpskkaClientError::WrongMessageForState(
-                    Box::new(msg),
+                    debug(&msg),
                     self.state,
                 )),
             },
@@ -257,7 +260,7 @@ impl WpskkaClientHandler {
                     ))
                 }
                 _ => Err(WpskkaClientError::WrongMessageForState(
-                    Box::new(msg),
+                    debug(&msg),
                     self.state,
                 )),
             },
@@ -288,8 +291,8 @@ impl WpskkaClientHandler {
 
 #[derive(Debug, thiserror::Error)]
 pub enum WpskkaClientError {
-    #[error("invalid message {0:?} for state {1:?}")]
-    WrongMessageForState(Box<WpskkaMessage>, State),
+    #[error("invalid message {0} for state {1:?}")]
+    WrongMessageForState(String, State),
 
     #[error("unsupported auth scheme type")]
     BadAuthSchemeType(AuthSchemeType),

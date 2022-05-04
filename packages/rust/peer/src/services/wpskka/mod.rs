@@ -43,7 +43,7 @@ impl WpskkaHandler {
         Ok(TransportDataMessageUnreliable { counter, data })
     }
 
-    pub fn wrap_reliable(
+    pub fn wrap_reliable<'a>(
         &mut self,
         msg: Vec<u8>,
     ) -> Result<TransportDataMessageReliable, CipherError> {

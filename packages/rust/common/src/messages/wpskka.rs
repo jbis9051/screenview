@@ -39,7 +39,7 @@ impl From<&AuthSchemeType> for u8 {
     }
 }
 
-impl MessageComponent for AuthSchemeType {
+impl MessageComponent<'_> for AuthSchemeType {
     fn read(cursor: &mut Cursor<&[u8]>) -> Result<Self, Error> {
         let byte = cursor.read_u8()?;
         Self::try_from(byte)
@@ -81,6 +81,7 @@ pub struct AuthResult {
 
 #[derive(Debug, MessageComponent)]
 #[message_id(5)]
+// #[lifetime('a)]
 pub struct TransportDataMessageReliable {
     #[parse(len_prefixed(2))]
     pub data: Vec<u8>,
@@ -95,6 +96,7 @@ pub struct TransportDataMessageUnreliable {
 }
 
 #[derive(MessageComponent, Debug)]
+// #[lifetime('a)]
 pub enum WpskkaMessage {
     AuthScheme(AuthScheme),
     TryAuth(TryAuth),

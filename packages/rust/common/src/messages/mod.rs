@@ -8,7 +8,7 @@ pub mod wpskka;
 
 macro_rules! impl_bitflags_message_component {
     ($name:ident) => {
-        impl MessageComponent for $name {
+        impl MessageComponent<'_> for $name {
             fn read(cursor: &mut Cursor<&[u8]>) -> Result<Self, Error> {
                 let flags = cursor.read_u8()?;
                 Self::from_bits(flags).ok_or(Error::BadFlags {
@@ -31,32 +31,32 @@ use sel::SelMessage;
 use svsc::SvscMessage;
 use wpskka::WpskkaMessage;
 
-pub enum ScreenViewMessage {
+pub enum ScreenViewMessage<'a> {
     SelMessage(SelMessage),
-    SvscMessage(SvscMessage),
+    SvscMessage(SvscMessage<'a>),
     WpskkaMessage(WpskkaMessage),
     RvdMessage(RvdMessage),
 }
 
-impl From<SelMessage> for ScreenViewMessage {
+impl From<SelMessage> for ScreenViewMessage<'_> {
     fn from(msg: SelMessage) -> Self {
         Self::SelMessage(msg)
     }
 }
 
-impl From<SvscMessage> for ScreenViewMessage {
-    fn from(msg: SvscMessage) -> Self {
+impl<'a> From<SvscMessage<'a>> for ScreenViewMessage<'a> {
+    fn from(msg: SvscMessage<'a>) -> Self {
         Self::SvscMessage(msg)
     }
 }
 
-impl From<WpskkaMessage> for ScreenViewMessage {
+impl From<WpskkaMessage> for ScreenViewMessage<'_> {
     fn from(msg: WpskkaMessage) -> Self {
         Self::WpskkaMessage(msg)
     }
 }
 
-impl From<RvdMessage> for ScreenViewMessage {
+impl From<RvdMessage> for ScreenViewMessage<'_> {
     fn from(msg: RvdMessage) -> Self {
         Self::RvdMessage(msg)
     }

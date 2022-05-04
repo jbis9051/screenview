@@ -1,12 +1,13 @@
 use crate::parse::{ArrayLength, ArrayType, Condition, Field, TypeInfo};
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{DataEnum, DeriveInput, Error, Fields, Ident, LitInt, Type};
+use syn::{DataEnum, DeriveInput, Error, Fields, Ident, Lifetime, LitInt, Type};
 
 pub fn gen_enum_impl(
     crate_common: &TokenStream,
     input: &DeriveInput,
     data_enum: &DataEnum,
+    lifetime: &Lifetime,
 ) -> TokenStream {
     let mut variants = Vec::with_capacity(data_enum.variants.len());
     for variant in &data_enum.variants {
@@ -34,8 +35,8 @@ pub fn gen_enum_impl(
     let write = gen_enum_serialize_impl(crate_common, &variants);
 
     quote! {
-        impl #impl_generics #crate_common::messages::MessageComponent for #name #ty_generics #where_clause {
-            fn read(__cursor: &mut ::std::io::Cursor<&[u8]>) -> Result<Self, #crate_common::messages::Error> {
+        impl #impl_generics #crate_common::messages::MessageComponent<#lifetime> for #name #ty_generics #where_clause {
+            fn read(__cursor: &mut ::std::io::Cursor<&#lifetime [u8]>) -> Result<Self, #crate_common::messages::Error> {
                 #read
             }
 
@@ -53,7 +54,7 @@ fn gen_enum_deserialize_impl(
     let match_arms = variants.iter().map(|&(name, ty)| {
         quote! {
             <#ty as #crate_common::messages::MessageID>::ID =>
-                Self::#name(#crate_common::messages::MessageComponent::read(__cursor)?)
+                Self::#name(#crate_common::messages::MessageComponent::<'_>::read(__cursor)?)
         }
     });
 
@@ -77,7 +78,7 @@ fn gen_enum_serialize_impl(
                     __cursor,
                     <#ty as #crate_common::messages::MessageID>::ID
                 )?;
-                #crate_common::messages::MessageComponent::write(__message, __cursor)
+                #crate_common::messages::MessageComponent::<'_>::write(__message, __cursor)
             }
         }
     });
@@ -93,6 +94,7 @@ pub fn gen_struct_impl(
     crate_common: &TokenStream,
     input: &DeriveInput,
     fields: &[Field],
+    lifetime: &Lifetime,
 ) -> TokenStream {
     let name = &input.ident;
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
@@ -100,8 +102,8 @@ pub fn gen_struct_impl(
     let write = gen_struct_serialize_impl(crate_common, fields);
 
     quote! {
-        impl #impl_generics #crate_common::messages::MessageComponent for #name #ty_generics #where_clause {
-            fn read(__cursor: &mut ::std::io::Cursor<&[u8]>) -> Result<Self, #crate_common::messages::Error> {
+        impl #impl_generics #crate_common::messages::MessageComponent<#lifetime> for #name #ty_generics #where_clause {
+            fn read(__cursor: &mut ::std::io::Cursor<&#lifetime [u8]>) -> Result<Self, #crate_common::messages::Error> {
                 #read
             }
 
@@ -167,7 +169,7 @@ fn gen_serialize_struct_field(crate_common: &TokenStream, field: &Field) -> Toke
             quote! {
                 #condition
                 if let ::core::option::Option::Some(#field_ref) = &self.#name {
-                    #crate_common::messages::MessageComponent::write(#field_ref, __cursor)?;
+                    #crate_common::messages::MessageComponent::<'_>::write(#field_ref, __cursor)?;
                 }
             }
         }
@@ -183,7 +185,7 @@ fn gen_serialize_struct_field(crate_common: &TokenStream, field: &Field) -> Toke
         }
         TypeInfo::Regular(_) => {
             quote! {
-                #crate_common::messages::MessageComponent::write(&self.#name, __cursor)?;
+                #crate_common::messages::MessageComponent::<'_>::write(&self.#name, __cursor)?;
             }
         }
     }
@@ -220,7 +222,7 @@ fn gen_deserialize_struct_field(crate_common: &TokenStream, field: &Field) -> To
 
             quote! {
                 let #name: #outer = if #present {
-                    Some(#crate_common::messages::MessageComponent::read(__cursor)?)
+                    Some(#crate_common::messages::MessageComponent::<'_>::read(__cursor)?)
                 } else {
                     None
                 };
@@ -244,7 +246,7 @@ fn gen_deserialize_struct_field(crate_common: &TokenStream, field: &Field) -> To
         }
         TypeInfo::Regular(ty) => {
             quote! {
-                let #name: #ty = #crate_common::messages::MessageComponent::read(__cursor)?;
+                let #name: #ty = #crate_common::messages::MessageComponent::<'_>::read(__cursor)?;
             }
         }
     }
@@ -287,7 +289,7 @@ impl Condition {
         match self {
             Self::Expr(expr) => quote! { #expr },
             Self::Prefixed(_) => {
-                quote! { <bool as #crate_common::messages::MessageComponent>::read(__cursor)? }
+                quote! { <bool as #crate_common::messages::MessageComponent<'_>>::read(__cursor)? }
             }
         }
     }
@@ -299,7 +301,7 @@ impl ArrayType {
             Self::Vec(_) => {
                 quote! {
                     for __ele in #field_ref.iter() {
-                        #crate_common::messages::MessageComponent::write(__ele, __cursor)?;
+                        #crate_common::messages::MessageComponent::<'_>::write(__ele, __cursor)?;
                     }
                 }
             }
@@ -322,7 +324,7 @@ impl ArrayType {
                 quote! {
                     let mut __dest = ::std::vec::Vec::with_capacity(__len);
                     for _ in 0..__len {
-                        __dest.push(#crate_common::messages::MessageComponent::read(__cursor)?);
+                        __dest.push(#crate_common::messages::MessageComponent::<'_>::read(__cursor)?);
                     }
                 }
             }

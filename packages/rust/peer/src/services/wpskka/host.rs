@@ -1,14 +1,17 @@
-use crate::services::{
-    helpers::{
-        cipher_reliable_peer::{CipherError, CipherReliablePeer},
-        cipher_unreliable_peer::CipherUnreliablePeer,
-        crypto::{diffie_hellman, keypair, parse_foreign_public, KeyPair},
+use crate::{
+    debug,
+    services::{
+        helpers::{
+            cipher_reliable_peer::{CipherError, CipherReliablePeer},
+            cipher_unreliable_peer::CipherUnreliablePeer,
+            crypto::{diffie_hellman, keypair, parse_foreign_public, KeyPair},
+        },
+        wpskka::auth::{
+            srp_host::{SrpAuthHost, SrpHostError},
+            AuthScheme,
+        },
+        InformEvent,
     },
-    wpskka::auth::{
-        srp_host::{SrpAuthHost, SrpHostError},
-        AuthScheme,
-    },
-    InformEvent,
 };
 use common::messages::{
     auth::srp::SrpMessage,
@@ -145,7 +148,7 @@ impl WpskkaHostHandler {
                     Ok(None)
                 }
                 _ => Err(WpskkaHostError::WrongMessageForState(
-                    Box::new(msg),
+                    debug(&msg),
                     self.state,
                 )),
             },
@@ -197,7 +200,7 @@ impl WpskkaHostHandler {
                     }
                 }
                 _ => Err(WpskkaHostError::WrongMessageForState(
-                    Box::new(msg),
+                    debug(&msg),
                     self.state,
                 )),
             },
@@ -219,7 +222,7 @@ impl WpskkaHostHandler {
                     ))
                 }
                 _ => Err(WpskkaHostError::WrongMessageForState(
-                    Box::new(msg),
+                    debug(&msg),
                     self.state,
                 )),
             },
@@ -263,8 +266,8 @@ impl WpskkaHostHandler {
 
 #[derive(Debug, thiserror::Error)]
 pub enum WpskkaHostError {
-    #[error("invalid message {0:?} for state {1:?}")]
-    WrongMessageForState(Box<WpskkaMessage>, State),
+    #[error("invalid message {0} for state {1:?}")]
+    WrongMessageForState(String, State),
 
     #[error("unsupported auth scheme type")]
     BadAuthSchemeType(AuthSchemeType),

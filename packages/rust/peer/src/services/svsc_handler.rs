@@ -1,4 +1,6 @@
-use crate::services::InformEvent;
+use std::fmt::Debug;
+
+use crate::{debug, services::InformEvent};
 use common::{
     constants::SVSC_VERSION,
     messages::svsc::{
@@ -82,12 +84,12 @@ impl SvscHandler {
         SvscMessage::EstablishSessionRequest(EstablishSessionRequest { lease_id })
     }
 
-    pub fn handle(
+    pub fn handle<'a>(
         &mut self,
-        msg: SvscMessage,
+        msg: SvscMessage<'a>,
         write: &mut Vec<SvscMessage>,
         event: &mut Vec<InformEvent>,
-    ) -> Result<Option<Vec<u8>>, SvscError> {
+    ) -> Result<Option<&'a [u8]>, SvscError> {
         if let SvscMessage::KeepAlive(_) = msg {
             write.push(SvscMessage::KeepAlive(KeepAlive {}));
             return Ok(None);
@@ -107,14 +109,14 @@ impl SvscHandler {
                     }
                     Ok(None)
                 }
-                _ => Err(SvscError::WrongMessageForState(Box::new(msg), self.state)),
+                _ => Err(SvscError::WrongMessageForState(debug(&msg), self.state)),
             },
             // SVSC is mostly stateless (or many messages can happen in any state), so lets just check by message instead
             _ => match msg {
                 SvscMessage::LeaseResponse(msg) => {
                     if !self.awaiting_lease_response {
                         return Err(SvscError::WrongMessageForState(
-                            Box::new(SvscMessage::LeaseResponse(msg)),
+                            debug(&SvscMessage::LeaseResponse(msg)),
                             self.state,
                         ));
                     }
@@ -132,7 +134,7 @@ impl SvscHandler {
                 SvscMessage::EstablishSessionResponse(msg) => {
                     if !self.awaiting_session_response {
                         return Err(SvscError::WrongMessageForState(
-                            Box::new(SvscMessage::EstablishSessionResponse(msg)),
+                            debug(&SvscMessage::EstablishSessionResponse(msg)),
                             self.state,
                         ));
                     }
@@ -150,7 +152,7 @@ impl SvscHandler {
                 SvscMessage::LeaseExtensionResponse(msg) => {
                     if !self.awaiting_extension_response {
                         return Err(SvscError::WrongMessageForState(
-                            Box::new(SvscMessage::LeaseExtensionResponse(msg)),
+                            debug(&SvscMessage::LeaseExtensionResponse(msg)),
                             self.state,
                         ));
                     }
@@ -182,14 +184,14 @@ impl SvscHandler {
                 SvscMessage::SessionDataReceive(msg) => {
                     if self.session.is_none() {
                         return Err(SvscError::WrongMessageForState(
-                            Box::new(SvscMessage::SessionDataReceive(msg)),
+                            debug(&SvscMessage::SessionDataReceive(msg)),
                             self.state,
                         ));
                     }
-                    Ok(Some(msg.data))
+                    Ok(Some(msg.data.0))
                 }
 
-                _ => Err(SvscError::WrongMessageForState(Box::new(msg), self.state)),
+                _ => Err(SvscError::WrongMessageForState(debug(&msg), self.state)),
             },
         }
     }
@@ -197,8 +199,8 @@ impl SvscHandler {
 
 #[derive(Debug, thiserror::Error)]
 pub enum SvscError {
-    #[error("invalid message {0:?} for state {1:?}")]
-    WrongMessageForState(Box<SvscMessage>, State),
+    #[error("invalid message {0} for state {1:?}")]
+    WrongMessageForState(String, State),
 }
 
 pub enum SvscInform {

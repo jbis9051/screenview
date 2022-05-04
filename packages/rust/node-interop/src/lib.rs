@@ -13,6 +13,7 @@ macro_rules! throw {
     }};
 }
 
+// This function is infallible but returns a result for convenience
 fn send_request<'a>(
     cx: &mut FunctionContext<'a>,
     handle: Handle<'_, JsBox<InstanceHandle>>,

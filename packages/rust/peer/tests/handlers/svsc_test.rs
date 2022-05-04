@@ -1,23 +1,25 @@
 extern crate core;
 
-
 use common::{
     chrono::{MAX_DATETIME, MIN_DATETIME},
     constants::SVSC_VERSION,
-    messages::svsc::{
-        EstablishSessionNotification,
-        EstablishSessionResponse,
-        EstablishSessionStatus,
-        KeepAlive,
-        LeaseExtensionResponse,
-        LeaseId,
-        LeaseResponse,
-        LeaseResponseData,
-        ProtocolVersion,
-        SessionData,
-        SessionDataReceive,
-        SessionEnd,
-        SvscMessage,
+    messages::{
+        svsc::{
+            EstablishSessionNotification,
+            EstablishSessionResponse,
+            EstablishSessionStatus,
+            KeepAlive,
+            LeaseExtensionResponse,
+            LeaseId,
+            LeaseResponse,
+            LeaseResponseData,
+            ProtocolVersion,
+            SessionData,
+            SessionDataReceive,
+            SessionEnd,
+            SvscMessage,
+        },
+        Data,
     },
 };
 use peer::services::{
@@ -303,7 +305,7 @@ fn test_session_data() {
 
     // test
     let data = vec![1, 2, 3, 4, 5, 6];
-    let message = SvscMessage::SessionDataReceive(SessionDataReceive { data: data.clone() });
+    let message = SvscMessage::SessionDataReceive(SessionDataReceive { data: Data(&data) });
 
     let inner = handler
         .handle(message, &mut write, &mut events)

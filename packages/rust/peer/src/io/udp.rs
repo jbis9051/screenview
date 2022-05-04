@@ -1,10 +1,10 @@
-use super::{JoinOnDrop, Source, TransportResult, Unreliable, UDP_READ_SIZE};
+use super::{Source, TransportResult, Unreliable, UDP_READ_SIZE};
 use crate::{
     io::{TransportError, TransportResponse},
     return_if_err,
 };
 use common::{
-    event_loop::ThreadWaker,
+    event_loop::{JoinOnDrop, ThreadWaker},
     messages::{sel::*, MessageComponent},
 };
 use crossbeam_channel::{unbounded, Receiver, Sender};
@@ -134,6 +134,7 @@ async fn write_unreliable(
         if buffer.len() > max_len {
             return_if_err!(sender.send(Err(TransportError::TooLarge(message))));
             waker.wake();
+            buffer.clear();
             continue;
         }
 

@@ -1,5 +1,5 @@
 use crate::protocol::{ConnectionType, Message, RequestContent};
-use common::event_loop::{event_loop, EventLoopState, ThreadWaker};
+use common::event_loop::{event_loop, EventLoopState, JoinOnDrop, ThreadWaker};
 use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
 use native::{NativeApi, NativeApiError};
 use neon::{
@@ -15,7 +15,7 @@ use std::thread::{self, JoinHandle};
 pub struct InstanceHandle {
     sender: Sender<Message>,
     waker: ThreadWaker,
-    thread_handle: Option<JoinHandle<()>>,
+    _thread_handle: JoinOnDrop<()>,
 }
 
 impl InstanceHandle {
@@ -23,7 +23,7 @@ impl InstanceHandle {
         Self {
             sender,
             waker,
-            thread_handle: Some(thread_handle),
+            _thread_handle: JoinOnDrop::new(thread_handle),
         }
     }
 
@@ -38,7 +38,7 @@ impl Drop for InstanceHandle {
     fn drop(&mut self) {
         let _ = self.sender.send(Message::Shutdown);
         self.waker.wake();
-        let _ = self.thread_handle.take().unwrap().join();
+        // thread_handle is dropped last
     }
 }
 
