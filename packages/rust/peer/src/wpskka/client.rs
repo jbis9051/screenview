@@ -17,14 +17,7 @@ use crate::{
 };
 use common::messages::{
     auth::srp::SrpMessage,
-    wpskka::{
-        AuthMessage,
-        AuthSchemeType,
-        TransportDataMessageReliable,
-        TransportDataMessageUnreliable,
-        TryAuth,
-        WpskkaMessage,
-    },
+    wpskka::{AuthMessage, AuthSchemeType, TryAuth, WpskkaMessage},
     MessageComponent,
 };
 use std::{cmp::Ordering, io::Cursor, sync::Arc};
