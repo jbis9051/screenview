@@ -41,8 +41,8 @@ pub enum Error {
     BadFlags { name: &'static str, value: u8 },
     #[error("encountered invalid message id {0}")]
     BadMessageID(u8),
-    #[error("encountered bad or malformed SEL message")]
-    BadSelMessage,
+    #[error("encountered bad or malformed transport message")]
+    BadTransportMessage,
     #[error("data cursor reached an invalid state (position > data len)")]
     BadCursorState,
     #[error("encountered invalid data length")]

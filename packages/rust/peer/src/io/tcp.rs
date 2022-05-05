@@ -1,20 +1,22 @@
 use super::{
+    parse_length_field,
     Reliable,
     Source,
     TransportError,
     TransportResponse,
     TransportResult,
     INIT_BUFFER_CAPACITY,
+    LENGTH_FIELD_WIDTH,
 };
 use crate::return_if_err;
 use common::{
     event_loop::{JoinOnDrop, ThreadWaker},
-    messages::{sel::*, Error, MessageComponent, MessageID},
+    messages::Error,
 };
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use std::{
     io,
-    io::{Cursor, Read, Write},
+    io::{Read, Write},
     net::{Shutdown, TcpStream, ToSocketAddrs},
     ptr,
     sync::Arc,
@@ -23,7 +25,7 @@ use std::{
 
 pub struct TcpHandle {
     stream: Arc<TcpStream>,
-    write: Sender<SelMessage>,
+    write: Sender<Vec<u8>>,
     _handles: Box<(JoinOnDrop<()>, JoinOnDrop<()>)>,
 }
 
@@ -61,7 +63,7 @@ impl Reliable for TcpHandle {
         })
     }
 
-    fn send(&mut self, message: SelMessage) -> bool {
+    fn send(&mut self, message: Vec<u8>) -> bool {
         self.write.send(message).is_ok()
     }
 
@@ -108,10 +110,11 @@ fn read_reliable(stream: Arc<TcpStream>, sender: Sender<TransportResult>, waker:
 
         // Collect and parse the message
         let data_parsed = match collect_and_parse_reliable(&*stream, &mut buffer, &mut data_end) {
-            Ok((message, data_parsed)) => {
+            Ok(message) => {
+                let message_len = message.len();
                 return_if_err!(sender.send(Ok(TransportResponse::Message(message))));
 
-                data_parsed
+                message_len + LENGTH_FIELD_WIDTH
             }
             Err(error) => {
                 let res = sender.send(Err(TransportError::Recoverable {
@@ -147,31 +150,18 @@ fn collect_and_parse_reliable(
     mut stream: &TcpStream,
     buffer: &mut Vec<u8>,
     data_end: &mut usize,
-) -> Result<(SelMessage, usize), Error> {
-    let id = buffer[0];
-
-    // Collect the remaining bytes if necessary, and parse the message'
-    match id {
-        TransportDataMessageReliable::ID => {
-            // Similar to ServerHello, if the length gets cut off, then we read the rest of it here
-            if *data_end < 3 {
-                Read::read_exact(&mut stream, &mut buffer[*data_end .. 3])?;
-            }
-
-            let mut length_bytes = [0u8; 2];
-            length_bytes.copy_from_slice(&buffer[1 .. 3]);
-            // Add 3 to account for ID byte and length bytes
-            let length = match usize::from(u16::from_le_bytes(length_bytes)).checked_add(3) {
-                Some(len) => len,
-                None => return Err(Error::BadSelMessage),
-            };
-
-            collect_reliable(stream, buffer, data_end, length)?;
-            let message = TransportDataMessageReliable::read(&mut Cursor::new(&buffer[3 ..]))?;
-            Ok((SelMessage::TransportDataMessageReliable(message), length))
-        }
-        _ => Err(Error::BadMessageID(id)),
+) -> Result<Vec<u8>, Error> {
+    if *data_end < LENGTH_FIELD_WIDTH {
+        Read::read_exact(&mut stream, &mut buffer[*data_end .. LENGTH_FIELD_WIDTH])?;
     }
+
+    let length = match parse_length_field(&buffer).checked_add(LENGTH_FIELD_WIDTH) {
+        Some(len) => len,
+        None => return Err(Error::BadTransportMessage),
+    };
+
+    collect_reliable(stream, buffer, data_end, length)?;
+    Ok(buffer[LENGTH_FIELD_WIDTH ..].to_vec())
 }
 
 #[inline]
@@ -196,36 +186,18 @@ fn collect_reliable(
 fn write_reliable(
     stream: Arc<TcpStream>,
     sender: Sender<TransportResult>,
-    receiver: Receiver<SelMessage>,
+    receiver: Receiver<Vec<u8>>,
     waker: &ThreadWaker,
 ) {
-    let mut buffer = Vec::with_capacity(INIT_BUFFER_CAPACITY);
-
-    while let Ok(ref msg) = receiver.recv() {
-        let mut cursor = Cursor::new(buffer);
-
-        let res = MessageComponent::write(msg, &mut cursor);
-        buffer = cursor.into_inner();
-
-        match res {
-            Ok(_) =>
-                if let Err(error) = (&*stream).write_all(&buffer) {
-                    let _ = sender.send(Err(TransportError::Fatal {
-                        source: Source::WriteReliable,
-                        error,
-                    }));
-                    return;
-                },
-            Err(error) => {
-                let res = sender.send(Err(TransportError::Recoverable {
-                    source: Source::WriteReliable,
-                    error,
-                }));
-                return_if_err!(res);
-                waker.wake();
-            }
+    while let Ok(msg) = receiver.recv() {
+        if let Err(error) = (&*stream).write_all(&*msg) {
+            let _ = sender.send(Err(TransportError::Fatal {
+                source: Source::WriteReliable,
+                error,
+            }));
+            return;
         }
 
-        buffer.clear();
+        waker.wake();
     }
 }
