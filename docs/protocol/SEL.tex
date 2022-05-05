@@ -15,13 +15,13 @@ The Client initiates a TLS connection with the Server in accordance with \href{h
     Peer $\leftrightarrow$ Server\\
     \begin{tabular}{|c|c|c|}
         \hline
-        \textbf{Bytes}     & \textbf{Name} & \textbf{Value} \\
+        \textbf{Bytes}       & \textbf{Name} & \textbf{Value} \\
         \hline
-        1                  & type          & 1              \\
+        2                    & data-length   &                \\
         \hline
-        2                  & data-length   &                \\
+        1                    & type          & 1              \\
         \hline
-        \emph{data-length} & data          &                \\
+        \emph{data-length-1} & data          &                \\
         \hline
     \end{tabular}
 \end{center}
@@ -52,15 +52,17 @@ The Server and Peer derive keys.
     Peer \textrightarrow Server\\
     \begin{tabular}{|c|c|c|}
         \hline
-        \textbf{Bytes}                & \textbf{Name}  & \textbf{Value} \\
+        \textbf{Bytes}  & \textbf{Name}  & \textbf{Value} \\
         \hline
-        1                             & type           & 2              \\
+        2               & data-length    &                \\
         \hline
-        16                            & \emph{peer-id} &                \\
+        1               & type           & 2              \\
         \hline
-        8                             & counter        &                \\
+        16              & \emph{peer-id} &                \\
         \hline
-        $\text{UDP length} - 8$ bytes & data           &                \\
+        8               & counter        &                \\
+        \hline
+        remaining bytes & data           &                \\
         \hline
     \end{tabular}
 \end{center}
@@ -69,13 +71,15 @@ The Server and Peer derive keys.
     Server \textrightarrow Peer\\
     \begin{tabular}{|c|c|c|}
         \hline
-        \textbf{Bytes}                & \textbf{Name} & \textbf{Value} \\
+        \textbf{Bytes}  & \textbf{Name} & \textbf{Value} \\
         \hline
-        1                             & type          & 3              \\
+        2               & data-length   &                \\
         \hline
-        8                             & counter       &                \\
+        1               & type          & 3              \\
         \hline
-        $\text{UDP length} - 8$ bytes & data          &                \\
+        8               & counter       &                \\
+        \hline
+        remaining bytes & data          &                \\
         \hline
     \end{tabular}
 \end{center}

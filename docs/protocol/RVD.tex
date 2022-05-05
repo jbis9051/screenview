@@ -9,7 +9,7 @@ All messages MUST occur over the transport listed.\\
 All RVD messages' first byte contain a number to indicate the message type. \\
 
 A sequence-number is an incrementing 32-bit counter each UDP message sent, separate for Host and Client. All
-messages sent over UDP MUST begin with a 4 bytes sequence-number. sequence-number is initialized
+messages sent over UDP MUST begin with a 4 byte sequence-number. sequence-number is initialized
 to 0 and increments once for every UDP message sent by the respective Peer. Therefore each RVD UDP message looks
 like:
 
