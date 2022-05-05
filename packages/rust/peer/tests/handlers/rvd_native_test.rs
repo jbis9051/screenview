@@ -22,7 +22,7 @@ use native::api::{
     Window,
     WindowId,
 };
-use peer::services::{
+use peer::{
     helpers::rvd_native_helper::{rvd_client_native_helper, rvd_host_native_helper},
     rvd::{DisplayType, RvdClientHandler, RvdDisplay, RvdHostHandler},
 };
@@ -146,7 +146,7 @@ fn test_host_mouse_input() {
         height: monitor.height as u16,
     });
     let update = host.display_update();
-    host.handle(
+    host._handle(
         RvdMessage::DisplayChangeReceived(DisplayChangeReceived {}),
         &mut events,
     )

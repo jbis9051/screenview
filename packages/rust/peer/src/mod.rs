@@ -178,15 +178,6 @@ impl<R: Reliable, U: Unreliable> ScreenViewHandler<R, U> {
     }
 }
 
-pub enum InformEvent {
-    TransportShutdown(Source),
-    SvscInform(SvscInform),
-    RvdClientInform(RvdClientInform),
-    RvdHostInform(RvdHostInform),
-    WpskkaClientInform(WpskkaClientInform),
-    WpskkaHostInform(WpskkaHostInform),
-}
-
 #[derive(thiserror::Error, Debug)]
 pub enum SendError {
     #[error("failed to encode message: {0}")]

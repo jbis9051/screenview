@@ -1,9 +1,7 @@
 use crate::{
     debug,
-    services::{
-        helpers::crypto::{hmac, hmac_verify, kdf1, random_srp_private_value},
-        wpskka::WpskkaClientInform,
-    },
+    helpers::crypto::{hmac, hmac_verify, kdf1, random_srp_private_value},
+    wpskka::WpskkaClientInform,
 };
 use common::{
     constants::{HashAlgo, SRP_PARAM},

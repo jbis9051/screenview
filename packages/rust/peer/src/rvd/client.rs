@@ -1,4 +1,8 @@
-use crate::{debug, services::InformEvent};
+use crate::{
+    debug,
+    rvd::{RvdError, RvdHandlerTrait},
+    InformEvent,
+};
 use common::{
     constants::RVD_VERSION,
     messages::rvd::{
@@ -34,8 +38,10 @@ impl RvdClientHandler {
             state: ClientState::Handshake,
         }
     }
+}
 
-    pub fn handle(
+impl RvdClientHandler {
+    pub fn _handle(
         &mut self,
         msg: RvdMessage,
         write: &mut Vec<RvdMessage>,
@@ -100,6 +106,17 @@ impl RvdClientHandler {
                 )),
             },
         }
+    }
+}
+
+impl RvdHandlerTrait for RvdClientHandler {
+    fn handle(
+        &mut self,
+        msg: RvdMessage,
+        write: &mut Vec<RvdMessage>,
+        events: &mut Vec<InformEvent>,
+    ) -> Result<(), RvdError> {
+        Ok(self._handle(msg, write, events)?)
     }
 }
 

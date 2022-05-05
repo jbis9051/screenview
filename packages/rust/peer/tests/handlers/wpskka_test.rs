@@ -2,8 +2,14 @@ use common::messages::{
     wpskka::{TransportDataMessageReliable, TransportDataMessageUnreliable, WpskkaMessage},
     Data,
 };
-use peer::services::{
-    wpskka::{WpskkaClientHandler, WpskkaClientInform, WpskkaHostHandler, WpskkaHostInform},
+use peer::{
+    wpskka::{
+        WpskkaClientHandler,
+        WpskkaClientInform,
+        WpskkaHandlerTrait,
+        WpskkaHostHandler,
+        WpskkaHostInform,
+    },
     InformEvent,
 };
 use std::borrow::Cow;
@@ -20,7 +26,7 @@ fn srp_authenticate(
     let auth_schemes = host.auth_schemes().expect("handler failed");
 
     assert!(client
-        .handle(auth_schemes, &mut write, &mut events)
+        ._handle(auth_schemes, &mut write, &mut events)
         .expect("handler failed")
         .is_none());
     assert_eq!(write.len(), 1);
@@ -31,7 +37,7 @@ fn srp_authenticate(
     let message = write.remove(0);
 
     assert!(host
-        .handle(message, &mut write, &mut events)
+        ._handle(message, &mut write, &mut events)
         .expect("handler failed")
         .is_none());
     assert_eq!(write.len(), 1);
@@ -42,7 +48,7 @@ fn srp_authenticate(
     let message = write.remove(0);
 
     assert!(client
-        .handle(message, &mut write, &mut events)
+        ._handle(message, &mut write, &mut events)
         .expect("handler failed")
         .is_none());
     assert_eq!(write.len(), 0);
@@ -61,7 +67,7 @@ fn srp_authenticate(
     // ClientHello
     let message = write.remove(0);
     assert!(host
-        .handle(message, &mut write, &mut events)
+        ._handle(message, &mut write, &mut events)
         .expect("handler failed")
         .is_none());
     assert_eq!(write.len(), 1);
@@ -76,7 +82,7 @@ fn srp_authenticate(
     // HostVerify
     let message = write.remove(0);
     assert!(client
-        .handle(message, &mut write, &mut events)
+        ._handle(message, &mut write, &mut events)
         .expect("handler failed")
         .is_none());
     assert_eq!(write.len(), 0);
@@ -98,7 +104,7 @@ fn test_reliable_communication(host: &mut WpskkaHostHandler, client: &mut Wpskka
     let mut write = Vec::new();
     let mut events = Vec::new();
     let result = client
-        .handle(message, &mut write, &mut events)
+        ._handle(message, &mut write, &mut events)
         .expect("handler failed")
         .expect("expected data");
     assert_eq!(write.len(), 0);
@@ -113,7 +119,7 @@ fn test_reliable_communication(host: &mut WpskkaHostHandler, client: &mut Wpskka
     let mut write = Vec::new();
     let mut events = Vec::new();
     let result = host
-        .handle(message, &mut write, &mut events)
+        ._handle(message, &mut write, &mut events)
         .expect("handler failed")
         .expect("expected data");
     assert_eq!(write.len(), 0);
@@ -134,7 +140,7 @@ fn test_unreliable_communication(host: &mut WpskkaHostHandler, client: &mut Wpsk
     let mut write = Vec::new();
     let mut events = Vec::new();
     let result = client
-        .handle(message, &mut write, &mut events)
+        ._handle(message, &mut write, &mut events)
         .expect("handler failed")
         .expect("expected data");
     assert_eq!(write.len(), 0);
@@ -151,7 +157,7 @@ fn test_unreliable_communication(host: &mut WpskkaHostHandler, client: &mut Wpsk
     let mut write = Vec::new();
     let mut events = Vec::new();
     let result = host
-        .handle(message, &mut write, &mut events)
+        ._handle(message, &mut write, &mut events)
         .expect("handler failed")
         .expect("expected data");
     assert_eq!(write.len(), 0);

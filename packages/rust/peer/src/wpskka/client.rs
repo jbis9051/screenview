@@ -1,21 +1,30 @@
 use crate::{
     debug,
-    services::{
-        helpers::{
-            cipher_reliable_peer::{CipherError, CipherReliablePeer},
-            cipher_unreliable_peer::CipherUnreliablePeer,
-            crypto::{diffie_hellman, keypair, parse_foreign_public, KeyPair},
-        },
-        wpskka::auth::{
+    helpers::{
+        cipher_reliable_peer::{CipherError, CipherReliablePeer},
+        cipher_unreliable_peer::CipherUnreliablePeer,
+        crypto::{diffie_hellman, keypair, parse_foreign_public, KeyPair},
+    },
+    wpskka::{
+        auth::{
             srp_client::{SrpAuthClient, SrpClientError},
             AuthScheme,
         },
-        InformEvent,
+        WpskkaError,
+        WpskkaHandlerTrait,
     },
+    InformEvent,
 };
 use common::messages::{
     auth::srp::SrpMessage,
-    wpskka::{AuthMessage, AuthSchemeType, TryAuth, WpskkaMessage},
+    wpskka::{
+        AuthMessage,
+        AuthSchemeType,
+        TransportDataMessageReliable,
+        TransportDataMessageUnreliable,
+        TryAuth,
+        WpskkaMessage,
+    },
     MessageComponent,
 };
 use std::{cmp::Ordering, io::Cursor, sync::Arc};
@@ -61,14 +70,6 @@ impl WpskkaClientHandler {
             keys: None,
             host_public_key: None,
         }
-    }
-
-    pub fn reliable_cipher_mut(&mut self) -> &mut CipherReliablePeer {
-        self.reliable.as_mut().unwrap()
-    }
-
-    pub fn unreliable_cipher(&self) -> &Arc<CipherUnreliablePeer> {
-        self.unreliable.as_ref().unwrap()
     }
 
     pub fn authenticated(&self) -> bool {
@@ -140,7 +141,7 @@ impl WpskkaClientHandler {
         Ok(())
     }
 
-    pub fn handle(
+    pub fn _handle(
         &mut self,
         msg: WpskkaMessage,
         write: &mut Vec<WpskkaMessage>,
@@ -286,6 +287,25 @@ impl WpskkaClientHandler {
             receive_unreliable.to_vec(),
         )));
         Ok(())
+    }
+}
+
+impl WpskkaHandlerTrait for WpskkaClientHandler {
+    fn handle(
+        &mut self,
+        msg: WpskkaMessage,
+        write: &mut Vec<WpskkaMessage>,
+        events: &mut Vec<InformEvent>,
+    ) -> Result<Option<Vec<u8>>, WpskkaError> {
+        Ok(self._handle(msg, write, events)?)
+    }
+
+    fn unreliable_cipher(&self) -> &Arc<CipherUnreliablePeer> {
+        self.unreliable.as_ref().unwrap()
+    }
+
+    fn reliable_cipher_mut(&mut self) -> &mut CipherReliablePeer {
+        self.reliable.as_mut().unwrap()
     }
 }
 

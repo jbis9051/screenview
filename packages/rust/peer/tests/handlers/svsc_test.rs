@@ -22,7 +22,7 @@ use common::{
         Data,
     },
 };
-use peer::services::{
+use peer::{
     svsc_handler::{SvscHandler, SvscInform},
     InformEvent,
 };

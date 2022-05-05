@@ -1,10 +1,8 @@
 use common::messages::sel::{SelMessage, TransportDataServerMessageUnreliable};
 use peer::{
     hash,
-    services::{
-        helpers::{cipher_unreliable_peer::CipherUnreliablePeer, crypto::kdf2},
-        sel_handler::SelHandler,
-    },
+    helpers::{cipher_unreliable_peer::CipherUnreliablePeer, crypto::kdf2},
+    sel_handler::SelHandler,
 };
 
 #[test]

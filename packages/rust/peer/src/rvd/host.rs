@@ -1,9 +1,11 @@
 use crate::{
     debug,
-    services::{
-        rvd::PermissionError::{ClipboardRead, ClipboardWrite, MouseInput},
-        InformEvent,
+    rvd::{
+        PermissionError::{ClipboardRead, ClipboardWrite, MouseInput},
+        RvdError,
+        RvdHandlerTrait,
     },
+    InformEvent,
 };
 use common::{
     constants::RVD_VERSION,
@@ -152,7 +154,7 @@ impl RvdHostHandler {
         })
     }
 
-    pub fn handle(
+    pub fn _handle(
         &mut self,
         msg: RvdMessage,
         events: &mut Vec<InformEvent>,
@@ -236,6 +238,17 @@ impl RvdHostHandler {
                 _ => Err(RvdHostError::WrongMessageForState(debug(&msg), self.state)),
             },
         }
+    }
+}
+
+impl RvdHandlerTrait for RvdHostHandler {
+    fn handle(
+        &mut self,
+        msg: RvdMessage,
+        _write: &mut Vec<RvdMessage>,
+        events: &mut Vec<InformEvent>,
+    ) -> Result<(), RvdError> {
+        Ok(self._handle(msg, events)?)
     }
 }
 

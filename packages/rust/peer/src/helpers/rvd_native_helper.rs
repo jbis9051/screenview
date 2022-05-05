@@ -1,4 +1,4 @@
-use crate::services::{
+use crate::{
     helpers::{
         clipboard_type_map::get_native_clipboard,
         network_mouse_button_to_native::network_mouse_button_to_native,
@@ -8,7 +8,7 @@ use crate::services::{
         RvdClientError,
         RvdClientHandler,
         RvdClientInform,
-        RvdHandler,
+        RvdHandlerTrait,
         RvdHostError,
         RvdHostHandler,
         RvdHostInform,
@@ -26,7 +26,7 @@ pub fn rvd_client_native_helper<T: NativeApiTemplate>(
     native: &mut T,
 ) -> Result<(), ClientError<T>> {
     let mut local_events = Vec::new();
-    rvd.handle(msg, write, &mut local_events)?;
+    rvd._handle(msg, write, &mut local_events)?;
     for inform in local_events {
         match &inform {
             InformEvent::RvdClientInform(event) => match event {
@@ -65,7 +65,7 @@ pub fn rvd_host_native_helper<T: NativeApiTemplate>(
     native: &mut T,
 ) -> Result<(), HostError<T>> {
     let mut local_events = Vec::new();
-    rvd.handle(msg, &mut local_events)?;
+    rvd._handle(msg, &mut local_events)?;
     for inform in local_events {
         match &inform {
             InformEvent::RvdHostInform(event) => match event {
@@ -113,7 +113,7 @@ pub fn rvd_host_native_helper<T: NativeApiTemplate>(
                         .map_err(HostError::NativeError)?;
                 }
                 RvdHostInform::ClipboardRequest(is_content, clip_type) => {
-                    write.push(RvdHandler::clipboard_data(
+                    write.push(<RvdHostHandler as RvdHandlerTrait>::clipboard_data(
                         native
                             .clipboard_content(&get_native_clipboard(clip_type))
                             .map_err(HostError::NativeError)?,
