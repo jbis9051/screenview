@@ -1,8 +1,15 @@
+import {connect_to_host_direct, new_instance} from "./index.node";
+
 export * from './index.node';
 
-export enum InstanceType {
+export enum InstancePeerType {
     Host = 'host',
     Client = 'client',
+}
+
+export enum InstanceConnectionType {
+    Direct = 'direct',
+    Signal = 'signal',
 }
 
 export const enum ConnectionType {

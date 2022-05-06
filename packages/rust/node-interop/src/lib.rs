@@ -56,18 +56,28 @@ fn send_request<'a>(
 }
 
 fn new_instance(mut cx: FunctionContext) -> JsResult<JsBox<InstanceHandle>> {
-    let instance_type = cx.argument::<JsString>(0)?;
+    let peer_type = cx.argument::<JsString>(0)?.value(&mut cx);
+    let instance_type = cx.argument::<JsString>(1)?.value(&mut cx);
     let channel = cx.channel();
 
-    // TODO: support other handler stacks
-    let handle = match instance_type.value(&mut cx).as_str() {
-        "host" => Instance::new_host_direct(channel),
-        "client" => Instance::new_client_direct(channel),
-        _ => {
-            return throw!(
-                cx,
-                "Invalid instance type, must either be 'host' or 'client'"
-            );
+    if peer_type != "client" && peer_type != "host" {
+        return throw!(cx, "Invalid peer type");
+    }
+
+    if instance_type != "direct" && instance_type != "signal" {
+        return throw!(cx, "Invalid instance type");
+    }
+    let handle = {
+        if peer_type == "client" && instance_type == "direct" {
+            Instance::new_client_direct(channel)
+        } else if peer_type == "host" && instance_type == "direct" {
+            Instance::new_host_direct(channel)
+        } else if peer_type == "client" && instance_type == "signal" {
+            Instance::new_client_signal(channel)
+        } else if peer_type == "host" && instance_type == "signal" {
+            Instance::new_host_signal(channel)
+        } else {
+            unreachable!()
         }
     };
 
