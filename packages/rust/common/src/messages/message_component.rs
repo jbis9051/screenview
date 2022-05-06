@@ -19,10 +19,11 @@ pub trait MessageComponent<'a>: Sized {
     fn to_bytes(&self, len_prefix_width: Option<usize>) -> Result<Vec<u8>, Error> {
         let len_width = len_prefix_width.unwrap_or(0);
         let mut cursor = Cursor::new(vec![0u8; len_width]);
+        cursor.set_position(u64::try_from(len_width)?);
         self.write(&mut cursor)?;
         let len_bytes = (cursor.get_ref().len() - len_width).to_le_bytes();
 
-        if len_bytes[len_width ..].iter().any(|&by| by != 0) {
+        if len_width > 0 && len_bytes[len_width ..].iter().any(|&by| by != 0) {
             return Err(Error::BadDataLength);
         }
 
