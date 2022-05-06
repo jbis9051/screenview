@@ -1,18 +1,22 @@
 use crate::{
-    higher_handler::{HigherError, HigherHandler, HigherHandlerTrait},
+    higher_handler::{HigherError, HigherHandlerTrait},
     io::{IoHandle, Reliable, TransportError, TransportResponse, Unreliable},
     lower::{LowerError, LowerHandlerTrait},
     InformEvent,
 };
 
-pub struct ScreenViewHandler<H, L, R, U> {
+pub struct HandlerStack<H, L, R, U> {
     higher: H,
     lower: L,
     io_handle: IoHandle<R, U>,
 }
 
-impl<H: HigherHandlerTrait, L: LowerHandlerTrait, R: Reliable, U: Unreliable>
-    ScreenViewHandler<H, L, R, U>
+impl<H, L, R, U> HandlerStack<H, L, R, U>
+where
+    H: HigherHandlerTrait,
+    L: LowerHandlerTrait,
+    R: Reliable,
+    U: Unreliable,
 {
     pub fn new(higher: H, lower: L, io_handle: IoHandle<R, U>) -> Self {
         Self {

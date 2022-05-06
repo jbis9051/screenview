@@ -6,7 +6,7 @@ pub use handle::*;
 pub use tcp::*;
 pub use udp::*;
 
-const LENGTH_FIELD_WIDTH: usize = 2;
+pub(crate) const LENGTH_FIELD_WIDTH: usize = 2;
 const INIT_BUFFER_CAPACITY: usize = 4096;
 const UDP_READ_SIZE: usize = 65507;
 const UDP_TIMEOUT: u64 = 50;

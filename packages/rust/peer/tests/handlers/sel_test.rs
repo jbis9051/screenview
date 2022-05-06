@@ -11,7 +11,7 @@ fn sel_reliable() {
     let vec = vec![10, 20, 30];
     let message = SelHandler::wrap_reliable(vec.clone());
 
-    assert_eq!(handler.handle(message).unwrap(), vec);
+    assert_eq!(handler.handle(&message).unwrap(), vec);
 }
 
 
@@ -54,7 +54,7 @@ fn sel_unreliable() {
     // confirm sel does encryption properly by checking decryption
     assert_eq!(
         server_cipher
-            .decrypt(&message.data, message.counter)
+            .decrypt(&*message.data.0, message.counter)
             .unwrap(),
         send_data
     );
@@ -70,5 +70,5 @@ fn sel_unreliable() {
         _ => panic!("bad message returned"),
     };
 
-    assert_eq!(handler.handle(message).unwrap(), send_data);
+    assert_eq!(handler.handle(&message).unwrap(), send_data);
 }

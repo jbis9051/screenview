@@ -1,4 +1,5 @@
 use crate::{
+    debug,
     hash,
     helpers::{
         cipher_reliable_peer::CipherError,
@@ -9,8 +10,9 @@ use crate::{
 use common::messages::{
     sel::{SelMessage, TransportDataMessageReliable, TransportDataPeerMessageUnreliable},
     svsc::PeerId,
+    Data,
 };
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 
 pub struct SelHandler {
     unreliable: Option<Arc<CipherUnreliablePeer>>,
@@ -32,8 +34,10 @@ impl SelHandler {
         self.unreliable.as_ref().unwrap()
     }
 
-    pub fn wrap_reliable(msg: Vec<u8>) -> SelMessage {
-        SelMessage::TransportDataMessageReliable(TransportDataMessageReliable { data: msg })
+    pub fn wrap_reliable(msg: Vec<u8>) -> SelMessage<'static> {
+        SelMessage::TransportDataMessageReliable(TransportDataMessageReliable {
+            data: Data(Cow::Owned(msg)),
+        })
     }
 
     // this is static because we need to access it in multiple threads and we don't want to Arc sel_handler, instead we just accept cipher which is Arced in self.unreliable.unwrap()
@@ -41,13 +45,13 @@ impl SelHandler {
         msg: Vec<u8>,
         peer_id: PeerId,
         cipher: &CipherUnreliablePeer,
-    ) -> Result<SelMessage, CipherError> {
+    ) -> Result<SelMessage<'static>, CipherError> {
         let (data, counter) = cipher.encrypt(&msg)?;
         Ok(SelMessage::TransportDataPeerMessageUnreliable(
             TransportDataPeerMessageUnreliable {
                 peer_id,
                 counter,
-                data,
+                data: Data(Cow::Owned(data)),
             },
         ))
     }
@@ -62,16 +66,17 @@ impl SelHandler {
         )));
     }
 
-    pub fn handle(&mut self, msg: SelMessage) -> Result<Vec<u8>, SelError> {
+    pub fn handle<'a>(&mut self, msg: &'a SelMessage<'_>) -> Result<Cow<'a, [u8]>, SelError> {
         match msg {
-            SelMessage::TransportDataMessageReliable(msg) => Ok(msg.data),
+            SelMessage::TransportDataMessageReliable(msg) => Ok(Cow::Borrowed(&*msg.data.0)),
             SelMessage::TransportDataServerMessageUnreliable(msg) => {
                 let unreliable = self.unreliable.as_mut().unwrap(); // TODO do we want to panic here?
                 Ok(unreliable
-                    .decrypt(&msg.data, msg.counter)
+                    .decrypt(&*msg.data.0, msg.counter)
+                    .map(Cow::Owned)
                     .map_err(SelError::CipherError)?)
             }
-            _ => Err(SelError::WrongMessage(Box::new(msg))),
+            _ => Err(SelError::WrongMessage(debug(msg))),
         }
     }
 }
@@ -80,6 +85,6 @@ impl SelHandler {
 pub enum SelError {
     #[error("{0}")]
     CipherError(#[from] CipherError),
-    #[error("invalid message {0:?}")]
-    WrongMessage(Box<SelMessage>),
+    #[error("invalid message {0}")]
+    WrongMessage(String),
 }

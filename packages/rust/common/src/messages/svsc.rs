@@ -150,7 +150,7 @@ pub struct SessionEndNotification {}
 #[lifetime('a)]
 pub struct SessionDataSend<'a> {
     // #[parse(len_prefixed(3))]
-    pub data: Data<'a, 3>,
+    pub data: Data<'a>,
 }
 
 #[derive(Debug, MessageComponent)]
@@ -158,7 +158,7 @@ pub struct SessionDataSend<'a> {
 #[lifetime('a)]
 pub struct SessionDataReceive<'a> {
     // #[parse(len_prefixed(3))]
-    pub data: Data<'a, 3>,
+    pub data: Data<'a>,
 }
 
 #[derive(Debug, MessageComponent)]

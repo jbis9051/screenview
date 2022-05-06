@@ -84,7 +84,7 @@ pub struct AuthResult {
 #[message_id(5)]
 #[lifetime('a)]
 pub struct TransportDataMessageReliable<'a> {
-    pub data: Data<'a, 2>,
+    pub data: Data<'a>,
 }
 
 #[derive(Debug, MessageComponent)]
@@ -92,7 +92,7 @@ pub struct TransportDataMessageReliable<'a> {
 #[lifetime('a)]
 pub struct TransportDataMessageUnreliable<'a> {
     pub counter: u64,
-    pub data: Data<'a, 2>,
+    pub data: Data<'a>,
 }
 
 #[derive(MessageComponent, Debug)]

@@ -32,14 +32,14 @@ use svsc::SvscMessage;
 use wpskka::WpskkaMessage;
 
 pub enum ScreenViewMessage<'a> {
-    SelMessage(SelMessage),
+    SelMessage(SelMessage<'a>),
     SvscMessage(SvscMessage<'a>),
     WpskkaMessage(WpskkaMessage<'a>),
     RvdMessage(RvdMessage),
 }
 
-impl From<SelMessage> for ScreenViewMessage<'_> {
-    fn from(msg: SelMessage) -> Self {
+impl<'a> From<SelMessage<'a>> for ScreenViewMessage<'a> {
+    fn from(msg: SelMessage<'a>) -> Self {
         Self::SelMessage(msg)
     }
 }

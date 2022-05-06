@@ -1,3 +1,4 @@
+use common::messages::rvd::ButtonsMask;
 use neon::types::Deferred;
 use std::convert::TryFrom;
 
@@ -19,6 +20,18 @@ pub enum RequestContent {
     Connect {
         addr: String,
         connection_type: ConnectionType,
+    },
+    EstablishSession {
+        lease_id: String,
+    },
+    ProcessPassword {
+        password: String,
+    },
+    MouseInput {
+        x_position: i32,
+        y_position: i32,
+        button_mask: ButtonsMask,
+        button_mask_state: ButtonsMask,
     },
 }
 

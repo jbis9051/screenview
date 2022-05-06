@@ -72,7 +72,7 @@ impl WpskkaClientHandler {
     pub fn process_password(
         &mut self,
         password: &[u8],
-        write: &mut Vec<WpskkaMessage>,
+        write: &mut Vec<WpskkaMessage<'_>>,
     ) -> Result<(), WpskkaClientError> {
         self.password = Some(password.to_vec());
         if let Some(auth) = self.current_auth.as_mut() {
@@ -83,7 +83,7 @@ impl WpskkaClientHandler {
                         .map_err(|_| WpskkaClientError::BadAuthSchemeMessage)?;
                     write.push(WpskkaMessage::AuthMessage(AuthMessage {
                         data: outgoing
-                            .to_bytes()
+                            .to_bytes(None)
                             .map_err(|_| WpskkaClientError::BadAuthSchemeMessage)?,
                     }));
                     Ok(())
@@ -96,7 +96,7 @@ impl WpskkaClientHandler {
 
     pub fn next_auth(
         &mut self,
-        write: &mut Vec<WpskkaMessage>,
+        write: &mut Vec<WpskkaMessage<'_>>,
         events: &mut Vec<InformEvent>,
     ) -> Result<(), WpskkaClientError> {
         while self.current_auth_num < self.available_auth_schemes.len() {
@@ -136,8 +136,8 @@ impl WpskkaClientHandler {
 
     pub fn _handle(
         &mut self,
-        msg: WpskkaMessage,
-        write: &mut Vec<WpskkaMessage>,
+        msg: WpskkaMessage<'_>,
+        write: &mut Vec<WpskkaMessage<'_>>,
         events: &mut Vec<InformEvent>,
     ) -> Result<Option<Vec<u8>>, WpskkaClientError> {
         match self.state {
@@ -286,8 +286,8 @@ impl WpskkaClientHandler {
 impl WpskkaHandlerTrait for WpskkaClientHandler {
     fn handle(
         &mut self,
-        msg: WpskkaMessage,
-        write: &mut Vec<WpskkaMessage>,
+        msg: WpskkaMessage<'_>,
+        write: &mut Vec<WpskkaMessage<'_>>,
         events: &mut Vec<InformEvent>,
     ) -> Result<Option<Vec<u8>>, WpskkaError> {
         Ok(self._handle(msg, write, events)?)

@@ -16,10 +16,20 @@ pub trait MessageComponent<'a>: Sized {
 
     fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> Result<(), Error>;
 
-    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        let mut cursor = Cursor::new(Vec::new());
+    fn to_bytes(&self, len_prefix_width: Option<usize>) -> Result<Vec<u8>, Error> {
+        let len_width = len_prefix_width.unwrap_or(0);
+        let mut cursor = Cursor::new(vec![0u8; len_width]);
         self.write(&mut cursor)?;
-        Ok(cursor.into_inner())
+        let len_bytes = (cursor.get_ref().len() - len_width).to_le_bytes();
+
+        if len_bytes[len_width ..].iter().any(|&by| by != 0) {
+            return Err(Error::BadDataLength);
+        }
+
+        let mut data = cursor.into_inner();
+        data[.. len_width].copy_from_slice(&len_bytes[.. len_width]);
+
+        Ok(data)
     }
 }
 
@@ -31,7 +41,7 @@ pub enum Error {
     InvalidString(#[from] FromUtf8Error),
     #[error("encountered invalid enum value for enum {name}: {value}")]
     InvalidEnumValue { name: &'static str, value: u16 },
-    #[error("encountered a length parameter too long to fit in a usize")]
+    #[error("encountered a length parameter too long to fit in allocated space")]
     LengthTooLong(#[from] TryFromIntError),
     #[error("invalid date: {0}")]
     InvalidDate(i64),
@@ -132,48 +142,23 @@ impl MessageComponent<'_> for u64 {
 }
 
 #[derive(Clone, Debug)]
-pub struct Data<'a, const LEN_WIDTH: usize>(pub Cow<'a, [u8]>);
+pub struct Data<'a>(pub Cow<'a, [u8]>);
 
-impl<'a, const LEN_WIDTH: usize> MessageComponent<'a> for Data<'a, LEN_WIDTH> {
+impl<'a> MessageComponent<'a> for Data<'a> {
     fn read(cursor: &mut Cursor<&'a [u8]>) -> Result<Self, Error> {
         let bytes = *cursor.get_ref();
-        let mut position = usize::try_from(cursor.position())?;
+        let position = usize::try_from(cursor.position())?;
 
-        let len = match LEN_WIDTH {
-            0 => bytes
-                .len()
-                .checked_sub(position)
-                .ok_or(Error::BadCursorState)?,
-            1 => usize::from(cursor.read_u8()?),
-            2 => usize::from(cursor.read_u16::<LittleEndian>()?),
-            3 => usize::try_from(cursor.read_u24::<LittleEndian>()?)?,
-            4 => usize::try_from(cursor.read_u32::<LittleEndian>()?)?,
-            _ => panic!("Invalid LEN_WIDTH in Data type: LEN_WIDTH cannot exceed 4 bytes"),
-        };
-
-        position = position
-            .checked_add(LEN_WIDTH)
-            .ok_or(Error::BadDataLength)?;
-
-        let data_end = position.checked_add(len).ok_or(Error::BadDataLength)?;
-        let data = bytes
-            .get(position .. data_end)
-            .ok_or(Error::BadDataLength)?;
-
-        let new_position = u64::try_from(data_end)?;
+        let new_position = u64::try_from(bytes.len())?;
         cursor.set_position(new_position);
 
-        Ok(Self(Cow::Borrowed(data)))
+        bytes
+            .get(position ..)
+            .map(|data| Self(Cow::Borrowed(data)))
+            .ok_or(Error::BadCursorState)
     }
 
     fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> Result<(), Error> {
-        let bytes = &*self.0;
-        let len = bytes.len().to_le_bytes();
-        cursor.write_all(&len[.. LEN_WIDTH])?;
-        cursor.write_all(bytes).map_err(Into::into)
-    }
-
-    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        Ok((*self.0).to_owned())
+        cursor.write_all(&*self.0).map_err(Into::into)
     }
 }

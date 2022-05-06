@@ -1,14 +1,16 @@
-use crate::protocol::{ConnectionType, Message, RequestContent};
-use common::event_loop::{event_loop, EventLoopState, JoinOnDrop, ThreadWaker};
+use crate::{
+    handler::ScreenViewHandler,
+    protocol::{ConnectionType, Message, RequestContent},
+};
+use common::{
+    event_loop::{event_loop, EventLoopState, JoinOnDrop, ThreadWaker},
+    messages::rvd::ButtonsMask,
+};
 use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
 use native::{NativeApi, NativeApiError};
 use neon::{
-    prelude::{Channel, Context, Finalize, JsUndefined},
+    prelude::{Channel, Context, Finalize},
     types::Deferred,
-};
-use peer::{
-    io::{TcpHandle, UdpHandle},
-    screen_view_handler::ScreenViewHandler,
 };
 use std::thread::{self, JoinHandle};
 
@@ -46,14 +48,14 @@ impl Finalize for InstanceHandle {}
 
 pub struct Instance {
     native: NativeApi,
-    sv_handler: ScreenViewHandler<TcpHandle, UdpHandle>,
+    sv_handler: ScreenViewHandler,
     channel: Channel,
     waker: ThreadWaker,
 }
 
 impl Instance {
     fn new_with<F>(channel: Channel, new_sv_handler: F) -> Result<InstanceHandle, NativeApiError>
-    where F: FnOnce() -> ScreenViewHandler<TcpHandle, UdpHandle> {
+    where F: FnOnce() -> ScreenViewHandler {
         let (tx, rx) = unbounded();
         let waker = ThreadWaker::new_current_thread();
         let instance = Self {
@@ -67,12 +69,20 @@ impl Instance {
         Ok(InstanceHandle::new(tx, waker, thread_handle))
     }
 
-    pub fn new_host(channel: Channel) -> Result<InstanceHandle, NativeApiError> {
-        Self::new_with(channel, ScreenViewHandler::new_host)
+    pub fn new_host_signal(channel: Channel) -> Result<InstanceHandle, NativeApiError> {
+        Self::new_with(channel, ScreenViewHandler::new_host_signal)
     }
 
-    pub fn new_client(channel: Channel) -> Result<InstanceHandle, NativeApiError> {
-        Self::new_with(channel, ScreenViewHandler::new_client)
+    pub fn new_host_direct(channel: Channel) -> Result<InstanceHandle, NativeApiError> {
+        Self::new_with(channel, ScreenViewHandler::new_host_direct)
+    }
+
+    pub fn new_client_signal(channel: Channel) -> Result<InstanceHandle, NativeApiError> {
+        Self::new_with(channel, ScreenViewHandler::new_client_signal)
+    }
+
+    pub fn new_client_direct(channel: Channel) -> Result<InstanceHandle, NativeApiError> {
+        Self::new_with(channel, ScreenViewHandler::new_client_direct)
     }
 
     fn handle_node_request(
@@ -85,6 +95,22 @@ impl Instance {
                 ref addr,
                 connection_type,
             } => self.handle_connect(addr, connection_type, promise),
+            RequestContent::EstablishSession { ref lease_id } =>
+                self.handle_establish_session(lease_id, promise),
+            RequestContent::ProcessPassword { ref password } =>
+                self.handle_process_password(password, promise),
+            RequestContent::MouseInput {
+                x_position,
+                y_position,
+                button_mask,
+                button_mask_state,
+            } => self.handle_mouse_input(
+                x_position,
+                y_position,
+                button_mask,
+                button_mask_state,
+                promise,
+            ),
         }
     }
 
@@ -103,13 +129,52 @@ impl Instance {
 
         let result = result.map_err(|error| error.to_string());
 
-        promise.settle_with::<JsUndefined, _>(&self.channel, move |mut cx| match result {
+        promise.settle_with(&self.channel, move |mut cx| match result {
             Ok(()) => Ok(cx.undefined()),
             Err(error) => {
                 let error = cx.error(error)?;
                 cx.throw(error)
             }
         });
+
+        Ok(())
+    }
+
+    fn handle_establish_session(
+        &mut self,
+        lease_id: &str,
+        promise: Deferred,
+    ) -> Result<(), anyhow::Error> {
+        // TODO: implement
+
+        promise.settle_with(&self.channel, move |mut cx| Ok(cx.undefined()));
+
+        Ok(())
+    }
+
+    fn handle_process_password(
+        &mut self,
+        password: &str,
+        promise: Deferred,
+    ) -> Result<(), anyhow::Error> {
+        // TODO: implement
+
+        promise.settle_with(&self.channel, move |mut cx| Ok(cx.undefined()));
+
+        Ok(())
+    }
+
+    fn handle_mouse_input(
+        &mut self,
+        x_position: i32,
+        y_position: i32,
+        button_mask: ButtonsMask,
+        button_mask_state: ButtonsMask,
+        promise: Deferred,
+    ) -> Result<(), anyhow::Error> {
+        // TODO: implement
+
+        promise.settle_with(&self.channel, move |mut cx| Ok(cx.undefined()));
 
         Ok(())
     }

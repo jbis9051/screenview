@@ -23,8 +23,8 @@ use std::{borrow::Cow, sync::Arc};
 pub trait WpskkaHandlerTrait {
     fn handle(
         &mut self,
-        msg: WpskkaMessage,
-        write: &mut Vec<WpskkaMessage>,
+        msg: WpskkaMessage<'_>,
+        write: &mut Vec<WpskkaMessage<'_>>,
         events: &mut Vec<InformEvent>,
     ) -> Result<Option<Vec<u8>>, WpskkaError>;
 

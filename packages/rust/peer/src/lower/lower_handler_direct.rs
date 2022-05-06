@@ -5,7 +5,13 @@ use crate::{
 
 // we handle the case when we are going directly to the peer, we just pass things through
 
-struct LowerHandlerDirect;
+pub struct LowerHandlerDirect;
+
+impl LowerHandlerDirect {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl LowerHandlerTrait for LowerHandlerDirect {
     fn handle(

@@ -6,8 +6,11 @@ use crate::{
 };
 use common::messages::Error as MessageComponentError;
 
-pub mod lower_handler_direct;
-pub mod lower_handler_signal;
+mod lower_handler_direct;
+mod lower_handler_signal;
+
+pub use lower_handler_direct::*;
+pub use lower_handler_signal::*;
 
 type LowerHandlerOutput = (Vec<u8>, bool);
 

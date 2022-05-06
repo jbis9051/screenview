@@ -1,4 +1,4 @@
-extern crate core;
+#![deny(rust_2018_idioms)]
 
 use crate::{
     io::Source,
@@ -16,8 +16,8 @@ pub mod rvd;
 pub mod wpskka;
 
 
+pub mod handler_stack;
 pub mod lower;
-pub mod screen_view_handler;
 pub mod sel_handler;
 pub mod svsc_handler;
 

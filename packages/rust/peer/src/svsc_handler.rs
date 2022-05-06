@@ -73,17 +73,17 @@ impl SvscHandler {
         self.session.as_deref()
     }
 
-    pub fn lease_request(&mut self, cookie: Option<Cookie>) -> SvscMessage {
+    pub fn lease_request(&mut self, cookie: Option<Cookie>) -> SvscMessage<'static> {
         self.awaiting_lease_response = true;
         SvscMessage::LeaseRequest(LeaseRequest { cookie })
     }
 
-    pub fn lease_extension_request(&mut self, cookie: Cookie) -> SvscMessage {
+    pub fn lease_extension_request(&mut self, cookie: Cookie) -> SvscMessage<'static> {
         self.awaiting_extension_response = true;
         SvscMessage::LeaseExtensionRequest(LeaseExtensionRequest { cookie })
     }
 
-    pub fn establish_session_request(&mut self, lease_id: LeaseId) -> SvscMessage {
+    pub fn establish_session_request(&mut self, lease_id: LeaseId) -> SvscMessage<'static> {
         self.awaiting_session_response = true;
         SvscMessage::EstablishSessionRequest(EstablishSessionRequest { lease_id })
     }
@@ -91,7 +91,7 @@ impl SvscHandler {
     pub fn handle<'a>(
         &mut self,
         msg: SvscMessage<'a>,
-        write: &mut Vec<SvscMessage>,
+        write: &mut Vec<SvscMessage<'_>>,
         event: &mut Vec<InformEvent>,
     ) -> Result<Option<Cow<'a, [u8]>>, SvscError> {
         if let SvscMessage::KeepAlive(_) = msg {

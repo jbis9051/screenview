@@ -1,32 +1,34 @@
 use crate::{
-    helpers::cipher_reliable_peer::CipherError,
+    io::LENGTH_FIELD_WIDTH,
     lower::{LowerError, LowerHandlerOutput, LowerHandlerTrait, LowerSendError},
     sel_handler::SelHandler,
     svsc_handler::SvscHandler,
     InformEvent,
 };
-use common::messages::{
-    sel::SelMessage,
-    svsc::SvscMessage,
-    Error as MessageComponentError,
-    MessageComponent,
-};
+use common::messages::{sel::SelMessage, svsc::SvscMessage, MessageComponent};
 use std::io::Cursor;
 
 // we handle the case when we are using a signal server
 
-struct LowerHandlerSignal {
+pub struct LowerHandlerSignal {
     sel: SelHandler,
     svsc: SvscHandler,
 }
 
 impl LowerHandlerSignal {
+    pub fn new() -> Self {
+        Self {
+            sel: SelHandler::new(),
+            svsc: SvscHandler::new(),
+        }
+    }
+
     fn send_svsc(
         &mut self,
-        message: SvscMessage,
+        message: SvscMessage<'_>,
         reliable: bool,
     ) -> Result<LowerHandlerOutput, LowerSendError> {
-        let data = message.to_bytes()?;
+        let data = message.to_bytes(None)?;
 
         let sel = if reliable {
             SelHandler::wrap_reliable(data)
@@ -41,8 +43,8 @@ impl LowerHandlerSignal {
         ))
     }
 
-    fn send_sel(&mut self, sel: &SelMessage) -> Result<Vec<u8>, LowerSendError> {
-        Ok(sel.to_bytes()?)
+    fn send_sel(&mut self, sel: &SelMessage<'_>) -> Result<Vec<u8>, LowerSendError> {
+        Ok(sel.to_bytes(Some(LENGTH_FIELD_WIDTH))?)
     }
 }
 
@@ -57,7 +59,7 @@ impl LowerHandlerTrait for LowerHandlerSignal {
         let message = SelMessage::read(&mut Cursor::new(wire))?;
 
         let mut events = Vec::new();
-        let svsc_data = self.sel.handle(message)?;
+        let svsc_data = self.sel.handle(&message)?;
         let svsc_message = SvscMessage::read(&mut Cursor::new(&svsc_data))?;
         let mut send_svsc = Vec::new();
 

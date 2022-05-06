@@ -11,6 +11,7 @@ crate-type = ["cdylib"]
 anyhow = "1.0.56"
 common = { path = "../common" }
 native = { path = "../native" }
+num-traits = "0.2.15"
 peer = { path = "../peer" }
 crossbeam-channel = "0.5.2"
 

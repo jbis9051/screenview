@@ -21,8 +21,6 @@ use common::messages::{
         AuthMessage,
         AuthScheme as AuthSchemeMessage,
         AuthSchemeType,
-        TransportDataMessageReliable,
-        TransportDataMessageUnreliable,
         TryAuth,
         WpskkaMessage,
     },
@@ -73,7 +71,7 @@ impl WpskkaHostHandler {
     }
 
     /// Warning: this erases and regenerates keys on every call
-    pub fn auth_schemes(&mut self) -> Result<WpskkaMessage, WpskkaHostError> {
+    pub fn auth_schemes(&mut self) -> Result<WpskkaMessage<'static>, WpskkaHostError> {
         let keys = keypair().map_err(|_| WpskkaHostError::RingError)?;
         let mut auth_schemes = Vec::new();
         if self.static_password.is_some() {
@@ -93,7 +91,7 @@ impl WpskkaHostHandler {
     pub fn handle_try_auth(
         &mut self,
         msg: TryAuth,
-        write: &mut Vec<WpskkaMessage>,
+        write: &mut Vec<WpskkaMessage<'_>>,
     ) -> Result<(), WpskkaHostError> {
         self.client_public_key = Some(msg.public_key);
         match msg.auth_scheme {
@@ -118,7 +116,7 @@ impl WpskkaHostHandler {
                 let outgoing = srp.init(password);
                 write.push(WpskkaMessage::AuthMessage(AuthMessage {
                     data: outgoing
-                        .to_bytes()
+                        .to_bytes(None)
                         .map_err(|_| WpskkaHostError::BadAuthSchemeMessage)?,
                 }));
 
@@ -133,8 +131,8 @@ impl WpskkaHostHandler {
 
     pub fn _handle(
         &mut self,
-        msg: WpskkaMessage,
-        write: &mut Vec<WpskkaMessage>,
+        msg: WpskkaMessage<'_>,
+        write: &mut Vec<WpskkaMessage<'_>>,
         events: &mut Vec<InformEvent>,
     ) -> Result<Option<Vec<u8>>, WpskkaHostError> {
         match self.state {
@@ -162,7 +160,7 @@ impl WpskkaHostHandler {
                             match srp_host.handle(msg) {
                                 Ok(outgoing) => {
                                     let data = outgoing
-                                        .to_bytes()
+                                        .to_bytes(None)
                                         .map_err(|_| WpskkaHostError::BadAuthSchemeMessage)?;
                                     if srp_host.is_authenticated() {
                                         self.current_auth = None; // TODO Security: Look into zeroing out the data here
@@ -263,8 +261,8 @@ impl WpskkaHostHandler {
 impl WpskkaHandlerTrait for WpskkaHostHandler {
     fn handle(
         &mut self,
-        msg: WpskkaMessage,
-        write: &mut Vec<WpskkaMessage>,
+        msg: WpskkaMessage<'_>,
+        write: &mut Vec<WpskkaMessage<'_>>,
         events: &mut Vec<InformEvent>,
     ) -> Result<Option<Vec<u8>>, WpskkaError> {
         Ok(self._handle(msg, write, events)?)
