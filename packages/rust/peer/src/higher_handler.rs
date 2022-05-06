@@ -16,6 +16,18 @@ use std::io::Cursor;
 
 pub type HigherOutput = (Vec<u8>, bool);
 
+pub trait HigherHandlerTrait {
+    // takes in wpskka data and ouputs a vector of wpskka data and reliable bool
+    fn handle(
+        &mut self,
+        wpskka_data: &[u8],
+        output: &mut Vec<HigherOutput>,
+    ) -> Result<Vec<InformEvent>, HigherError>;
+
+    // takes in
+    fn send(&mut self, message: ScreenViewMessage) -> Result<HigherOutput, HigherSendError>;
+}
+
 pub struct HigherHandler<Wpskka, Rvd> {
     wpskka: Wpskka,
     rvd: Rvd,
@@ -34,14 +46,6 @@ impl HigherHandler<WpskkaClientHandler, RvdClientHandler> {
 }
 
 impl<Wpskka: WpskkaHandlerTrait, Rvd: RvdHandlerTrait> HigherHandler<Wpskka, Rvd> {
-    pub fn send(&mut self, message: ScreenViewMessage) -> Result<HigherOutput, HigherSendError> {
-        match message {
-            ScreenViewMessage::RvdMessage(rvd) => self.send_rvd(rvd),
-            ScreenViewMessage::WpskkaMessage(wpskka) => Ok(self.send_wpskka(wpskka)?),
-            _ => panic!("You should only be sending RvdMessage or WpskkaMessage to HigherHandler"),
-        }
-    }
-
     fn send_rvd(&mut self, rvd: RvdMessage) -> Result<HigherOutput, HigherSendError> {
         let data = rvd.to_bytes()?;
 
@@ -65,8 +69,12 @@ impl<Wpskka: WpskkaHandlerTrait, Rvd: RvdHandlerTrait> HigherHandler<Wpskka, Rvd
         let bytes = MessageComponent::to_bytes(&message)?;
         Ok((bytes, reliable))
     }
+}
 
-    pub fn handle(
+impl<Wpskka: WpskkaHandlerTrait, Rvd: RvdHandlerTrait> HigherHandlerTrait
+    for HigherHandler<Wpskka, Rvd>
+{
+    fn handle(
         &mut self,
         wpskka_data: &[u8],
         output: &mut Vec<HigherOutput>,
@@ -97,7 +105,16 @@ impl<Wpskka: WpskkaHandlerTrait, Rvd: RvdHandlerTrait> HigherHandler<Wpskka, Rvd
 
         Ok(events)
     }
+
+    fn send(&mut self, message: ScreenViewMessage) -> Result<HigherOutput, HigherSendError> {
+        match message {
+            ScreenViewMessage::RvdMessage(rvd) => self.send_rvd(rvd),
+            ScreenViewMessage::WpskkaMessage(wpskka) => Ok(self.send_wpskka(wpskka)?),
+            _ => panic!("You should only be sending RvdMessage or WpskkaMessage to HigherHandler"),
+        }
+    }
 }
+
 
 #[derive(thiserror::Error, Debug)]
 pub enum HigherSendError {

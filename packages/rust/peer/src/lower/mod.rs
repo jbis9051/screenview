@@ -11,14 +11,14 @@ pub mod lower_handler_signal;
 
 type LowerHandlerOutput = (Vec<u8>, bool);
 
-trait LowerHandlerTrait {
+pub trait LowerHandlerTrait {
     // takes messages from the wire and outputs wpskka bytes, send is bytes to put back on the wire
     fn handle(
         &mut self,
         wire: &[u8],
         output: &mut Vec<u8>,
-        send_reliable: &mut Vec<u8>,
-        send_unreliable: &mut Vec<Vec<u8>>,
+        send_reliable: &mut Vec<Vec<u8>>, // this must be a double vec because we don't prepend length on to_bytes calls so we need a way to indicates the seperation of messages
+        send_unreliable: &mut Vec<Vec<u8>>, // this must be a double vec because udp is not a stream (obviously)
     ) -> Result<Vec<InformEvent>, LowerError>;
 
     // takes wpskka bytes and outputs messages to the wire

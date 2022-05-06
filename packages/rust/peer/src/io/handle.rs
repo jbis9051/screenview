@@ -15,7 +15,7 @@ pub trait Reliable: Sized {
         waker: ThreadWaker,
     ) -> Result<Self, io::Error>;
 
-    fn send(&mut self, message: Vec<u8>) -> bool;
+    fn send(&mut self, message: Vec<u8>) -> Result<(), ()>;
 
     fn close(&mut self);
 }
@@ -27,7 +27,7 @@ pub trait Unreliable: Sized {
         waker: ThreadWaker,
     ) -> Result<Self, io::Error>;
 
-    fn send(&mut self, message: Vec<u8>, max_len: usize) -> bool;
+    fn send(&mut self, message: Vec<u8>, max_len: usize) -> Result<(), ()>;
 
     fn close(&mut self);
 }
@@ -119,7 +119,7 @@ impl<R: Reliable, U> IoHandle<R, U> {
     /// Panics if called before a successful call to [`connect_reliable`] is made.
     ///
     /// [`connect_reliable`](crate::io::IoHandle::connect_reliable)
-    pub fn send_reliable(&mut self, message: Vec<u8>) -> bool {
+    pub fn send_reliable(&mut self, message: Vec<u8>) -> Result<(), ()> {
         self.reliable
             .as_mut()
             .expect("reliable connection not established")
@@ -163,7 +163,7 @@ impl<R, U: Unreliable> IoHandle<R, U> {
     ///
     /// [`connect_unreliable`](crate::io::IoHandle::connect_unreliable)
     /// [`max_unreliable_message_size`](crate::io::IoHandle::max_unreliable_message_size)
-    pub fn send_unreliable(&mut self, message: Vec<u8>) -> bool {
+    pub fn send_unreliable(&mut self, message: Vec<u8>) -> Result<(), ()> {
         self.unreliable
             .as_mut()
             .expect("unreliable connection not established")

@@ -63,8 +63,8 @@ impl Reliable for TcpHandle {
         })
     }
 
-    fn send(&mut self, message: Vec<u8>) -> bool {
-        self.write.send(message).is_ok()
+    fn send(&mut self, message: Vec<u8>) -> Result<(), ()> {
+        self.write.send(message).map_err(|_| ())
     }
 
     fn close(&mut self) {

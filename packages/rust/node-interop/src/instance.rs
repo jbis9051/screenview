@@ -8,7 +8,7 @@ use neon::{
 };
 use peer::{
     io::{TcpHandle, UdpHandle},
-    services::ScreenViewHandler,
+    screen_view_handler::ScreenViewHandler,
 };
 use std::thread::{self, JoinHandle};
 

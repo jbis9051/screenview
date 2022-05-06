@@ -1,6 +1,7 @@
 extern crate core;
 
 use crate::{
+    io::Source,
     rvd::{RvdClientInform, RvdHostInform},
     svsc_handler::SvscInform,
     wpskka::{WpskkaClientInform, WpskkaHostInform},
@@ -16,11 +17,13 @@ pub mod wpskka;
 
 
 pub mod lower;
+pub mod screen_view_handler;
 pub mod sel_handler;
 pub mod svsc_handler;
 
 
 pub enum InformEvent {
+    TransportShutdown(Source),
     SvscInform(SvscInform),
     RvdClientInform(RvdClientInform),
     RvdHostInform(RvdHostInform),

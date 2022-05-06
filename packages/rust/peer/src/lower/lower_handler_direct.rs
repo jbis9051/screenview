@@ -12,11 +12,11 @@ impl LowerHandlerTrait for LowerHandlerDirect {
         &mut self,
         wire: &[u8],
         output: &mut Vec<u8>,
-        _send_reliable: &mut Vec<u8>,
+        _send_reliable: &mut Vec<Vec<u8>>,
         _send_unreliable: &mut Vec<Vec<u8>>,
     ) -> Result<Vec<InformEvent>, LowerError> {
         output.extend_from_slice(wire);
-        Ok(vec![])
+        Ok(Vec::new())
     }
 
     fn send(

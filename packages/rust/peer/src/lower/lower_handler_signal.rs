@@ -51,7 +51,7 @@ impl LowerHandlerTrait for LowerHandlerSignal {
         &mut self,
         wire: &[u8],
         output: &mut Vec<u8>,
-        send_reliable: &mut Vec<u8>,
+        send_reliable: &mut Vec<Vec<u8>>,
         send_unreliable: &mut Vec<Vec<u8>>,
     ) -> Result<Vec<InformEvent>, LowerError> {
         let message = SelMessage::read(&mut Cursor::new(wire))?;
@@ -72,9 +72,9 @@ impl LowerHandlerTrait for LowerHandlerSignal {
         };
 
         for message in send_svsc {
-            let (mut data, reliable) = self.send_svsc(message, true)?; // TODO check if reliable
+            let (data, reliable) = self.send_svsc(message, true)?; // TODO check if reliable
             if reliable {
-                send_reliable.append(&mut data);
+                send_reliable.push(data);
             } else {
                 send_unreliable.push(data);
             }

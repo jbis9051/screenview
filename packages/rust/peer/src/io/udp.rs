@@ -56,8 +56,8 @@ impl Unreliable for UdpHandle {
         })
     }
 
-    fn send(&mut self, message: Vec<u8>, max_len: usize) -> bool {
-        self.write.send((message, max_len)).is_ok()
+    fn send(&mut self, message: Vec<u8>, max_len: usize) -> Result<(), ()> {
+        self.write.send((message, max_len)).map_err(|_| ())
     }
 
     fn close(&mut self) {
