@@ -1,3 +1,5 @@
+#![deny(rust_2018_idioms)]
+
 mod handler;
 mod instance;
 mod protocol;
@@ -6,7 +8,7 @@ use common::messages::rvd::ButtonsMask;
 use instance::*;
 use neon::prelude::*;
 use num_traits::FromPrimitive;
-use protocol::{ConnectionType, Message, RequestContent};
+use protocol::{ConnectionType, Display, DisplayType, Message, RequestContent};
 use std::{any::type_name, convert::TryFrom, num::FpCategory};
 
 macro_rules! throw {
@@ -19,7 +21,11 @@ macro_rules! throw {
 fn integer_arg<T>(cx: &mut FunctionContext<'_>, index: i32) -> NeonResult<T>
 where T: FromPrimitive {
     let value = cx.argument::<JsNumber>(index)?.value(cx);
+    checked_int_cast(cx, value)
+}
 
+fn checked_int_cast<T>(cx: &mut FunctionContext<'_>, value: f64) -> NeonResult<T>
+where T: FromPrimitive {
     if matches!(value.classify(), FpCategory::Infinite | FpCategory::Nan) {
         return throw!(*cx, "Invalid argument: number must not be infinite or NaN");
     }
@@ -55,30 +61,22 @@ fn send_request<'a>(
     }
 }
 
-fn new_instance(mut cx: FunctionContext) -> JsResult<JsBox<InstanceHandle>> {
+fn new_instance(mut cx: FunctionContext<'_>) -> JsResult<'_, JsBox<InstanceHandle>> {
     let peer_type = cx.argument::<JsString>(0)?.value(&mut cx);
     let instance_type = cx.argument::<JsString>(1)?.value(&mut cx);
     let channel = cx.channel();
 
-    if peer_type != "client" && peer_type != "host" {
-        return throw!(cx, "Invalid peer type");
-    }
-
-    if instance_type != "direct" && instance_type != "signal" {
-        return throw!(cx, "Invalid instance type");
-    }
-    let handle = {
-        if peer_type == "client" && instance_type == "direct" {
-            Instance::new_client_direct(channel)
-        } else if peer_type == "host" && instance_type == "direct" {
-            Instance::new_host_direct(channel)
-        } else if peer_type == "client" && instance_type == "signal" {
-            Instance::new_client_signal(channel)
-        } else if peer_type == "host" && instance_type == "signal" {
-            Instance::new_host_signal(channel)
-        } else {
-            unreachable!()
-        }
+    let handle = match (peer_type.as_str(), instance_type.as_str()) {
+        ("client", "direct") => Instance::new_client_direct(channel),
+        ("host", "direct") => Instance::new_host_direct(channel),
+        ("client", "signal") => Instance::new_client_signal(channel),
+        ("host", "signal") => Instance::new_host_signal(channel),
+        _ =>
+            if peer_type != "client" && peer_type != "host" {
+                return throw!(cx, "Invalid peer type");
+            } else {
+                return throw!(cx, "Invalid instance type");
+            },
     };
 
     match handle {
@@ -87,7 +85,7 @@ fn new_instance(mut cx: FunctionContext) -> JsResult<JsBox<InstanceHandle>> {
     }
 }
 
-fn connect(mut cx: FunctionContext) -> JsResult<JsPromise> {
+fn connect(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
     let handle = cx.argument::<JsBox<InstanceHandle>>(0)?;
     let connection_type = integer_arg::<u8>(&mut cx, 1)?;
 
@@ -103,7 +101,7 @@ fn connect(mut cx: FunctionContext) -> JsResult<JsPromise> {
     })
 }
 
-fn establish_session(mut cx: FunctionContext) -> JsResult<JsPromise> {
+fn establish_session(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
     let handle = cx.argument::<JsBox<InstanceHandle>>(0)?;
     let lease_id = cx.argument::<JsString>(1)?.value(&mut cx);
 
@@ -112,7 +110,7 @@ fn establish_session(mut cx: FunctionContext) -> JsResult<JsPromise> {
     })
 }
 
-fn process_password(mut cx: FunctionContext) -> JsResult<JsPromise> {
+fn process_password(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
     let handle = cx.argument::<JsBox<InstanceHandle>>(0)?;
     let password = cx.argument::<JsString>(1)?.value(&mut cx);
 
@@ -121,7 +119,7 @@ fn process_password(mut cx: FunctionContext) -> JsResult<JsPromise> {
     })
 }
 
-fn mouse_input(mut cx: FunctionContext) -> JsResult<JsPromise> {
+fn mouse_input(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
     let handle = cx.argument::<JsBox<InstanceHandle>>(0)?;
     let x_position = cx.argument::<JsNumber>(1)?.value(&mut cx) as i32;
     let y_position = cx.argument::<JsNumber>(2)?.value(&mut cx) as i32;
@@ -144,8 +142,78 @@ fn mouse_input(mut cx: FunctionContext) -> JsResult<JsPromise> {
     })
 }
 
+fn keyboard_input(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
+    let handle = cx.argument::<JsBox<InstanceHandle>>(0)?;
+    let keycode = integer_arg::<u32>(&mut cx, 1)?;
+    let down = cx.argument::<JsBoolean>(2)?.value(&mut cx);
+
+    send_request(&mut cx, handle, RequestContent::KeyboardInput {
+        keycode,
+        down,
+    })
+}
+
+fn lease_request(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
+    let handle = cx.argument::<JsBox<InstanceHandle>>(0)?;
+
+    send_request(&mut cx, handle, RequestContent::LeaseRequest)
+}
+
+fn update_static_password(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
+    let handle = cx.argument::<JsBox<InstanceHandle>>(0)?;
+    let password = cx
+        .argument::<JsValue>(1)?
+        .downcast::<JsString, _>(&mut cx)
+        .ok()
+        .map(|string| string.value(&mut cx));
+
+    send_request(&mut cx, handle, RequestContent::UpdateStaticPassword {
+        password,
+    })
+}
+
+fn set_controllable(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
+    let handle = cx.argument::<JsBox<InstanceHandle>>(0)?;
+    let is_controllable = cx.argument::<JsBoolean>(1)?.value(&mut cx);
+
+    send_request(&mut cx, handle, RequestContent::SetControllable {
+        is_controllable,
+    })
+}
+
+fn set_clipboard_readable(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
+    let handle = cx.argument::<JsBox<InstanceHandle>>(0)?;
+    let is_readable = cx.argument::<JsBoolean>(1)?.value(&mut cx);
+
+    send_request(&mut cx, handle, RequestContent::SetClipboardReadable {
+        is_readable,
+    })
+}
+
+fn share_displays(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
+    let handle = cx.argument::<JsBox<InstanceHandle>>(0)?;
+    let js_displays = cx.argument::<JsArray>(1)?;
+    let len = js_displays.len(&mut cx);
+    let mut displays = Vec::with_capacity(usize::try_from(len).unwrap());
+
+    for i in 0 .. len {
+        let obj = js_displays.get::<JsObject, _, _>(&mut cx, i)?;
+        let native_id = obj
+            .get::<JsNumber, _, _>(&mut cx, "native_id")?
+            .value(&mut cx);
+        let display_type = obj.get::<JsString, _, _>(&mut cx, "type")?.value(&mut cx);
+
+        displays.push(Display {
+            native_id: checked_int_cast(&mut cx, native_id)?,
+            display_type: DisplayType::try_from(display_type.as_str()).unwrap(),
+        });
+    }
+
+    send_request(&mut cx, handle, RequestContent::ShareDisplays { displays })
+}
+
 #[neon::main]
-fn main(mut cx: ModuleContext) -> NeonResult<()> {
+fn main(mut cx: ModuleContext<'_>) -> NeonResult<()> {
     macro_rules! export {
         ( $( $name:ident ),* ) => {
             $(
@@ -159,7 +227,13 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
         connect,
         establish_session,
         process_password,
-        mouse_input
+        mouse_input,
+        keyboard_input,
+        lease_request,
+        update_static_password,
+        set_controllable,
+        set_clipboard_readable,
+        share_displays
     }
 
     Ok(())

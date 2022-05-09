@@ -33,6 +33,23 @@ pub enum RequestContent {
         button_mask: ButtonsMask,
         button_mask_state: ButtonsMask,
     },
+    KeyboardInput {
+        keycode: u32,
+        down: bool,
+    },
+    LeaseRequest,
+    UpdateStaticPassword {
+        password: Option<String>,
+    },
+    SetControllable {
+        is_controllable: bool,
+    },
+    SetClipboardReadable {
+        is_readable: bool,
+    },
+    ShareDisplays {
+        displays: Vec<Display>,
+    },
 }
 
 #[repr(u8)]
@@ -42,15 +59,38 @@ pub enum ConnectionType {
 }
 
 impl TryFrom<u8> for ConnectionType {
-    type Error = EnumDiscriminantOutOfRange;
+    type Error = InvalidEnumDiscriminant;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
             0 => Ok(Self::Reliable),
             1 => Ok(Self::Unreliable),
-            _ => Err(EnumDiscriminantOutOfRange),
+            _ => Err(InvalidEnumDiscriminant),
         }
     }
 }
 
-pub struct EnumDiscriminantOutOfRange;
+pub struct Display {
+    pub native_id: u32,
+    pub display_type: DisplayType,
+}
+
+pub enum DisplayType {
+    Monitor,
+    Window,
+}
+
+impl TryFrom<&str> for DisplayType {
+    type Error = InvalidEnumDiscriminant;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "monitor" => Ok(Self::Monitor),
+            "window" => Ok(Self::Window),
+            _ => Err(InvalidEnumDiscriminant),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct InvalidEnumDiscriminant;

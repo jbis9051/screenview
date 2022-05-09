@@ -1,6 +1,6 @@
 use crate::{
     handler::ScreenViewHandler,
-    protocol::{ConnectionType, Message, RequestContent},
+    protocol::{ConnectionType, Display, Message, RequestContent},
 };
 use common::{
     event_loop::{event_loop, EventLoopState, JoinOnDrop, ThreadWaker},
@@ -94,31 +94,42 @@ impl Instance {
             RequestContent::Connect {
                 ref addr,
                 connection_type,
-            } => self.handle_connect(addr, connection_type, promise),
+            } => self.handle_connect(promise, addr, connection_type),
             RequestContent::EstablishSession { ref lease_id } =>
-                self.handle_establish_session(lease_id, promise),
+                self.handle_establish_session(promise, lease_id),
             RequestContent::ProcessPassword { ref password } =>
-                self.handle_process_password(password, promise),
+                self.handle_process_password(promise, password),
             RequestContent::MouseInput {
                 x_position,
                 y_position,
                 button_mask,
                 button_mask_state,
             } => self.handle_mouse_input(
+                promise,
                 x_position,
                 y_position,
                 button_mask,
                 button_mask_state,
-                promise,
             ),
+            RequestContent::KeyboardInput { keycode, down } =>
+                self.handle_keyboard_input(promise, keycode, down),
+            RequestContent::LeaseRequest => self.handle_lease_request(promise),
+            RequestContent::UpdateStaticPassword { password } =>
+                self.handle_update_static_password(promise, password),
+            RequestContent::SetControllable { is_controllable } =>
+                self.handle_set_controllable(promise, is_controllable),
+            RequestContent::SetClipboardReadable { is_readable } =>
+                self.handle_set_clipboard_readable(promise, is_readable),
+            RequestContent::ShareDisplays { ref displays } =>
+                self.handle_share_displays(promise, displays),
         }
     }
 
     fn handle_connect(
         &mut self,
+        promise: Deferred,
         addr: &str,
         connection_type: ConnectionType,
-        promise: Deferred,
     ) -> Result<(), anyhow::Error> {
         let io_handle = self.sv_handler.io_handle();
 
@@ -142,8 +153,8 @@ impl Instance {
 
     fn handle_establish_session(
         &mut self,
-        lease_id: &str,
         promise: Deferred,
+        lease_id: &str,
     ) -> Result<(), anyhow::Error> {
         // TODO: implement
 
@@ -154,8 +165,8 @@ impl Instance {
 
     fn handle_process_password(
         &mut self,
-        password: &str,
         promise: Deferred,
+        password: &str,
     ) -> Result<(), anyhow::Error> {
         // TODO: implement
 
@@ -166,11 +177,80 @@ impl Instance {
 
     fn handle_mouse_input(
         &mut self,
+        promise: Deferred,
         x_position: i32,
         y_position: i32,
         button_mask: ButtonsMask,
         button_mask_state: ButtonsMask,
+    ) -> Result<(), anyhow::Error> {
+        // TODO: implement
+
+        promise.settle_with(&self.channel, move |mut cx| Ok(cx.undefined()));
+
+        Ok(())
+    }
+
+    fn handle_keyboard_input(
+        &mut self,
         promise: Deferred,
+        keycode: u32,
+        down: bool,
+    ) -> Result<(), anyhow::Error> {
+        // TODO: implement
+
+        promise.settle_with(&self.channel, move |mut cx| Ok(cx.undefined()));
+
+        Ok(())
+    }
+
+    fn handle_lease_request(&mut self, promise: Deferred) -> Result<(), anyhow::Error> {
+        // TODO: implement
+
+        promise.settle_with(&self.channel, move |mut cx| Ok(cx.undefined()));
+
+        Ok(())
+    }
+
+    fn handle_update_static_password(
+        &mut self,
+        promise: Deferred,
+        password: Option<String>,
+    ) -> Result<(), anyhow::Error> {
+        // TODO: implement
+
+        promise.settle_with(&self.channel, move |mut cx| Ok(cx.undefined()));
+
+        Ok(())
+    }
+
+    fn handle_set_controllable(
+        &mut self,
+        promise: Deferred,
+        is_controllable: bool,
+    ) -> Result<(), anyhow::Error> {
+        // TODO: implement
+
+        promise.settle_with(&self.channel, move |mut cx| Ok(cx.undefined()));
+
+        Ok(())
+    }
+
+    fn handle_set_clipboard_readable(
+        &mut self,
+        promise: Deferred,
+        is_readable: bool,
+    ) -> Result<(), anyhow::Error> {
+        // TODO: implement
+
+        promise.settle_with(&self.channel, move |mut cx| Ok(cx.undefined()));
+
+        Ok(())
+    }
+
+    fn handle_share_displays(
+        &mut self,
+        promise: Deferred,
+        displays: &[Display],
     ) -> Result<(), anyhow::Error> {
         // TODO: implement
 
