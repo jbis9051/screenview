@@ -3,6 +3,7 @@ use crate::{
     io::LENGTH_FIELD_WIDTH,
     rvd::{RvdClientHandler, RvdError, RvdHandlerTrait, RvdHostHandler},
     wpskka::{WpskkaClientHandler, WpskkaError, WpskkaHandlerTrait, WpskkaHostHandler},
+    ChanneledMessage,
     InformEvent,
 };
 use common::messages::{
@@ -14,19 +15,19 @@ use common::messages::{
 };
 use std::io::Cursor;
 
-
-pub type HigherOutput = (Vec<u8>, bool);
-
 pub trait HigherHandlerTrait {
     // takes in wpskka data and ouputs a vector of wpskka data and reliable bool
     fn handle(
         &mut self,
         wpskka_data: &[u8],
-        output: &mut Vec<HigherOutput>,
+        output: &mut Vec<ChanneledMessage<Vec<u8>>>,
     ) -> Result<Vec<InformEvent>, HigherError>;
 
     // takes in
-    fn send(&mut self, message: ScreenViewMessage<'_>) -> Result<HigherOutput, HigherSendError>;
+    fn send(
+        &mut self,
+        message: ScreenViewMessage<'_>,
+    ) -> Result<ChanneledMessage<Vec<u8>>, HigherSendError>;
 }
 
 pub struct HigherHandler<Wpskka, Rvd> {
@@ -53,7 +54,7 @@ impl HigherHandler<WpskkaClientHandler, RvdClientHandler> {
 }
 
 impl<Wpskka: WpskkaHandlerTrait, Rvd: RvdHandlerTrait> HigherHandler<Wpskka, Rvd> {
-    fn send_rvd(&mut self, rvd: RvdMessage) -> Result<HigherOutput, HigherSendError> {
+    fn send_rvd(&mut self, rvd: RvdMessage) -> Result<ChanneledMessage<Vec<u8>>, HigherSendError> {
         let data = rvd.to_bytes(None)?;
 
         match rvd {
@@ -70,11 +71,18 @@ impl<Wpskka: WpskkaHandlerTrait, Rvd: RvdHandlerTrait> HigherHandler<Wpskka, Rvd
         }
     }
 
-    fn send_wpskka(&mut self, message: WpskkaMessage<'_>) -> Result<HigherOutput, HigherSendError> {
-        // TransportDataMessageUnreliable is the only type of unreliable message
-        let reliable = !matches!(message, WpskkaMessage::TransportDataMessageUnreliable(_));
+    fn send_wpskka(
+        &mut self,
+        message: WpskkaMessage<'_>,
+    ) -> Result<ChanneledMessage<Vec<u8>>, HigherSendError> {
         let bytes = message.to_bytes(Some(LENGTH_FIELD_WIDTH))?;
-        Ok((bytes, reliable))
+
+        match message {
+            // TransportDataMessageUnreliable is the only type of unreliable message
+            WpskkaMessage::TransportDataMessageUnreliable(..) =>
+                Ok(ChanneledMessage::Unreliable(bytes)),
+            _ => Ok(ChanneledMessage::Reliable(bytes)),
+        }
     }
 }
 
@@ -84,7 +92,7 @@ impl<Wpskka: WpskkaHandlerTrait, Rvd: RvdHandlerTrait> HigherHandlerTrait
     fn handle(
         &mut self,
         wpskka_data: &[u8],
-        output: &mut Vec<HigherOutput>,
+        output: &mut Vec<ChanneledMessage<Vec<u8>>>,
     ) -> Result<Vec<InformEvent>, HigherError> {
         let mut events = Vec::new();
 
@@ -113,7 +121,10 @@ impl<Wpskka: WpskkaHandlerTrait, Rvd: RvdHandlerTrait> HigherHandlerTrait
         Ok(events)
     }
 
-    fn send(&mut self, message: ScreenViewMessage<'_>) -> Result<HigherOutput, HigherSendError> {
+    fn send(
+        &mut self,
+        message: ScreenViewMessage<'_>,
+    ) -> Result<ChanneledMessage<Vec<u8>>, HigherSendError> {
         match message {
             ScreenViewMessage::RvdMessage(rvd) => self.send_rvd(rvd),
             ScreenViewMessage::WpskkaMessage(wpskka) => Ok(self.send_wpskka(wpskka)?),

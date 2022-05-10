@@ -22,7 +22,7 @@ pub enum RequestContent {
         connection_type: ConnectionType,
     },
     EstablishSession {
-        lease_id: String,
+        lease_id: [u8; 4],
     },
     ProcessPassword {
         password: String,

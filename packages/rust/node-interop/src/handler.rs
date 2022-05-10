@@ -10,6 +10,24 @@ use peer::{
 
 type HStack<W, R, L> = HandlerStack<HigherHandler<W, R>, L, TcpHandle, UdpHandle>;
 
+#[inline(always)]
+fn call_unary<F, T, U>(arg: T, f: F) -> U
+where F: FnOnce(T) -> U {
+    f(arg)
+}
+
+#[macro_export]
+macro_rules! forward {
+    ($handler:expr, $closure:expr) => {{
+        match &mut $handler {
+            ScreenViewHandler::HostSignal(stack) => call_unary(stack, $closure),
+            ScreenViewHandler::HostDirect(stack) => call_unary(stack, $closure),
+            ScreenViewHandler::ClientSignal(stack) => call_unary(stack, $closure),
+            ScreenViewHandler::ClientDirect(stack) => call_unary(stack, $closure),
+        }
+    }};
+}
+
 pub enum ScreenViewHandler {
     HostSignal(HStack<WpskkaHostHandler, RvdHostHandler, LowerHandlerSignal>),
     HostDirect(HStack<WpskkaHostHandler, RvdHostHandler, LowerHandlerDirect>),
@@ -51,20 +69,10 @@ impl ScreenViewHandler {
     }
 
     pub fn io_handle(&mut self) -> &mut IoHandle<TcpHandle, UdpHandle> {
-        match self {
-            Self::HostSignal(stack) => stack.io_handle(),
-            Self::HostDirect(stack) => stack.io_handle(),
-            Self::ClientSignal(stack) => stack.io_handle(),
-            Self::ClientDirect(stack) => stack.io_handle(),
-        }
+        forward!(*self, |stack| &mut stack.io_handle)
     }
 
     pub fn handle_next_message(&mut self) -> Option<Result<Vec<InformEvent>, HandlerError>> {
-        match self {
-            Self::HostSignal(stack) => stack.handle_next_message(),
-            Self::HostDirect(stack) => stack.handle_next_message(),
-            Self::ClientSignal(stack) => stack.handle_next_message(),
-            Self::ClientDirect(stack) => stack.handle_next_message(),
-        }
+        forward!(*self, |stack| stack.handle_next_message())
     }
 }

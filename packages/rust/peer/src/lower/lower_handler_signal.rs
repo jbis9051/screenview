@@ -1,8 +1,9 @@
 use crate::{
     io::LENGTH_FIELD_WIDTH,
-    lower::{LowerError, LowerHandlerOutput, LowerHandlerTrait, LowerSendError},
+    lower::{LowerError, LowerHandlerTrait, LowerSendError},
     sel_handler::SelHandler,
     svsc_handler::SvscHandler,
+    ChanneledMessage,
     InformEvent,
 };
 use common::messages::{sel::SelMessage, svsc::SvscMessage, MessageComponent};
@@ -25,22 +26,23 @@ impl LowerHandlerSignal {
 
     fn send_svsc(
         &mut self,
-        message: SvscMessage<'_>,
-        reliable: bool,
-    ) -> Result<LowerHandlerOutput, LowerSendError> {
-        let data = message.to_bytes(None)?;
-
-        let sel = if reliable {
-            SelHandler::wrap_reliable(data)
-        } else {
-            let cipher = self.sel.unreliable_cipher();
-            SelHandler::wrap_unreliable(data, *self.svsc.peer_id().unwrap(), cipher)?
+        message: ChanneledMessage<SvscMessage<'_>>,
+    ) -> Result<ChanneledMessage<Vec<u8>>, LowerSendError> {
+        let sel = match message.map(|msg| msg.to_bytes(None)) {
+            ChanneledMessage::Reliable(message) => SelHandler::wrap_reliable(message?),
+            ChanneledMessage::Unreliable(message) => {
+                let cipher = self.sel.unreliable_cipher();
+                SelHandler::wrap_unreliable(message?, *self.svsc.peer_id().unwrap(), cipher)?
+            }
         };
 
-        Ok((
-            self.send_sel(&sel)?,
-            !matches!(sel, SelMessage::TransportDataPeerMessageUnreliable(_)),
-        ))
+        match &sel {
+            SelMessage::TransportDataMessageReliable(..) =>
+                self.send_sel(&sel).map(ChanneledMessage::Reliable),
+            SelMessage::TransportDataPeerMessageUnreliable(..)
+            | SelMessage::TransportDataServerMessageUnreliable(..) =>
+                self.send_sel(&sel).map(ChanneledMessage::Unreliable),
+        }
     }
 
     fn send_sel(&mut self, sel: &SelMessage<'_>) -> Result<Vec<u8>, LowerSendError> {
@@ -74,11 +76,10 @@ impl LowerHandlerTrait for LowerHandlerSignal {
         };
 
         for message in send_svsc {
-            let (data, reliable) = self.send_svsc(message, true)?; // TODO check if reliable
-            if reliable {
-                send_reliable.push(data);
-            } else {
-                send_unreliable.push(data);
+            // TODO check if reliable
+            match self.send_svsc(ChanneledMessage::Reliable(message))? {
+                ChanneledMessage::Reliable(data) => send_reliable.push(data),
+                ChanneledMessage::Unreliable(data) => send_unreliable.push(data),
             }
         }
 
@@ -87,10 +88,11 @@ impl LowerHandlerTrait for LowerHandlerSignal {
 
     fn send(
         &mut self,
-        wpskka_bytes: Vec<u8>,
-        reliable: bool,
-    ) -> Result<LowerHandlerOutput, LowerError> {
-        let svsc = SvscHandler::wrap(wpskka_bytes);
-        Ok(self.send_svsc(SvscMessage::SessionDataSend(svsc), reliable)?)
+        wpskka_bytes: ChanneledMessage<Vec<u8>>,
+    ) -> Result<ChanneledMessage<Vec<u8>>, LowerError> {
+        self.send_svsc(
+            wpskka_bytes.map(|data| SvscMessage::SessionDataSend(SvscHandler::wrap(data))),
+        )
+        .map_err(Into::into)
     }
 }

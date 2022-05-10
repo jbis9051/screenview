@@ -2,11 +2,13 @@
 
 mod handler;
 mod instance;
+mod node_interface;
 mod protocol;
 
 use common::messages::rvd::ButtonsMask;
 use instance::*;
 use neon::prelude::*;
+use node_interface::NodeInterface;
 use num_traits::FromPrimitive;
 use protocol::{ConnectionType, Display, DisplayType, Message, RequestContent};
 use std::{any::type_name, convert::TryFrom, num::FpCategory};
@@ -65,12 +67,14 @@ fn new_instance(mut cx: FunctionContext<'_>) -> JsResult<'_, JsBox<InstanceHandl
     let peer_type = cx.argument::<JsString>(0)?.value(&mut cx);
     let instance_type = cx.argument::<JsString>(1)?.value(&mut cx);
     let channel = cx.channel();
+    let interface_obj = cx.argument::<JsObject>(2)?;
+    let node_interface = NodeInterface::from_obj(&mut cx, interface_obj)?;
 
     let handle = match (peer_type.as_str(), instance_type.as_str()) {
-        ("client", "direct") => Instance::new_client_direct(channel),
-        ("host", "direct") => Instance::new_host_direct(channel),
-        ("client", "signal") => Instance::new_client_signal(channel),
-        ("host", "signal") => Instance::new_host_signal(channel),
+        ("client", "direct") => Instance::new_client_direct(channel, node_interface),
+        ("host", "direct") => Instance::new_host_direct(channel, node_interface),
+        ("client", "signal") => Instance::new_client_signal(channel, node_interface),
+        ("host", "signal") => Instance::new_host_signal(channel, node_interface),
         _ =>
             if peer_type != "client" && peer_type != "host" {
                 return throw!(cx, "Invalid peer type");
@@ -103,7 +107,15 @@ fn connect(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
 
 fn establish_session(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
     let handle = cx.argument::<JsBox<InstanceHandle>>(0)?;
-    let lease_id = cx.argument::<JsString>(1)?.value(&mut cx);
+    let lease_id: [u8; 4] = match cx
+        .argument::<JsString>(1)?
+        .value(&mut cx)
+        .as_bytes()
+        .try_into()
+    {
+        Ok(id) => id,
+        Err(_) => return throw!(cx, "Lease ID must contain 4 bytes"),
+    };
 
     send_request(&mut cx, handle, RequestContent::EstablishSession {
         lease_id,

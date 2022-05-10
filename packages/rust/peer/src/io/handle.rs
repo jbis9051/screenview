@@ -3,7 +3,7 @@ use common::{event_loop::ThreadWaker, messages::Error};
 use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
 use std::{
     error::Error as StdError,
-    fmt::{self, Display, Formatter},
+    fmt::{self, Debug, Display, Formatter},
     io,
     net::ToSocketAddrs,
 };
@@ -15,7 +15,7 @@ pub trait Reliable: Sized {
         waker: ThreadWaker,
     ) -> Result<Self, io::Error>;
 
-    fn send(&mut self, message: Vec<u8>) -> Result<(), ()>;
+    fn send(&mut self, message: Vec<u8>) -> Result<(), SendError>;
 
     fn close(&mut self);
 }
@@ -27,10 +27,21 @@ pub trait Unreliable: Sized {
         waker: ThreadWaker,
     ) -> Result<Self, io::Error>;
 
-    fn send(&mut self, message: Vec<u8>, max_len: usize) -> Result<(), ()>;
+    fn send(&mut self, message: Vec<u8>, max_len: usize) -> Result<(), SendError>;
 
     fn close(&mut self);
 }
+
+#[derive(Debug)]
+pub struct SendError;
+
+impl Display for SendError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        Debug::fmt(self, f)
+    }
+}
+
+impl StdError for SendError {}
 
 pub struct IoHandle<R, U> {
     reliable: Option<R>,
@@ -111,6 +122,16 @@ impl<R: Reliable, U> IoHandle<R, U> {
         Ok(())
     }
 
+    /// Terminates any existing connection and attempts to replace that connection using the given
+    /// closure.
+    pub fn connect_reliable_with<F, E>(&mut self, f: F) -> Result<(), E>
+    where F: FnOnce(Sender<TransportResult>) -> Result<R, E> {
+        self.disconnect_reliable();
+        let handle = f(self.result_sender.clone())?;
+        self.reliable = Some(handle);
+        Ok(())
+    }
+
     /// Sends a message through the reliable channel, returning true if it was successfully sent to
     /// the worker thread, or false otherwise.
     ///
@@ -119,7 +140,7 @@ impl<R: Reliable, U> IoHandle<R, U> {
     /// Panics if called before a successful call to [`connect_reliable`] is made.
     ///
     /// [`connect_reliable`](crate::io::IoHandle::connect_reliable)
-    pub fn send_reliable(&mut self, message: Vec<u8>) -> Result<(), ()> {
+    pub fn send_reliable(&mut self, message: Vec<u8>) -> Result<(), SendError> {
         self.reliable
             .as_mut()
             .expect("reliable connection not established")
@@ -163,7 +184,7 @@ impl<R, U: Unreliable> IoHandle<R, U> {
     ///
     /// [`connect_unreliable`](crate::io::IoHandle::connect_unreliable)
     /// [`max_unreliable_message_size`](crate::io::IoHandle::max_unreliable_message_size)
-    pub fn send_unreliable(&mut self, message: Vec<u8>) -> Result<(), ()> {
+    pub fn send_unreliable(&mut self, message: Vec<u8>) -> Result<(), SendError> {
         self.unreliable
             .as_mut()
             .expect("unreliable connection not established")

@@ -1,5 +1,6 @@
 use crate::{
-    lower::{LowerError, LowerHandlerOutput, LowerHandlerTrait},
+    lower::{LowerError, LowerHandlerTrait},
+    ChanneledMessage,
     InformEvent,
 };
 
@@ -27,9 +28,8 @@ impl LowerHandlerTrait for LowerHandlerDirect {
 
     fn send(
         &mut self,
-        wpskka_bytes: Vec<u8>,
-        reliable: bool,
-    ) -> Result<LowerHandlerOutput, LowerError> {
-        Ok((wpskka_bytes, reliable))
+        wpskka_bytes: ChanneledMessage<Vec<u8>>,
+    ) -> Result<ChanneledMessage<Vec<u8>>, LowerError> {
+        Ok(wpskka_bytes)
     }
 }

@@ -1,4 +1,5 @@
 #![deny(rust_2018_idioms)]
+#![allow(clippy::new_without_default)]
 
 use crate::{
     io::Source,
@@ -31,6 +32,20 @@ pub enum InformEvent {
     WpskkaHostInform(WpskkaHostInform),
 }
 
+pub enum ChanneledMessage<T> {
+    Reliable(T),
+    Unreliable(T),
+}
+
+impl<T> ChanneledMessage<T> {
+    pub fn map<F, U>(self, f: F) -> ChanneledMessage<U>
+    where F: FnOnce(T) -> U {
+        match self {
+            Self::Reliable(msg) => ChanneledMessage::Reliable(f(msg)),
+            Self::Unreliable(msg) => ChanneledMessage::Unreliable(f(msg)),
+        }
+    }
+}
 
 #[cold]
 pub(crate) fn debug<T: std::fmt::Debug>(val: &T) -> String {

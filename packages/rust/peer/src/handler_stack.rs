@@ -2,13 +2,14 @@ use crate::{
     higher_handler::{HigherError, HigherHandlerTrait},
     io::{IoHandle, Reliable, TransportError, TransportResponse, Unreliable},
     lower::{LowerError, LowerHandlerTrait},
+    ChanneledMessage,
     InformEvent,
 };
 
 pub struct HandlerStack<H, L, R, U> {
-    higher: H,
-    lower: L,
-    io_handle: IoHandle<R, U>,
+    pub higher: H,
+    pub lower: L,
+    pub io_handle: IoHandle<R, U>,
 }
 
 impl<H, L, R, U> HandlerStack<H, L, R, U>
@@ -24,10 +25,6 @@ where
             lower,
             io_handle,
         }
-    }
-
-    pub fn io_handle(&mut self) -> &mut IoHandle<R, U> {
-        &mut self.io_handle
     }
 
     pub fn handle_next_message(&mut self) -> Option<Result<Vec<InformEvent>, HandlerError>> {
@@ -83,19 +80,20 @@ where
 
         let mut to_wires = Vec::new();
 
-        for (wpskka_output, reliable) in wpskka_outputs {
-            to_wires.push(self.lower.send(wpskka_output, reliable)?);
+        for wpskka_output in wpskka_outputs {
+            to_wires.push(self.lower.send(wpskka_output)?);
         }
 
-        for (wire_msg, reliable) in to_wires {
-            if reliable {
-                self.io_handle
-                    .send_reliable(wire_msg)
-                    .map_err(|_| HandlerError::SendReliable)?;
-            } else {
-                self.io_handle
-                    .send_unreliable(wire_msg)
-                    .map_err(|_| HandlerError::SendUnreliable)?;
+        for wire_msg in to_wires {
+            match wire_msg {
+                ChanneledMessage::Reliable(data) => self
+                    .io_handle
+                    .send_reliable(data)
+                    .map_err(|_| HandlerError::SendReliable)?,
+                ChanneledMessage::Unreliable(data) => self
+                    .io_handle
+                    .send_unreliable(data)
+                    .map_err(|_| HandlerError::SendUnreliable)?,
             }
         }
 

@@ -1,6 +1,7 @@
 use super::{
     parse_length_field,
     Reliable,
+    SendError,
     Source,
     TransportError,
     TransportResponse,
@@ -29,13 +30,14 @@ pub struct TcpHandle {
     _handles: Box<(JoinOnDrop<()>, JoinOnDrop<()>)>,
 }
 
-impl Reliable for TcpHandle {
-    fn new<A: ToSocketAddrs>(
-        addr: A,
+impl TcpHandle {
+    // Infallible but returns a result for convenience
+    pub fn new_from(
+        stream: TcpStream,
         result_sender: Sender<TransportResult>,
         waker: ThreadWaker,
     ) -> Result<Self, io::Error> {
-        let stream = Arc::new(TcpStream::connect(addr)?);
+        let stream = Arc::new(stream);
         let (write_tx, write_rx) = unbounded();
 
         let read_handle = thread::spawn({
@@ -62,9 +64,19 @@ impl Reliable for TcpHandle {
             _handles: Box::new((JoinOnDrop::new(read_handle), JoinOnDrop::new(write_handle))),
         })
     }
+}
 
-    fn send(&mut self, message: Vec<u8>) -> Result<(), ()> {
-        self.write.send(message).map_err(|_| ())
+impl Reliable for TcpHandle {
+    fn new<A: ToSocketAddrs>(
+        addr: A,
+        result_sender: Sender<TransportResult>,
+        waker: ThreadWaker,
+    ) -> Result<Self, io::Error> {
+        Self::new_from(TcpStream::connect(addr)?, result_sender, waker)
+    }
+
+    fn send(&mut self, message: Vec<u8>) -> Result<(), SendError> {
+        self.write.send(message).map_err(|_| SendError)
     }
 
     fn close(&mut self) {
@@ -155,7 +167,7 @@ fn collect_and_parse_reliable(
         Read::read_exact(&mut stream, &mut buffer[*data_end .. LENGTH_FIELD_WIDTH])?;
     }
 
-    let length = match parse_length_field(&buffer).checked_add(LENGTH_FIELD_WIDTH) {
+    let length = match parse_length_field(buffer).checked_add(LENGTH_FIELD_WIDTH) {
         Some(len) => len,
         None => return Err(Error::BadTransportMessage),
     };

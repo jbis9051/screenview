@@ -1,4 +1,4 @@
-use super::{Source, TransportResult, Unreliable, UDP_READ_SIZE, UDP_TIMEOUT};
+use super::{SendError, Source, TransportResult, Unreliable, UDP_READ_SIZE, UDP_TIMEOUT};
 use crate::{
     io::{parse_length_field, TransportError, TransportResponse, LENGTH_FIELD_WIDTH},
     return_if_err,
@@ -56,8 +56,8 @@ impl Unreliable for UdpHandle {
         })
     }
 
-    fn send(&mut self, message: Vec<u8>, max_len: usize) -> Result<(), ()> {
-        self.write.send((message, max_len)).map_err(|_| ())
+    fn send(&mut self, message: Vec<u8>, max_len: usize) -> Result<(), SendError> {
+        self.write.send((message, max_len)).map_err(|_| SendError)
     }
 
     fn close(&mut self) {

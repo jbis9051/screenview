@@ -1,5 +1,6 @@
 use crate::{
     handler::ScreenViewHandler,
+    node_interface::NodeInterface,
     protocol::{ConnectionType, Display, Message, RequestContent},
 };
 use common::{
@@ -49,18 +50,26 @@ impl Finalize for InstanceHandle {}
 pub struct Instance {
     native: NativeApi,
     sv_handler: ScreenViewHandler,
+    node_interface: NodeInterface,
     channel: Channel,
     waker: ThreadWaker,
 }
 
 impl Instance {
-    fn new_with<F>(channel: Channel, new_sv_handler: F) -> Result<InstanceHandle, NativeApiError>
-    where F: FnOnce() -> ScreenViewHandler {
+    fn new_with<F>(
+        channel: Channel,
+        new_sv_handler: F,
+        node_interface: NodeInterface,
+    ) -> Result<InstanceHandle, NativeApiError>
+    where
+        F: FnOnce() -> ScreenViewHandler,
+    {
         let (tx, rx) = unbounded();
         let waker = ThreadWaker::new_current_thread();
         let instance = Self {
             native: NativeApi::new()?,
             sv_handler: new_sv_handler(),
+            node_interface,
             channel,
             waker: waker.clone(),
         };
@@ -69,20 +78,40 @@ impl Instance {
         Ok(InstanceHandle::new(tx, waker, thread_handle))
     }
 
-    pub fn new_host_signal(channel: Channel) -> Result<InstanceHandle, NativeApiError> {
-        Self::new_with(channel, ScreenViewHandler::new_host_signal)
+    pub fn new_host_signal(
+        channel: Channel,
+        node_interface: NodeInterface,
+    ) -> Result<InstanceHandle, NativeApiError> {
+        Self::new_with(channel, ScreenViewHandler::new_host_signal, node_interface)
     }
 
-    pub fn new_host_direct(channel: Channel) -> Result<InstanceHandle, NativeApiError> {
-        Self::new_with(channel, ScreenViewHandler::new_host_direct)
+    pub fn new_host_direct(
+        channel: Channel,
+        node_interface: NodeInterface,
+    ) -> Result<InstanceHandle, NativeApiError> {
+        Self::new_with(channel, ScreenViewHandler::new_host_direct, node_interface)
     }
 
-    pub fn new_client_signal(channel: Channel) -> Result<InstanceHandle, NativeApiError> {
-        Self::new_with(channel, ScreenViewHandler::new_client_signal)
+    pub fn new_client_signal(
+        channel: Channel,
+        node_interface: NodeInterface,
+    ) -> Result<InstanceHandle, NativeApiError> {
+        Self::new_with(
+            channel,
+            ScreenViewHandler::new_client_signal,
+            node_interface,
+        )
     }
 
-    pub fn new_client_direct(channel: Channel) -> Result<InstanceHandle, NativeApiError> {
-        Self::new_with(channel, ScreenViewHandler::new_client_direct)
+    pub fn new_client_direct(
+        channel: Channel,
+        node_interface: NodeInterface,
+    ) -> Result<InstanceHandle, NativeApiError> {
+        Self::new_with(
+            channel,
+            ScreenViewHandler::new_client_direct,
+            node_interface,
+        )
     }
 
     fn handle_node_request(
@@ -95,7 +124,7 @@ impl Instance {
                 ref addr,
                 connection_type,
             } => self.handle_connect(promise, addr, connection_type),
-            RequestContent::EstablishSession { ref lease_id } =>
+            RequestContent::EstablishSession { lease_id } =>
                 self.handle_establish_session(promise, lease_id),
             RequestContent::ProcessPassword { ref password } =>
                 self.handle_process_password(promise, password),
@@ -154,7 +183,7 @@ impl Instance {
     fn handle_establish_session(
         &mut self,
         promise: Deferred,
-        lease_id: &str,
+        lease_id: [u8; 4],
     ) -> Result<(), anyhow::Error> {
         // TODO: implement
 

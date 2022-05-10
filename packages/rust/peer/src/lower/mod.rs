@@ -2,6 +2,7 @@ use crate::{
     helpers::cipher_reliable_peer::CipherError,
     sel_handler::SelError,
     svsc_handler::SvscError,
+    ChanneledMessage,
     InformEvent,
 };
 use common::messages::Error as MessageComponentError;
@@ -11,8 +12,6 @@ mod lower_handler_signal;
 
 pub use lower_handler_direct::*;
 pub use lower_handler_signal::*;
-
-type LowerHandlerOutput = (Vec<u8>, bool);
 
 pub trait LowerHandlerTrait {
     // takes messages from the wire and outputs wpskka bytes, send is bytes to put back on the wire
@@ -27,9 +26,8 @@ pub trait LowerHandlerTrait {
     // takes wpskka bytes and outputs messages to the wire
     fn send(
         &mut self,
-        wpskka_bytes: Vec<u8>,
-        reliable: bool,
-    ) -> Result<LowerHandlerOutput, LowerError>;
+        wpskka_bytes: ChanneledMessage<Vec<u8>>,
+    ) -> Result<ChanneledMessage<Vec<u8>>, LowerError>;
 }
 
 
