@@ -2,6 +2,7 @@ use crate::{
     handler::ScreenViewHandler,
     node_interface::NodeInterface,
     protocol::{ConnectionType, Display, Message, RequestContent},
+    throw,
 };
 use common::{
     event_loop::{event_loop, EventLoopState, JoinOnDrop, ThreadWaker},
@@ -10,10 +11,14 @@ use common::{
 use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
 use native::{NativeApi, NativeApiError};
 use neon::{
-    prelude::{Channel, Context, Finalize},
+    prelude::{Channel, Context, Finalize, JsResult, JsUndefined},
     types::Deferred,
 };
-use std::thread::{self, JoinHandle};
+use peer::io::{DirectServer, TcpHandle};
+use std::{
+    net::TcpStream,
+    thread::{self, JoinHandle},
+};
 
 pub struct InstanceHandle {
     sender: Sender<Message>,
@@ -51,6 +56,7 @@ pub struct Instance {
     native: NativeApi,
     sv_handler: ScreenViewHandler,
     node_interface: NodeInterface,
+    server: Option<DirectServer>,
     channel: Channel,
     waker: ThreadWaker,
 }
@@ -70,6 +76,7 @@ impl Instance {
             native: NativeApi::new()?,
             sv_handler: new_sv_handler(),
             node_interface,
+            server: None,
             channel,
             waker: waker.clone(),
         };
@@ -124,6 +131,7 @@ impl Instance {
                 ref addr,
                 connection_type,
             } => self.handle_connect(promise, addr, connection_type),
+            RequestContent::StartServer { ref addr } => self.handle_start_server(promise, addr),
             RequestContent::EstablishSession { lease_id } =>
                 self.handle_establish_session(promise, lease_id),
             RequestContent::ProcessPassword { ref password } =>
@@ -175,6 +183,52 @@ impl Instance {
                 let error = cx.error(error)?;
                 cx.throw(error)
             }
+        });
+
+        Ok(())
+    }
+
+    fn handle_direct_connect(&mut self, stream: TcpStream) {
+        let io_handle = self.sv_handler.io_handle();
+
+        // Terminate the connection
+        if io_handle.is_reliable_connected() {
+            drop(stream);
+            return;
+        }
+
+        let waker = self.waker.clone();
+        io_handle.connect_reliable_with(move |result_sender| {
+            TcpHandle::new_from(stream, result_sender, waker)
+        });
+    }
+
+    fn handle_start_server(&mut self, promise: Deferred, addr: &str) -> Result<(), anyhow::Error> {
+        if !matches!(self.sv_handler, ScreenViewHandler::HostDirect(..)) {
+            panic!("Attempted to start server on non-host-direct instance");
+        }
+
+        if self.server.is_some() {
+            promise.settle_with(&self.channel, |mut cx| -> JsResult<'_, JsUndefined> {
+                throw!(
+                    cx,
+                    "Attempted to start server while one was already running"
+                )
+            });
+            return Ok(());
+        }
+
+        let result = match DirectServer::new(addr, self.waker.clone()) {
+            Ok(server) => {
+                self.server = Some(server);
+                Ok(())
+            }
+            Err(error) => Err(error.to_string()),
+        };
+
+        promise.settle_with(&self.channel, move |mut cx| match result {
+            Ok(()) => Ok(cx.undefined()),
+            Err(error) => throw!(cx, error),
         });
 
         Ok(())
@@ -297,6 +351,8 @@ fn start_instance_main(instance: Instance, message_receiver: Receiver<Message>) 
 
 fn instance_main(mut instance: Instance, message_receiver: Receiver<Message>) {
     event_loop(instance.waker.clone(), move || {
+        let mut state = EventLoopState::Waiting;
+
         // Handle incoming messages from node
         match message_receiver.try_recv() {
             Ok(Message::Request { content, promise }) => {
@@ -304,6 +360,8 @@ fn instance_main(mut instance: Instance, message_receiver: Receiver<Message>) {
                     Ok(()) => { /* yay */ }
                     Err(error) => panic!("Internal error while handling node request: {}", error),
                 }
+
+                state = EventLoopState::Working;
             }
             Ok(Message::Shutdown) => return EventLoopState::Complete,
             Err(TryRecvError::Empty) => {}
@@ -312,14 +370,35 @@ fn instance_main(mut instance: Instance, message_receiver: Receiver<Message>) {
 
         // Handle messages from remote party
         match instance.sv_handler.handle_next_message() {
-            Some(Ok(events)) =>
+            Some(Ok(events)) => {
                 for event in events {
                     todo!("Handle event")
-                },
-            Some(Err(error)) => todo!("Handle this error properly: {}", error),
+                }
+
+                state = EventLoopState::Working;
+            }
+            Some(Err(error)) => {
+                state = EventLoopState::Working;
+
+                todo!("Handle this error properly: {}", error)
+            }
             None => {}
         }
 
-        EventLoopState::Working
+        // If a server is running, handle incoming connections from there
+        match instance.server.as_ref().and_then(|server| server.recv()) {
+            Some(Ok(stream)) => {
+                instance.handle_direct_connect(stream);
+                state = EventLoopState::Working;
+            }
+            Some(Err(error)) => {
+                state = EventLoopState::Working;
+
+                todo!("Handle this error properly: {}", error)
+            }
+            None => {}
+        }
+
+        state
     });
 }

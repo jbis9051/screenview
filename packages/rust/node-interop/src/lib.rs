@@ -13,10 +13,11 @@ use num_traits::FromPrimitive;
 use protocol::{ConnectionType, Display, DisplayType, Message, RequestContent};
 use std::{any::type_name, convert::TryFrom, num::FpCategory};
 
+#[macro_export]
 macro_rules! throw {
     ($cx:expr, $error:expr) => {{
-        let error = JsError::error(&mut $cx, $error.to_string())?;
-        $cx.throw(error)
+        let error = neon::prelude::JsError::error(&mut $cx, $error.to_string());
+        error.and_then(|error| $cx.throw(error))
     }};
 }
 
@@ -103,6 +104,13 @@ fn connect(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
         addr,
         connection_type,
     })
+}
+
+fn start_server(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
+    let handle = cx.argument::<JsBox<InstanceHandle>>(0)?;
+    let addr = cx.argument::<JsString>(1)?.value(&mut cx);
+
+    send_request(&mut cx, handle, RequestContent::StartServer { addr })
 }
 
 fn establish_session(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
@@ -236,6 +244,7 @@ fn main(mut cx: ModuleContext<'_>) -> NeonResult<()> {
 
     export! {
         new_instance,
+        start_server,
         connect,
         establish_session,
         process_password,

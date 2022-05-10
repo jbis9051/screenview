@@ -87,6 +87,11 @@ impl<R, U> IoHandle<R, U> {
         }
     }
 
+    /// Returns whether or not the reliable channel is connected.
+    pub fn is_reliable_connected(&self) -> bool {
+        self.reliable.is_some()
+    }
+
     /// Returns the current maximum unreliable message size. This is the strictly enforced limit on the
     /// maximum message size (in bytes) which can be sent over the unreliable connection. Any message
     /// which goes over this limit will be rejected.
@@ -124,12 +129,11 @@ impl<R: Reliable, U> IoHandle<R, U> {
 
     /// Terminates any existing connection and attempts to replace that connection using the given
     /// closure.
-    pub fn connect_reliable_with<F, E>(&mut self, f: F) -> Result<(), E>
-    where F: FnOnce(Sender<TransportResult>) -> Result<R, E> {
+    pub fn connect_reliable_with<F>(&mut self, f: F)
+    where F: FnOnce(Sender<TransportResult>) -> R {
         self.disconnect_reliable();
-        let handle = f(self.result_sender.clone())?;
+        let handle = f(self.result_sender.clone());
         self.reliable = Some(handle);
-        Ok(())
     }
 
     /// Sends a message through the reliable channel, returning true if it was successfully sent to

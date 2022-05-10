@@ -36,7 +36,7 @@ impl TcpHandle {
         stream: TcpStream,
         result_sender: Sender<TransportResult>,
         waker: ThreadWaker,
-    ) -> Result<Self, io::Error> {
+    ) -> Self {
         let stream = Arc::new(stream);
         let (write_tx, write_rx) = unbounded();
 
@@ -58,11 +58,11 @@ impl TcpHandle {
             }
         });
 
-        Ok(Self {
+        Self {
             stream,
             write: write_tx,
             _handles: Box::new((JoinOnDrop::new(read_handle), JoinOnDrop::new(write_handle))),
-        })
+        }
     }
 }
 
@@ -72,7 +72,11 @@ impl Reliable for TcpHandle {
         result_sender: Sender<TransportResult>,
         waker: ThreadWaker,
     ) -> Result<Self, io::Error> {
-        Self::new_from(TcpStream::connect(addr)?, result_sender, waker)
+        Ok(Self::new_from(
+            TcpStream::connect(addr)?,
+            result_sender,
+            waker,
+        ))
     }
 
     fn send(&mut self, message: Vec<u8>) -> Result<(), SendError> {

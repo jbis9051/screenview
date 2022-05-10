@@ -21,6 +21,9 @@ pub enum RequestContent {
         addr: String,
         connection_type: ConnectionType,
     },
+    StartServer {
+        addr: String,
+    },
     EstablishSession {
         lease_id: [u8; 4],
     },
