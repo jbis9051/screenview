@@ -215,7 +215,7 @@ SessionData* packets.
 An EstablishSessionRequest message is a Peer request to establish a session with another Peer.
 
 \begin{center}
-    Peer \textrightarrow\ Server\\
+    Client \textrightarrow\ Server\\
     \begin{tabular}{|c|c|c|c|}
         \hline
         \textbf{Bytes} & \textbf{Name} & \textbf{Value} & \textbf{Description}                                 \\
@@ -232,7 +232,7 @@ An EstablishSessionRequest message is a Peer request to establish a session with
 An EstablishSessionResponse message is a response to EstablishSessionRequest.
 
 \begin{center}
-    Server \textrightarrow\ Peer\\
+    Server \textrightarrow\ Client\\
     \begin{tabular}{|c|c|c|c|}
         \hline
         \textbf{Bytes} & \textbf{Name} & \textbf{Value} & \textbf{Description}                       \\
@@ -357,9 +357,7 @@ SessionDataReceive message to be sent to the other Peer, the SessionDataSend mes
         \hline
         1              & type          & 11             &                                \\
         \hline
-        3              & data-length   &                & length of the content in bytes \\
-        \hline
-        data-length    & data          &                & data to be forwarded           \\
+        remaining-bytes    & data          &                & data to be forwarded           \\
         \hline
     \end{tabular}
 \end{center}
@@ -377,9 +375,7 @@ session. The Server SHOULD forward the message along the same transport as it wa
         \hline
         1              & type          & 12             &                                \\
         \hline
-        3              & data-length   &                & length of the content in bytes \\
-        \hline
-        data-length    & data          &                & data to be forwarded           \\
+        remaning-bytes    & data          &                & data to be forwarded           \\
         \hline
     \end{tabular}
 \end{center}

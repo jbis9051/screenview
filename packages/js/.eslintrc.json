@@ -51,7 +51,12 @@
         "import/no-extraneous-dependencies": [
             "error",
             { "devDependencies": true }
-        ]
+        ],
+        "camelcase": [
+            "error",
+            { "ignoreImports": true, "properties": "never" }
+        ],
+        "no-param-reassign": ["error", { "props": false }]
     },
     "ignorePatterns": ["**/build/*"]
 }

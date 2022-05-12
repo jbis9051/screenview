@@ -1,5 +1,3 @@
-import {connect_to_host_direct, new_instance} from "./index.node";
-
 export * from './index.node';
 
 export enum InstancePeerType {
@@ -12,7 +10,7 @@ export enum InstanceConnectionType {
     Signal = 'signal',
 }
 
-export const enum ConnectionType {
+export enum ConnectionType {
     Reliable = 0,
     Unreliable = 1,
 }

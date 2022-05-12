@@ -66,7 +66,7 @@ impl SrpAuthClient {
 
 
         Ok(SrpMessage::ClientHello(ClientHello {
-            a_pub: a_pub.try_into().map(Box::new).unwrap(),
+            a_pub: a_pub.try_into().map(Box::new).unwrap(), // TODO this may fail cause math
             mac: mac.try_into().unwrap(),
         }))
     }
