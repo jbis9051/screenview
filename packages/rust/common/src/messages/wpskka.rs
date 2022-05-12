@@ -1,4 +1,4 @@
-use super::Data;
+use super::{Data, Message};
 use crate::messages::{Error, MessageComponent};
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use parser::{message_id, MessageComponent};
@@ -104,4 +104,8 @@ pub enum WpskkaMessage<'a> {
     AuthResult(AuthResult),
     TransportDataMessageReliable(TransportDataMessageReliable<'a>),
     TransportDataMessageUnreliable(TransportDataMessageUnreliable<'a>),
+}
+
+impl<'a> Message for WpskkaMessage<'a> {
+    const LEN_PREFIX_WIDTH: usize = 2;
 }

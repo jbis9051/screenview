@@ -22,7 +22,6 @@ pub mod lower;
 pub mod sel_handler;
 pub mod svsc_handler;
 
-
 pub enum InformEvent {
     TransportShutdown(Source),
     SvscInform(SvscInform),

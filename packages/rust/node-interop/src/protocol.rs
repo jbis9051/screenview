@@ -1,4 +1,4 @@
-use common::messages::rvd::ButtonsMask;
+use common::messages::{rvd::ButtonsMask, svsc::LeaseId};
 use neon::types::Deferred;
 use std::convert::TryFrom;
 
@@ -25,7 +25,7 @@ pub enum RequestContent {
         addr: String,
     },
     EstablishSession {
-        lease_id: [u8; 4],
+        lease_id: LeaseId,
     },
     ProcessPassword {
         password: String,

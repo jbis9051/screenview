@@ -11,7 +11,7 @@ use peer::{
 type HStack<W, R, L> = HandlerStack<HigherHandler<W, R>, L, TcpHandle, UdpHandle>;
 
 #[inline(always)]
-fn call_unary<F, T, U>(arg: T, f: F) -> U
+pub(crate) fn call_unary<F, T, U>(arg: T, f: F) -> U
 where F: FnOnce(T) -> U {
     f(arg)
 }
@@ -20,10 +20,14 @@ where F: FnOnce(T) -> U {
 macro_rules! forward {
     ($handler:expr, $closure:expr) => {{
         match &mut $handler {
-            ScreenViewHandler::HostSignal(stack) => call_unary(stack, $closure),
-            ScreenViewHandler::HostDirect(stack) => call_unary(stack, $closure),
-            ScreenViewHandler::ClientSignal(stack) => call_unary(stack, $closure),
-            ScreenViewHandler::ClientDirect(stack) => call_unary(stack, $closure),
+            $crate::handler::ScreenViewHandler::HostSignal(stack) =>
+                $crate::handler::call_unary(stack, $closure),
+            $crate::handler::ScreenViewHandler::HostDirect(stack) =>
+                $crate::handler::call_unary(stack, $closure),
+            $crate::handler::ScreenViewHandler::ClientSignal(stack) =>
+                $crate::handler::call_unary(stack, $closure),
+            $crate::handler::ScreenViewHandler::ClientDirect(stack) =>
+                $crate::handler::call_unary(stack, $closure),
         }
     }};
 }

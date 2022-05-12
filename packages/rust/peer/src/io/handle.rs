@@ -1,3 +1,5 @@
+use crate::ChanneledMessage;
+
 use super::DEFAULT_UNRELIABLE_MESSAGE_SIZE;
 use common::{event_loop::ThreadWaker, messages::Error};
 use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
@@ -33,11 +35,11 @@ pub trait Unreliable: Sized {
 }
 
 #[derive(Debug)]
-pub struct SendError;
+pub struct SendError(pub Source);
 
 impl Display for SendError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        Debug::fmt(self, f)
+        write!(f, "send error in {:?}", self.0)
     }
 }
 
@@ -199,6 +201,15 @@ impl<R, U: Unreliable> IoHandle<R, U> {
     pub fn disconnect_unreliable(&mut self) {
         if let Some(mut handle) = self.unreliable.take() {
             handle.close()
+        }
+    }
+}
+
+impl<R: Reliable, U: Unreliable> IoHandle<R, U> {
+    pub fn send(&mut self, message: ChanneledMessage<Vec<u8>>) -> Result<(), SendError> {
+        match message {
+            ChanneledMessage::Reliable(message) => self.send_reliable(message),
+            ChanneledMessage::Unreliable(message) => self.send_unreliable(message),
         }
     }
 }

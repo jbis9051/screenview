@@ -15,22 +15,33 @@ pub trait MessageComponent<'a>: Sized {
     fn read(cursor: &mut Cursor<&'a [u8]>) -> Result<Self, Error>;
 
     fn write(&self, cursor: &mut Cursor<Vec<u8>>) -> Result<(), Error>;
+}
 
-    fn to_bytes(&self, len_prefix_width: Option<usize>) -> Result<Vec<u8>, Error> {
-        let len_width = len_prefix_width.unwrap_or(0);
-        let mut cursor = Cursor::new(vec![0u8; len_width]);
-        cursor.set_position(u64::try_from(len_width)?);
-        self.write(&mut cursor)?;
-        let len_bytes = (cursor.get_ref().len() - len_width).to_le_bytes();
+pub trait Message {
+    const LEN_PREFIX_WIDTH: usize;
 
-        if len_width > 0 && len_bytes[len_width ..].iter().any(|&by| by != 0) {
-            return Err(Error::BadDataLength);
+    fn to_bytes<'a>(&'a self) -> Result<Vec<u8>, Error>
+    where Self: MessageComponent<'a> {
+        if Self::LEN_PREFIX_WIDTH == 0 {
+            let mut cursor = Cursor::new(Vec::new());
+            self.write(&mut cursor)?;
+            Ok(cursor.into_inner())
+        } else {
+            let mut cursor = Cursor::new(vec![0u8; Self::LEN_PREFIX_WIDTH]);
+            cursor.set_position(u64::try_from(Self::LEN_PREFIX_WIDTH)?);
+            self.write(&mut cursor)?;
+            let len = cursor.get_ref().len() - Self::LEN_PREFIX_WIDTH;
+
+            if len >= 1usize << (8 * Self::LEN_PREFIX_WIDTH) {
+                return Err(Error::BadDataLength);
+            }
+
+            let len_bytes = len.to_le_bytes();
+            let mut data = cursor.into_inner();
+            data[.. Self::LEN_PREFIX_WIDTH].copy_from_slice(&len_bytes[.. Self::LEN_PREFIX_WIDTH]);
+
+            Ok(data)
         }
-
-        let mut data = cursor.into_inner();
-        data[.. len_width].copy_from_slice(&len_bytes[.. len_width]);
-
-        Ok(data)
     }
 }
 
@@ -61,8 +72,8 @@ pub enum Error {
 }
 
 impl From<Infallible> for Error {
-    fn from(_: Infallible) -> Self {
-        unreachable!()
+    fn from(x: Infallible) -> Self {
+        match x {}
     }
 }
 

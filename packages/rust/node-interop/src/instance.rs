@@ -1,4 +1,5 @@
 use crate::{
+    forward,
     handler::ScreenViewHandler,
     node_interface::NodeInterface,
     protocol::{ConnectionType, Display, Message, RequestContent},
@@ -6,12 +7,12 @@ use crate::{
 };
 use common::{
     event_loop::{event_loop, EventLoopState, JoinOnDrop, ThreadWaker},
-    messages::rvd::ButtonsMask,
+    messages::{rvd::ButtonsMask, svsc::LeaseId},
 };
 use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
 use native::{NativeApi, NativeApiError};
 use neon::{
-    prelude::{Channel, Context, Finalize, JsResult, JsUndefined},
+    prelude::{Channel, Context, Finalize, JsResult, JsUndefined, TaskContext, Value},
     types::Deferred,
 };
 use peer::io::{DirectServer, TcpHandle};
@@ -121,6 +122,24 @@ impl Instance {
         )
     }
 
+    fn settle_with_result<E, F, V>(&self, promise: Deferred, result: Result<(), E>, ret: F)
+    where
+        E: ToString,
+        F: FnOnce(TaskContext<'_>) -> JsResult<'_, V> + Send + 'static,
+        V: Value,
+    {
+        let result = result.map_err(|error| error.to_string());
+
+        promise.settle_with(&self.channel, move |mut cx| match result {
+            Ok(()) => ret(cx),
+            Err(error) => throw!(cx, error),
+        });
+    }
+
+    fn undefined(mut cx: TaskContext<'_>) -> JsResult<'_, JsUndefined> {
+        Ok(cx.undefined())
+    }
+
     fn handle_node_request(
         &mut self,
         content: RequestContent,
@@ -223,13 +242,10 @@ impl Instance {
                 self.server = Some(server);
                 Ok(())
             }
-            Err(error) => Err(error.to_string()),
+            Err(error) => Err(error),
         };
 
-        promise.settle_with(&self.channel, move |mut cx| match result {
-            Ok(()) => Ok(cx.undefined()),
-            Err(error) => throw!(cx, error),
-        });
+        self.settle_with_result(promise, result, Self::undefined);
 
         Ok(())
     }
@@ -237,12 +253,11 @@ impl Instance {
     fn handle_establish_session(
         &mut self,
         promise: Deferred,
-        lease_id: [u8; 4],
+        lease_id: LeaseId,
     ) -> Result<(), anyhow::Error> {
-        // TODO: implement
-
-        promise.settle_with(&self.channel, move |mut cx| Ok(cx.undefined()));
-
+        let result = forward!(self.sv_handler, |stack| stack
+            .establish_session_request(lease_id));
+        self.settle_with_result(promise, result, Self::undefined);
         Ok(())
     }
 

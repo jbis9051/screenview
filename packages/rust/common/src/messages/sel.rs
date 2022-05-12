@@ -1,4 +1,4 @@
-use super::Data;
+use super::{Data, Message};
 use parser::{message_id, MessageComponent};
 
 #[derive(Debug, MessageComponent)]
@@ -31,4 +31,8 @@ pub enum SelMessage<'a> {
     TransportDataMessageReliable(TransportDataMessageReliable<'a>),
     TransportDataPeerMessageUnreliable(TransportDataPeerMessageUnreliable<'a>),
     TransportDataServerMessageUnreliable(TransportDataServerMessageUnreliable<'a>),
+}
+
+impl<'a> Message for SelMessage<'a> {
+    const LEN_PREFIX_WIDTH: usize = 2;
 }

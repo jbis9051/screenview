@@ -1,14 +1,14 @@
 use crate::{
     higher_handler::{HigherError, HigherHandlerTrait},
-    io::{IoHandle, Reliable, TransportError, TransportResponse, Unreliable},
+    io::{IoHandle, Reliable, SendError, TransportError, TransportResponse, Unreliable},
     lower::{LowerError, LowerHandlerTrait},
-    ChanneledMessage,
     InformEvent,
 };
+use common::messages::svsc::LeaseId;
 
 pub struct HandlerStack<H, L, R, U> {
-    pub higher: H,
-    pub lower: L,
+    higher: H,
+    lower: L,
     pub io_handle: IoHandle<R, U>,
 }
 
@@ -45,8 +45,7 @@ where
         // if we are direct, wire is wpskaa data
         // if we are signal, wire data is sel
 
-        let mut send_reliable = Vec::new();
-        let mut send_unreliable = Vec::new();
+        let mut send = Vec::new();
         let mut inform_events = Vec::new();
 
 
@@ -54,23 +53,10 @@ where
         // if direct, lower just passes us back
         // if signal it decrypts it and passes is through svsc
         // regardless we will get wpskka data out of ths
-        inform_events.append(&mut self.lower.handle(
-            wire,
-            &mut data_for_higher,
-            &mut send_reliable,
-            &mut send_unreliable,
-        )?);
+        inform_events.append(&mut self.lower.handle(wire, &mut data_for_higher, &mut send)?);
 
-        for msg in send_reliable {
-            self.io_handle
-                .send_reliable(msg)
-                .map_err(|_| HandlerError::SendReliable)?;
-        }
-
-        for msg in send_unreliable {
-            self.io_handle
-                .send_unreliable(msg)
-                .map_err(|_| HandlerError::SendUnreliable)?;
+        for msg in send {
+            self.io_handle.send(msg)?;
         }
 
         // we get wpskka data from higher
@@ -78,26 +64,23 @@ where
         inform_events.append(&mut self.higher.handle(&data_for_higher, &mut wpskka_outputs)?);
 
 
-        let mut to_wires = Vec::new();
+        let mut to_wire = Vec::new();
 
         for wpskka_output in wpskka_outputs {
-            to_wires.push(self.lower.send(wpskka_output)?);
+            to_wire.push(self.lower.send(wpskka_output)?);
         }
 
-        for wire_msg in to_wires {
-            match wire_msg {
-                ChanneledMessage::Reliable(data) => self
-                    .io_handle
-                    .send_reliable(data)
-                    .map_err(|_| HandlerError::SendReliable)?,
-                ChanneledMessage::Unreliable(data) => self
-                    .io_handle
-                    .send_unreliable(data)
-                    .map_err(|_| HandlerError::SendUnreliable)?,
-            }
+        for wire_msg in to_wire {
+            self.io_handle.send(wire_msg)?;
         }
 
         Ok(inform_events)
+    }
+
+    pub fn establish_session_request(&mut self, lease_id: LeaseId) -> Result<(), HandlerError> {
+        let message = self.lower.establish_session_request(lease_id);
+        let data = self.lower.send(message)?;
+        self.io_handle.send(data).map_err(Into::into)
     }
 }
 
@@ -109,8 +92,6 @@ pub enum HandlerError {
     Lower(#[from] LowerError),
     #[error("higher-layer error: {0}")]
     Higher(#[from] HigherError),
-    #[error("send-reliable error")]
-    SendReliable,
-    #[error("send-unreliable error")]
-    SendUnreliable,
+    #[error("failed to send message to IO handler: {0}")]
+    SendError(#[from] SendError),
 }

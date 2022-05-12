@@ -1,6 +1,5 @@
 use crate::{
     helpers::cipher_reliable_peer::CipherError,
-    io::LENGTH_FIELD_WIDTH,
     rvd::{RvdClientHandler, RvdError, RvdHandlerTrait, RvdHostHandler},
     wpskka::{WpskkaClientHandler, WpskkaError, WpskkaHandlerTrait, WpskkaHostHandler},
     ChanneledMessage,
@@ -10,8 +9,8 @@ use common::messages::{
     rvd::RvdMessage,
     wpskka::{TransportDataMessageUnreliable, WpskkaMessage},
     Error as MessageComponentError,
+    Message,
     MessageComponent,
-    ScreenViewMessage,
 };
 use std::io::Cursor;
 
@@ -20,15 +19,38 @@ pub trait HigherHandlerTrait {
     fn handle(
         &mut self,
         wpskka_data: &[u8],
-        output: &mut Vec<ChanneledMessage<Vec<u8>>>,
+        output: &mut Vec<ChanneledMessage<HigherOutput>>,
     ) -> Result<Vec<InformEvent>, HigherError>;
 
     // takes in
-    fn send(
+    fn send<'a, M: Into<sealed::HigherMessage<'a>>>(
         &mut self,
-        message: ScreenViewMessage<'_>,
-    ) -> Result<ChanneledMessage<Vec<u8>>, HigherSendError>;
+        message: M,
+    ) -> Result<ChanneledMessage<HigherOutput>, HigherSendError>;
 }
+
+pub(crate) mod sealed {
+    use super::*;
+
+    pub enum HigherMessage<'a> {
+        Rvd(RvdMessage),
+        Wpskka(WpskkaMessage<'a>),
+    }
+}
+
+impl From<RvdMessage> for sealed::HigherMessage<'_> {
+    fn from(msg: RvdMessage) -> Self {
+        Self::Rvd(msg)
+    }
+}
+
+impl<'a> From<WpskkaMessage<'a>> for sealed::HigherMessage<'a> {
+    fn from(msg: WpskkaMessage<'a>) -> Self {
+        Self::Wpskka(msg)
+    }
+}
+
+pub struct HigherOutput(pub(crate) Vec<u8>);
 
 pub struct HigherHandler<Wpskka, Rvd> {
     wpskka: Wpskka,
@@ -54,8 +76,11 @@ impl HigherHandler<WpskkaClientHandler, RvdClientHandler> {
 }
 
 impl<Wpskka: WpskkaHandlerTrait, Rvd: RvdHandlerTrait> HigherHandler<Wpskka, Rvd> {
-    fn send_rvd(&mut self, rvd: RvdMessage) -> Result<ChanneledMessage<Vec<u8>>, HigherSendError> {
-        let data = rvd.to_bytes(None)?;
+    fn send_rvd(
+        &mut self,
+        rvd: RvdMessage,
+    ) -> Result<ChanneledMessage<HigherOutput>, HigherSendError> {
+        let data = rvd.to_bytes()?;
 
         match rvd {
             RvdMessage::FrameData(_) => {
@@ -74,14 +99,14 @@ impl<Wpskka: WpskkaHandlerTrait, Rvd: RvdHandlerTrait> HigherHandler<Wpskka, Rvd
     fn send_wpskka(
         &mut self,
         message: WpskkaMessage<'_>,
-    ) -> Result<ChanneledMessage<Vec<u8>>, HigherSendError> {
-        let bytes = message.to_bytes(Some(LENGTH_FIELD_WIDTH))?;
+    ) -> Result<ChanneledMessage<HigherOutput>, HigherSendError> {
+        let output = HigherOutput(message.to_bytes()?);
 
         match message {
             // TransportDataMessageUnreliable is the only type of unreliable message
             WpskkaMessage::TransportDataMessageUnreliable(..) =>
-                Ok(ChanneledMessage::Unreliable(bytes)),
-            _ => Ok(ChanneledMessage::Reliable(bytes)),
+                Ok(ChanneledMessage::Unreliable(output)),
+            _ => Ok(ChanneledMessage::Reliable(output)),
         }
     }
 }
@@ -92,7 +117,7 @@ impl<Wpskka: WpskkaHandlerTrait, Rvd: RvdHandlerTrait> HigherHandlerTrait
     fn handle(
         &mut self,
         wpskka_data: &[u8],
-        output: &mut Vec<ChanneledMessage<Vec<u8>>>,
+        output: &mut Vec<ChanneledMessage<HigherOutput>>,
     ) -> Result<Vec<InformEvent>, HigherError> {
         let mut events = Vec::new();
 
@@ -121,14 +146,13 @@ impl<Wpskka: WpskkaHandlerTrait, Rvd: RvdHandlerTrait> HigherHandlerTrait
         Ok(events)
     }
 
-    fn send(
+    fn send<'a, M: Into<sealed::HigherMessage<'a>>>(
         &mut self,
-        message: ScreenViewMessage<'_>,
-    ) -> Result<ChanneledMessage<Vec<u8>>, HigherSendError> {
-        match message {
-            ScreenViewMessage::RvdMessage(rvd) => self.send_rvd(rvd),
-            ScreenViewMessage::WpskkaMessage(wpskka) => Ok(self.send_wpskka(wpskka)?),
-            _ => panic!("You should only be sending RvdMessage or WpskkaMessage to HigherHandler"),
+        message: M,
+    ) -> Result<ChanneledMessage<HigherOutput>, HigherSendError> {
+        match message.into() {
+            sealed::HigherMessage::Rvd(rvd) => self.send_rvd(rvd),
+            sealed::HigherMessage::Wpskka(wpskka) => Ok(self.send_wpskka(wpskka)?),
         }
     }
 }

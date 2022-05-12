@@ -57,7 +57,9 @@ impl Unreliable for UdpHandle {
     }
 
     fn send(&mut self, message: Vec<u8>, max_len: usize) -> Result<(), SendError> {
-        self.write.send((message, max_len)).map_err(|_| SendError)
+        self.write
+            .send((message, max_len))
+            .map_err(|_| SendError(Source::WriteUnreliable))
     }
 
     fn close(&mut self) {

@@ -1,4 +1,4 @@
-use super::{Error, MessageComponent};
+use super::{Error, Message, MessageComponent};
 use crate::messages::impl_bitflags_message_component;
 use bitflags::bitflags;
 use byteorder::{ReadBytesExt, WriteBytesExt};
@@ -302,4 +302,8 @@ pub enum RvdMessage {
     ClipboardRequest(ClipboardRequest),
     ClipboardNotification(ClipboardNotification),
     FrameData(FrameData),
+}
+
+impl Message for RvdMessage {
+    const LEN_PREFIX_WIDTH: usize = 0;
 }

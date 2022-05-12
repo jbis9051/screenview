@@ -80,7 +80,9 @@ impl Reliable for TcpHandle {
     }
 
     fn send(&mut self, message: Vec<u8>) -> Result<(), SendError> {
-        self.write.send(message).map_err(|_| SendError)
+        self.write
+            .send(message)
+            .map_err(|_| SendError(Source::WriteReliable))
     }
 
     fn close(&mut self) {

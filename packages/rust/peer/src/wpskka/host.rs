@@ -24,6 +24,7 @@ use common::messages::{
         TryAuth,
         WpskkaMessage,
     },
+    Message,
     MessageComponent,
 };
 use std::{io::Cursor, sync::Arc};
@@ -116,7 +117,7 @@ impl WpskkaHostHandler {
                 let outgoing = srp.init(password);
                 write.push(WpskkaMessage::AuthMessage(AuthMessage {
                     data: outgoing
-                        .to_bytes(None)
+                        .to_bytes()
                         .map_err(|_| WpskkaHostError::BadAuthSchemeMessage)?,
                 }));
 
@@ -160,7 +161,7 @@ impl WpskkaHostHandler {
                             match srp_host.handle(msg) {
                                 Ok(outgoing) => {
                                     let data = outgoing
-                                        .to_bytes(None)
+                                        .to_bytes()
                                         .map_err(|_| WpskkaHostError::BadAuthSchemeMessage)?;
                                     if srp_host.is_authenticated() {
                                         self.current_auth = None; // TODO Security: Look into zeroing out the data here

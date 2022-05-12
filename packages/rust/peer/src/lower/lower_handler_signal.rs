@@ -1,12 +1,17 @@
+use super::sealed::LowerMessage;
 use crate::{
-    io::LENGTH_FIELD_WIDTH,
     lower::{LowerError, LowerHandlerTrait, LowerSendError},
     sel_handler::SelHandler,
     svsc_handler::SvscHandler,
     ChanneledMessage,
     InformEvent,
 };
-use common::messages::{sel::SelMessage, svsc::SvscMessage, MessageComponent};
+use common::messages::{
+    sel::SelMessage,
+    svsc::{LeaseId, SvscMessage},
+    Message,
+    MessageComponent,
+};
 use std::io::Cursor;
 
 // we handle the case when we are using a signal server
@@ -28,7 +33,7 @@ impl LowerHandlerSignal {
         &mut self,
         message: ChanneledMessage<SvscMessage<'_>>,
     ) -> Result<ChanneledMessage<Vec<u8>>, LowerSendError> {
-        let sel = match message.map(|msg| msg.to_bytes(None)) {
+        let sel = match message.map(|msg| msg.to_bytes()) {
             ChanneledMessage::Reliable(message) => SelHandler::wrap_reliable(message?),
             ChanneledMessage::Unreliable(message) => {
                 let cipher = self.sel.unreliable_cipher();
@@ -36,17 +41,21 @@ impl LowerHandlerSignal {
             }
         };
 
-        match &sel {
-            SelMessage::TransportDataMessageReliable(..) =>
-                self.send_sel(&sel).map(ChanneledMessage::Reliable),
-            SelMessage::TransportDataPeerMessageUnreliable(..)
-            | SelMessage::TransportDataServerMessageUnreliable(..) =>
-                self.send_sel(&sel).map(ChanneledMessage::Unreliable),
-        }
+        self.send_sel(&sel)
     }
 
-    fn send_sel(&mut self, sel: &SelMessage<'_>) -> Result<Vec<u8>, LowerSendError> {
-        Ok(sel.to_bytes(Some(LENGTH_FIELD_WIDTH))?)
+    fn send_sel(
+        &mut self,
+        sel: &SelMessage<'_>,
+    ) -> Result<ChanneledMessage<Vec<u8>>, LowerSendError> {
+        let bytes = sel.to_bytes()?;
+
+        match &sel {
+            SelMessage::TransportDataMessageReliable(..) => Ok(ChanneledMessage::Reliable(bytes)),
+            SelMessage::TransportDataPeerMessageUnreliable(..)
+            | SelMessage::TransportDataServerMessageUnreliable(..) =>
+                Ok(ChanneledMessage::Unreliable(bytes)),
+        }
     }
 }
 
@@ -55,8 +64,7 @@ impl LowerHandlerTrait for LowerHandlerSignal {
         &mut self,
         wire: &[u8],
         output: &mut Vec<u8>,
-        send_reliable: &mut Vec<Vec<u8>>,
-        send_unreliable: &mut Vec<Vec<u8>>,
+        send: &mut Vec<ChanneledMessage<Vec<u8>>>,
     ) -> Result<Vec<InformEvent>, LowerError> {
         let message = SelMessage::read(&mut Cursor::new(wire))?;
 
@@ -77,22 +85,31 @@ impl LowerHandlerTrait for LowerHandlerSignal {
 
         for message in send_svsc {
             // TODO check if reliable
-            match self.send_svsc(ChanneledMessage::Reliable(message))? {
-                ChanneledMessage::Reliable(data) => send_reliable.push(data),
-                ChanneledMessage::Unreliable(data) => send_unreliable.push(data),
-            }
+            send.push(self.send_svsc(ChanneledMessage::Reliable(message))?);
         }
 
         Ok(events)
     }
 
-    fn send(
+    fn send<'a, M: Into<LowerMessage<'a>>>(
         &mut self,
-        wpskka_bytes: ChanneledMessage<Vec<u8>>,
+        message: M,
     ) -> Result<ChanneledMessage<Vec<u8>>, LowerError> {
-        self.send_svsc(
-            wpskka_bytes.map(|data| SvscMessage::SessionDataSend(SvscHandler::wrap(data))),
-        )
-        .map_err(Into::into)
+        let result = match message.into() {
+            LowerMessage::HigherOutput(output) => self.send_svsc(
+                output.map(|data| SvscMessage::SessionDataSend(SvscHandler::wrap(data.0))),
+            ),
+            LowerMessage::Svsc(svsc) => self.send_svsc(svsc),
+            LowerMessage::Sel(ref sel) => self.send_sel(sel),
+        };
+
+        result.map_err(Into::into)
+    }
+
+    fn establish_session_request(
+        &mut self,
+        lease_id: LeaseId,
+    ) -> ChanneledMessage<SvscMessage<'static>> {
+        ChanneledMessage::Reliable(self.svsc.establish_session_request(lease_id))
     }
 }

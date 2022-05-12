@@ -3,6 +3,9 @@ use crate::{
     ChanneledMessage,
     InformEvent,
 };
+use common::messages::svsc::{LeaseId, SvscMessage};
+
+use super::sealed::LowerMessage;
 
 // we handle the case when we are going directly to the peer, we just pass things through
 
@@ -19,17 +22,27 @@ impl LowerHandlerTrait for LowerHandlerDirect {
         &mut self,
         wire: &[u8],
         output: &mut Vec<u8>,
-        _send_reliable: &mut Vec<Vec<u8>>,
-        _send_unreliable: &mut Vec<Vec<u8>>,
+        _send: &mut Vec<ChanneledMessage<Vec<u8>>>,
     ) -> Result<Vec<InformEvent>, LowerError> {
         output.extend_from_slice(wire);
         Ok(Vec::new())
     }
 
-    fn send(
+    fn send<'a, M: Into<LowerMessage<'a>>>(
         &mut self,
-        wpskka_bytes: ChanneledMessage<Vec<u8>>,
+        message: M,
     ) -> Result<ChanneledMessage<Vec<u8>>, LowerError> {
-        Ok(wpskka_bytes)
+        match message.into() {
+            LowerMessage::HigherOutput(output) => Ok(output.map(|wrapper| wrapper.0)),
+            LowerMessage::Svsc(..) => panic!("Attempted to send SVSC message to direct handler"),
+            LowerMessage::Sel(..) => panic!("Attempted to send SEL message to direct handler"),
+        }
+    }
+
+    fn establish_session_request(
+        &mut self,
+        _lease_id: LeaseId,
+    ) -> ChanneledMessage<SvscMessage<'static>> {
+        panic!("Attempted to call establish_session_request on direct handler")
     }
 }

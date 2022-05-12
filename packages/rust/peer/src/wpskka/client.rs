@@ -18,6 +18,7 @@ use crate::{
 use common::messages::{
     auth::srp::SrpMessage,
     wpskka::{AuthMessage, AuthSchemeType, TryAuth, WpskkaMessage},
+    Message,
     MessageComponent,
 };
 use std::{cmp::Ordering, io::Cursor, sync::Arc};
@@ -83,7 +84,7 @@ impl WpskkaClientHandler {
                         .map_err(|_| WpskkaClientError::BadAuthSchemeMessage)?;
                     write.push(WpskkaMessage::AuthMessage(AuthMessage {
                         data: outgoing
-                            .to_bytes(None)
+                            .to_bytes()
                             .map_err(|_| WpskkaClientError::BadAuthSchemeMessage)?,
                     }));
                     Ok(())

@@ -1,4 +1,4 @@
-use super::{Data, Error, MessageComponent};
+use super::{Data, Error, Message, MessageComponent};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use chrono::{DateTime, LocalResult, TimeZone, Utc};
 use parser::{message_id, MessageComponent};
@@ -182,4 +182,8 @@ pub enum SvscMessage<'a> {
     SessionDataSend(SessionDataSend<'a>),
     SessionDataReceive(SessionDataReceive<'a>),
     KeepAlive(KeepAlive),
+}
+
+impl<'a> Message for SvscMessage<'a> {
+    const LEN_PREFIX_WIDTH: usize = 0;
 }

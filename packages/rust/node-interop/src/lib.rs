@@ -5,7 +5,7 @@ mod instance;
 mod node_interface;
 mod protocol;
 
-use common::messages::rvd::ButtonsMask;
+use common::messages::{rvd::ButtonsMask, svsc::LeaseId};
 use instance::*;
 use neon::prelude::*;
 use node_interface::NodeInterface;
@@ -115,7 +115,7 @@ fn start_server(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
 
 fn establish_session(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
     let handle = cx.argument::<JsBox<InstanceHandle>>(0)?;
-    let lease_id: [u8; 4] = match cx
+    let lease_id: LeaseId = match cx
         .argument::<JsString>(1)?
         .value(&mut cx)
         .as_bytes()
