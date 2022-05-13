@@ -1,6 +1,6 @@
 use peer::{
-    handler_stack::{HandlerError, HandlerStack, HigherStack, LowerStack},
-    higher_handler::{HigherHandler, HigherHandlerClient, HigherHandlerHost},
+    handler_stack::{HandlerError, HandlerStack},
+    higher_handler::HigherHandler,
     io::{DirectServer, IoHandle, TcpHandle, UdpHandle},
     lower::{LowerHandlerDirect, LowerHandlerSignal},
     rvd::{RvdClientHandler, RvdHostHandler},
@@ -13,6 +13,41 @@ type HostSignalStack = HStack<WpskkaHostHandler, RvdHostHandler, LowerHandlerSig
 type HostDirectStack = HStack<WpskkaHostHandler, RvdHostHandler, LowerHandlerDirect>;
 type ClientSignalStack = HStack<WpskkaClientHandler, RvdClientHandler, LowerHandlerSignal>;
 type ClientDirectStack = HStack<WpskkaClientHandler, RvdClientHandler, LowerHandlerDirect>;
+
+pub(crate) fn call_unary<F, T, U>(arg: T, f: F) -> U
+where F: FnOnce(T) -> U {
+    f(arg)
+}
+
+#[macro_export]
+macro_rules! __forward_pat {
+    (HostDirect, $stack:ident) => {
+        $crate::handler::ScreenViewHandler::HostDirect($stack, _)
+    };
+    ($variant:ident, $stack:ident) => {
+        $crate::handler::ScreenViewHandler::$variant($stack)
+    };
+}
+
+#[macro_export]
+macro_rules! __forward_internal {
+    ($stack:ident, $handler:expr, [ $( $variant:ident ),* ], $op:expr) => {
+        match &mut $handler {
+            $(
+                $crate::__forward_pat!($variant, $stack)  => $crate::handler::call_unary($stack, $op),
+            )*
+            #[allow(unreachable_patterns)]
+            _ => unreachable!()
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! forward {
+    ($handler:expr, [ $( $variant:ident ),* ], $op:expr) => {
+        $crate::__forward_internal!(stack, $handler, [ $( $variant ),* ], $op)
+    };
+}
 
 pub enum ScreenViewHandler {
     HostSignal(HostSignalStack),
@@ -58,165 +93,18 @@ impl ScreenViewHandler {
     }
 
     pub fn io_handle(&mut self) -> &mut IoHandle<TcpHandle, UdpHandle> {
-        match self {
-            Self::HostSignal(stack) => &mut stack.io_handle,
-            Self::HostDirect(stack, ..) => &mut stack.io_handle,
-            Self::ClientSignal(stack) => &mut stack.io_handle,
-            Self::ClientDirect(stack) => &mut stack.io_handle,
-        }
+        forward!(
+            *self,
+            [HostSignal, HostDirect, ClientSignal, ClientDirect],
+            |stack| &mut stack.io_handle
+        )
     }
 
     pub fn handle_next_message(&mut self) -> Option<Result<Vec<InformEvent>, HandlerError>> {
-        match self {
-            Self::HostSignal(stack) => stack.handle_next_message(),
-            Self::HostDirect(stack, ..) => stack.handle_next_message(),
-            Self::ClientSignal(stack) => stack.handle_next_message(),
-            Self::ClientDirect(stack) => stack.handle_next_message(),
-        }
-    }
-
-    pub fn view(&mut self) -> HandlerView<&'_ mut Self> {
-        HandlerView(self)
-    }
-}
-
-pub struct HandlerView<T>(T);
-
-impl<'a> HandlerView<&'a mut ScreenViewHandler> {
-    pub fn host(self) -> HandlerView<HostView<'a>> {
-        match self.0 {
-            ScreenViewHandler::HostSignal(stack) => HandlerView(HostView::Signal(stack)),
-            ScreenViewHandler::HostDirect(stack, server) =>
-                HandlerView(HostView::Direct(stack, server)),
-            _ => panic!("Attempted to take a HostView of a non-host handler"),
-        }
-    }
-
-    pub fn client(self) -> HandlerView<ClientView<'a>> {
-        match self.0 {
-            ScreenViewHandler::ClientSignal(stack) => HandlerView(ClientView::Signal(stack)),
-            ScreenViewHandler::ClientDirect(stack) => HandlerView(ClientView::Direct(stack)),
-            _ => panic!("Attempted to take a ClientView of a non-client handler"),
-        }
-    }
-
-    pub fn any_higher(self) -> HandlerView<AnyHigher<'a>> {
-        HandlerView(AnyHigher(self.0))
-    }
-}
-
-impl<'a> HandlerView<HostView<'a>> {
-    pub fn signal(self) -> &'a mut HostSignalStack {
-        match self.0 {
-            HostView::Signal(stack) => stack,
-            _ => panic!("Attempted to take SignalView of non-signal handler"),
-        }
-    }
-
-    pub fn direct(self) -> (&'a mut HostDirectStack, &'a mut Option<DirectServer>) {
-        match self.0 {
-            HostView::Direct(stack, server) => (stack, server),
-            _ => panic!("Attempted to take DirectView of non-direct handler"),
-        }
-    }
-
-    pub fn any_lower(self) -> HigherStack<'a, HigherHandlerHost, TcpHandle, UdpHandle> {
-        self.0.higher()
-    }
-}
-
-impl<'a> HandlerView<ClientView<'a>> {
-    pub fn signal(self) -> &'a mut ClientSignalStack {
-        match self.0 {
-            ClientView::Signal(stack) => stack,
-            _ => panic!("Attempted to take SignalView of non-signal handler"),
-        }
-    }
-
-    pub fn direct(self) -> &'a mut ClientDirectStack {
-        match self.0 {
-            ClientView::Direct(stack) => stack,
-            _ => panic!("Attempted to take DirectView of non-direct handler"),
-        }
-    }
-
-    pub fn any_lower(self) -> HigherStack<'a, HigherHandlerClient, TcpHandle, UdpHandle> {
-        self.0.higher()
-    }
-}
-
-impl<'a> HandlerView<AnyHigher<'a>> {
-    pub fn signal(self) -> LowerStack<'a, LowerHandlerSignal, TcpHandle, UdpHandle> {
-        match self.0 .0 {
-            ScreenViewHandler::HostSignal(stack) => SignalView::Host(stack).lower(),
-            ScreenViewHandler::ClientSignal(stack) => SignalView::Client(stack).lower(),
-            _ => panic!("Attempted to take SignalView of non-signal handler"),
-        }
-    }
-
-    pub fn direct(self) -> LowerStack<'a, LowerHandlerDirect, TcpHandle, UdpHandle> {
-        match self.0 .0 {
-            ScreenViewHandler::HostDirect(stack, ..) => DirectView::Host(stack).lower(),
-            ScreenViewHandler::ClientDirect(stack) => DirectView::Client(stack).lower(),
-            _ => panic!("Attempted to take DirectView of non-direct handler"),
-        }
-    }
-}
-
-pub struct AnyHigher<'a>(&'a mut ScreenViewHandler);
-
-pub enum HostView<'a> {
-    Signal(&'a mut HostSignalStack),
-    Direct(&'a mut HostDirectStack, &'a mut Option<DirectServer>),
-}
-
-impl<'a> HostView<'a> {
-    pub fn higher(self) -> HigherStack<'a, HigherHandlerHost, TcpHandle, UdpHandle> {
-        match self {
-            Self::Signal(stack) => stack.higher(),
-            Self::Direct(stack, ..) => stack.higher(),
-        }
-    }
-}
-
-pub enum ClientView<'a> {
-    Signal(&'a mut ClientSignalStack),
-    Direct(&'a mut ClientDirectStack),
-}
-
-impl<'a> ClientView<'a> {
-    pub fn higher(self) -> HigherStack<'a, HigherHandlerClient, TcpHandle, UdpHandle> {
-        match self {
-            Self::Signal(stack) => stack.higher(),
-            Self::Direct(stack) => stack.higher(),
-        }
-    }
-}
-
-pub enum SignalView<'a> {
-    Host(&'a mut HostSignalStack),
-    Client(&'a mut ClientSignalStack),
-}
-
-impl<'a> SignalView<'a> {
-    pub fn lower(self) -> LowerStack<'a, LowerHandlerSignal, TcpHandle, UdpHandle> {
-        match self {
-            Self::Host(stack) => stack.lower(),
-            Self::Client(stack) => stack.lower(),
-        }
-    }
-}
-
-pub enum DirectView<'a> {
-    Host(&'a mut HostDirectStack),
-    Client(&'a mut ClientDirectStack),
-}
-
-impl<'a> DirectView<'a> {
-    pub fn lower(self) -> LowerStack<'a, LowerHandlerDirect, TcpHandle, UdpHandle> {
-        match self {
-            Self::Host(stack) => stack.lower(),
-            Self::Client(stack) => stack.lower(),
-        }
+        forward!(
+            *self,
+            [HostSignal, HostDirect, ClientSignal, ClientDirect],
+            |stack| stack.handle_next_message()
+        )
     }
 }

@@ -1,4 +1,5 @@
 use crate::{
+    forward,
     handler::ScreenViewHandler,
     node_interface::NodeInterface,
     protocol::{ConnectionType, Display, Message, RequestContent},
@@ -223,7 +224,10 @@ impl Instance {
     }
 
     fn handle_start_server(&mut self, promise: Deferred, addr: &str) -> Result<(), anyhow::Error> {
-        let (_, server) = self.sv_handler.view().host().direct();
+        let server = match &mut self.sv_handler {
+            ScreenViewHandler::HostDirect(_, server) => server,
+            _ => unreachable!(),
+        };
 
         if server.is_some() {
             promise.settle_with(&self.channel, |mut cx| -> JsResult<'_, JsUndefined> {
@@ -253,12 +257,8 @@ impl Instance {
         promise: Deferred,
         lease_id: LeaseId,
     ) -> Result<(), anyhow::Error> {
-        let result = self
-            .sv_handler
-            .view()
-            .any_higher()
-            .signal()
-            .establish_session_request(lease_id);
+        let result = forward!(self.sv_handler, [HostSignal, ClientSignal], |stack| stack
+            .establish_session_request(lease_id));
         self.settle_with_result(promise, result, Self::undefined);
         Ok(())
     }
@@ -268,12 +268,8 @@ impl Instance {
         promise: Deferred,
         password: Vec<u8>,
     ) -> Result<(), anyhow::Error> {
-        let result = self
-            .sv_handler
-            .view()
-            .client()
-            .any_lower()
-            .process_password(password);
+        let result = forward!(self.sv_handler, [ClientSignal, ClientDirect], |stack| stack
+            .process_password(password));
         self.settle_with_result(promise, result, Self::undefined);
         Ok(())
     }
@@ -311,12 +307,8 @@ impl Instance {
         promise: Deferred,
         cookie: Option<Cookie>,
     ) -> Result<(), anyhow::Error> {
-        let result = self
-            .sv_handler
-            .view()
-            .any_higher()
-            .signal()
-            .lease_request(cookie);
+        let result = forward!(self.sv_handler, [HostSignal, ClientSignal], |stack| stack
+            .lease_request(cookie));
         self.settle_with_result(promise, result, Self::undefined);
         Ok(())
     }
@@ -326,11 +318,8 @@ impl Instance {
         promise: Deferred,
         password: Option<Vec<u8>>,
     ) -> Result<(), anyhow::Error> {
-        self.sv_handler
-            .view()
-            .host()
-            .any_lower()
-            .set_static_password(password);
+        forward!(self.sv_handler, [HostSignal, HostDirect], |stack| stack
+            .set_static_password(password));
         promise.settle_with(&self.channel, move |mut cx| Ok(cx.undefined()));
         Ok(())
     }

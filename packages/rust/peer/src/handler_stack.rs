@@ -1,7 +1,7 @@
 use crate::{
     higher_handler::{HigherError, HigherHandlerClient, HigherHandlerHost, HigherHandlerTrait},
     io::{IoHandle, Reliable, SendError, TransportError, TransportResponse, Unreliable},
-    lower::{LowerError, LowerHandlerSignal, LowerHandlerTrait, OpaqueLowerHandler},
+    lower::{LowerError, LowerHandlerSignal, LowerHandlerTrait},
     InformEvent,
 };
 use common::messages::svsc::{Cookie, LeaseId};
@@ -76,29 +76,13 @@ where
 
         Ok(inform_events)
     }
-
-    pub fn lower(&mut self) -> LowerStack<'_, L, R, U> {
-        LowerStack {
-            lower: &mut self.lower,
-            io_handle: &mut self.io_handle,
-        }
-    }
-
-    pub fn higher(&mut self) -> HigherStack<'_, H, R, U> {
-        HigherStack {
-            higher: &mut self.higher,
-            lower: OpaqueLowerHandler::from_lower(&mut self.lower),
-            io_handle: &mut self.io_handle,
-        }
-    }
 }
 
-pub struct LowerStack<'a, L, R, U> {
-    lower: &'a mut L,
-    io_handle: &'a mut IoHandle<R, U>,
-}
-
-impl<'a, R: Reliable, U: Unreliable> LowerStack<'a, LowerHandlerSignal, R, U> {
+impl<H, R, U> HandlerStack<H, LowerHandlerSignal, R, U>
+where
+    R: Reliable,
+    U: Unreliable,
+{
     pub fn establish_session_request(&mut self, lease_id: LeaseId) -> Result<(), HandlerError> {
         let message = self.lower.establish_session_request(lease_id);
         let data = self.lower.send(message)?;
@@ -112,13 +96,12 @@ impl<'a, R: Reliable, U: Unreliable> LowerStack<'a, LowerHandlerSignal, R, U> {
     }
 }
 
-pub struct HigherStack<'a, H, R, U> {
-    higher: &'a mut H,
-    lower: OpaqueLowerHandler<'a>,
-    io_handle: &'a mut IoHandle<R, U>,
-}
-
-impl<'a, R: Reliable, U: Unreliable> HigherStack<'a, HigherHandlerClient, R, U> {
+impl<L, R, U> HandlerStack<HigherHandlerClient, L, R, U>
+where
+    L: LowerHandlerTrait,
+    R: Reliable,
+    U: Unreliable,
+{
     pub fn process_password(&mut self, password: Vec<u8>) -> Result<(), HandlerError> {
         if let Some(message) = self.higher.process_password(password)? {
             let higher_output = self.higher.send(message)?;
@@ -130,7 +113,7 @@ impl<'a, R: Reliable, U: Unreliable> HigherStack<'a, HigherHandlerClient, R, U> 
     }
 }
 
-impl<'a, R: Reliable, U: Unreliable> HigherStack<'a, HigherHandlerHost, R, U> {
+impl<L, R, U> HandlerStack<HigherHandlerHost, L, R, U> {
     pub fn set_static_password(&mut self, static_password: Option<Vec<u8>>) {
         self.higher.set_static_password(static_password)
     }

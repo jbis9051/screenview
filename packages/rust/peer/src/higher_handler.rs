@@ -134,7 +134,7 @@ impl<Wpskka: WpskkaHandlerTrait, Rvd: RvdHandlerTrait> HigherHandler<Wpskka, Rvd
     ) -> Result<Vec<InformEvent>, HigherError> {
         let mut events = Vec::new();
 
-        let wpskka_message = WpskkaMessage::read(&mut Cursor::new(&wpskka_data[..]))?;
+        let wpskka_message = WpskkaMessage::read(&mut Cursor::new(wpskka_data))?;
         let mut send_wpskka = Vec::new();
         let rvd_data = self
             .wpskka

@@ -182,7 +182,7 @@ fn lease_request(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
         .argument::<JsValue>(1)?
         .downcast::<JsArrayBuffer, _>(&mut cx)
     {
-        Ok(array_buf) => match array_buf.as_slice(&mut cx).try_into() {
+        Ok(array_buf) => match array_buf.as_slice(&cx).try_into() {
             Ok(cookie) => Some(cookie),
             Err(_) => return throw!(cx, "Cookie is incorrect length"),
         },
