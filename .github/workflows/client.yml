@@ -37,5 +37,6 @@ jobs:
         with:
           node-version: "17"
       - run: npm install -g yarn
+      - run: cd ../rust/node-interop && yarn --ignore-scripts && touch index.node && yarn ts-build && cd ../../js
       - run: yarn install --ignore-scripts
       - run: yarn lint:check
