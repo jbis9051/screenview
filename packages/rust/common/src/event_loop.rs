@@ -10,14 +10,13 @@ pub fn event_loop<F>(waker: ThreadWaker, mut func: F)
 where F: FnMut() -> EventLoopState {
     loop {
         match func() {
-            EventLoopState::Waiting => {
+            EventLoopState::Working => {
                 let unparked = waker.unparked.swap(false, Ordering::Acquire);
                 if !unparked {
                     thread::park();
                     waker.unparked.store(false, Ordering::Release);
                 }
             }
-            EventLoopState::Working => continue,
             EventLoopState::Complete => return,
         }
     }
@@ -47,7 +46,6 @@ impl ThreadWaker {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum EventLoopState {
-    Waiting,
     Working,
     Complete,
 }

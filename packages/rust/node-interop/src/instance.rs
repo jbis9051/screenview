@@ -1,5 +1,4 @@
 use crate::{
-    forward,
     handler::ScreenViewHandler,
     node_interface::NodeInterface,
     protocol::{ConnectionType, Display, Message, RequestContent},
@@ -7,7 +6,10 @@ use crate::{
 };
 use common::{
     event_loop::{event_loop, EventLoopState, JoinOnDrop, ThreadWaker},
-    messages::{rvd::ButtonsMask, svsc::LeaseId},
+    messages::{
+        rvd::ButtonsMask,
+        svsc::{Cookie, LeaseId},
+    },
 };
 use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
 use native::{NativeApi, NativeApiError};
@@ -57,7 +59,6 @@ pub struct Instance {
     native: NativeApi,
     sv_handler: ScreenViewHandler,
     node_interface: NodeInterface,
-    server: Option<DirectServer>,
     channel: Channel,
     waker: ThreadWaker,
 }
@@ -77,7 +78,6 @@ impl Instance {
             native: NativeApi::new()?,
             sv_handler: new_sv_handler(),
             node_interface,
-            server: None,
             channel,
             waker: waker.clone(),
         };
@@ -153,7 +153,7 @@ impl Instance {
             RequestContent::StartServer { ref addr } => self.handle_start_server(promise, addr),
             RequestContent::EstablishSession { lease_id } =>
                 self.handle_establish_session(promise, lease_id),
-            RequestContent::ProcessPassword { ref password } =>
+            RequestContent::ProcessPassword { password } =>
                 self.handle_process_password(promise, password),
             RequestContent::MouseInput {
                 x_position,
@@ -169,7 +169,7 @@ impl Instance {
             ),
             RequestContent::KeyboardInput { keycode, down } =>
                 self.handle_keyboard_input(promise, keycode, down),
-            RequestContent::LeaseRequest => self.handle_lease_request(promise),
+            RequestContent::LeaseRequest { cookie } => self.handle_lease_request(promise, cookie),
             RequestContent::UpdateStaticPassword { password } =>
                 self.handle_update_static_password(promise, password),
             RequestContent::SetControllable { is_controllable } =>
@@ -223,11 +223,9 @@ impl Instance {
     }
 
     fn handle_start_server(&mut self, promise: Deferred, addr: &str) -> Result<(), anyhow::Error> {
-        if !matches!(self.sv_handler, ScreenViewHandler::HostDirect(..)) {
-            panic!("Attempted to start server on non-host-direct instance");
-        }
+        let (_, server) = self.sv_handler.view().host().direct();
 
-        if self.server.is_some() {
+        if server.is_some() {
             promise.settle_with(&self.channel, |mut cx| -> JsResult<'_, JsUndefined> {
                 throw!(
                     cx,
@@ -238,8 +236,8 @@ impl Instance {
         }
 
         let result = match DirectServer::new(addr, self.waker.clone()) {
-            Ok(server) => {
-                self.server = Some(server);
+            Ok(new_server) => {
+                *server = Some(new_server);
                 Ok(())
             }
             Err(error) => Err(error),
@@ -255,8 +253,12 @@ impl Instance {
         promise: Deferred,
         lease_id: LeaseId,
     ) -> Result<(), anyhow::Error> {
-        let result = forward!(self.sv_handler, |stack| stack
-            .establish_session_request(lease_id));
+        let result = self
+            .sv_handler
+            .view()
+            .any_higher()
+            .signal()
+            .establish_session_request(lease_id);
         self.settle_with_result(promise, result, Self::undefined);
         Ok(())
     }
@@ -264,12 +266,15 @@ impl Instance {
     fn handle_process_password(
         &mut self,
         promise: Deferred,
-        password: &str,
+        password: Vec<u8>,
     ) -> Result<(), anyhow::Error> {
-        // TODO: implement
-
-        promise.settle_with(&self.channel, move |mut cx| Ok(cx.undefined()));
-
+        let result = self
+            .sv_handler
+            .view()
+            .client()
+            .any_lower()
+            .process_password(password);
+        self.settle_with_result(promise, result, Self::undefined);
         Ok(())
     }
 
@@ -301,23 +306,32 @@ impl Instance {
         Ok(())
     }
 
-    fn handle_lease_request(&mut self, promise: Deferred) -> Result<(), anyhow::Error> {
-        // TODO: implement
-
-        promise.settle_with(&self.channel, move |mut cx| Ok(cx.undefined()));
-
+    fn handle_lease_request(
+        &mut self,
+        promise: Deferred,
+        cookie: Option<Cookie>,
+    ) -> Result<(), anyhow::Error> {
+        let result = self
+            .sv_handler
+            .view()
+            .any_higher()
+            .signal()
+            .lease_request(cookie);
+        self.settle_with_result(promise, result, Self::undefined);
         Ok(())
     }
 
     fn handle_update_static_password(
         &mut self,
         promise: Deferred,
-        password: Option<String>,
+        password: Option<Vec<u8>>,
     ) -> Result<(), anyhow::Error> {
-        // TODO: implement
-
+        self.sv_handler
+            .view()
+            .host()
+            .any_lower()
+            .set_static_password(password);
         promise.settle_with(&self.channel, move |mut cx| Ok(cx.undefined()));
-
         Ok(())
     }
 
@@ -366,8 +380,6 @@ fn start_instance_main(instance: Instance, message_receiver: Receiver<Message>) 
 
 fn instance_main(mut instance: Instance, message_receiver: Receiver<Message>) {
     event_loop(instance.waker.clone(), move || {
-        let mut state = EventLoopState::Waiting;
-
         // Handle incoming messages from node
         match message_receiver.try_recv() {
             Ok(Message::Request { content, promise }) => {
@@ -375,8 +387,6 @@ fn instance_main(mut instance: Instance, message_receiver: Receiver<Message>) {
                     Ok(()) => { /* yay */ }
                     Err(error) => panic!("Internal error while handling node request: {}", error),
                 }
-
-                state = EventLoopState::Working;
             }
             Ok(Message::Shutdown) => return EventLoopState::Complete,
             Err(TryRecvError::Empty) => {}
@@ -385,35 +395,29 @@ fn instance_main(mut instance: Instance, message_receiver: Receiver<Message>) {
 
         // Handle messages from remote party
         match instance.sv_handler.handle_next_message() {
-            Some(Ok(events)) => {
+            Some(Ok(events)) =>
                 for event in events {
                     todo!("Handle event")
-                }
-
-                state = EventLoopState::Working;
-            }
+                },
             Some(Err(error)) => {
-                state = EventLoopState::Working;
-
                 todo!("Handle this error properly: {}", error)
             }
             None => {}
         }
 
         // If a server is running, handle incoming connections from there
-        match instance.server.as_ref().and_then(|server| server.recv()) {
-            Some(Ok(stream)) => {
-                instance.handle_direct_connect(stream);
-                state = EventLoopState::Working;
+        if let ScreenViewHandler::HostDirect(_, Some(ref server)) = instance.sv_handler {
+            match server.recv() {
+                Some(Ok(stream)) => {
+                    instance.handle_direct_connect(stream);
+                }
+                Some(Err(error)) => {
+                    todo!("Handle this error properly: {}", error)
+                }
+                None => {}
             }
-            Some(Err(error)) => {
-                state = EventLoopState::Working;
-
-                todo!("Handle this error properly: {}", error)
-            }
-            None => {}
         }
 
-        state
+        EventLoopState::Working
     });
 }

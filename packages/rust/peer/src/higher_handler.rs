@@ -26,7 +26,7 @@ pub trait HigherHandlerTrait {
     fn send<'a, M: Into<sealed::HigherMessage<'a>>>(
         &mut self,
         message: M,
-    ) -> Result<ChanneledMessage<HigherOutput>, HigherSendError>;
+    ) -> Result<ChanneledMessage<HigherOutput>, HigherError>;
 }
 
 pub(crate) mod sealed {
@@ -52,45 +52,62 @@ impl<'a> From<WpskkaMessage<'a>> for sealed::HigherMessage<'a> {
 
 pub struct HigherOutput(pub(crate) Vec<u8>);
 
+pub type HigherHandlerHost = HigherHandler<WpskkaHostHandler, RvdHostHandler>;
+pub type HigherHandlerClient = HigherHandler<WpskkaClientHandler, RvdClientHandler>;
+
 pub struct HigherHandler<Wpskka, Rvd> {
     wpskka: Wpskka,
     rvd: Rvd,
 }
 
-impl HigherHandler<WpskkaHostHandler, RvdHostHandler> {
+impl HigherHandlerHost {
     pub fn new() -> Self {
         HigherHandler {
             wpskka: WpskkaHostHandler::new(),
             rvd: RvdHostHandler::new(),
         }
     }
+
+    pub fn set_static_password(&mut self, static_password: Option<Vec<u8>>) {
+        self.wpskka.set_static_password(static_password)
+    }
 }
 
-impl HigherHandler<WpskkaClientHandler, RvdClientHandler> {
+impl HigherHandlerClient {
     pub fn new() -> Self {
         HigherHandler {
             wpskka: WpskkaClientHandler::new(),
             rvd: RvdClientHandler::new(),
         }
     }
+
+    pub fn process_password(
+        &mut self,
+        password: Vec<u8>,
+    ) -> Result<Option<WpskkaMessage<'static>>, HigherError> {
+        self.wpskka
+            .process_password(password)
+            .map_err(|error| HigherError::Wpskka(WpskkaError::Client(error)))
+    }
 }
 
 impl<Wpskka: WpskkaHandlerTrait, Rvd: RvdHandlerTrait> HigherHandler<Wpskka, Rvd> {
-    fn send_rvd(
-        &mut self,
-        rvd: RvdMessage,
-    ) -> Result<ChanneledMessage<HigherOutput>, HigherSendError> {
+    fn send_rvd(&mut self, rvd: RvdMessage) -> Result<ChanneledMessage<HigherOutput>, HigherError> {
         let data = rvd.to_bytes()?;
 
         match rvd {
             RvdMessage::FrameData(_) => {
                 let cipher = self.wpskka.unreliable_cipher();
                 let wpskka: TransportDataMessageUnreliable<'_> =
-                    <Wpskka as WpskkaHandlerTrait>::wrap_unreliable(data, cipher)?;
+                    <Wpskka as WpskkaHandlerTrait>::wrap_unreliable(data, cipher)
+                        .map_err(HigherSendError::from)?;
                 Ok(self.send_wpskka(WpskkaMessage::TransportDataMessageUnreliable(wpskka))?)
             }
             _ => {
-                let wpskka = self.wpskka.wrap_reliable(data)?;
+                let wpskka = self
+                    .wpskka
+                    .wrap_reliable(data)
+                    .map_err(HigherSendError::from)?;
                 Ok(self.send_wpskka(WpskkaMessage::TransportDataMessageReliable(wpskka))?)
             }
         }
@@ -109,12 +126,8 @@ impl<Wpskka: WpskkaHandlerTrait, Rvd: RvdHandlerTrait> HigherHandler<Wpskka, Rvd
             _ => Ok(ChanneledMessage::Reliable(output)),
         }
     }
-}
 
-impl<Wpskka: WpskkaHandlerTrait, Rvd: RvdHandlerTrait> HigherHandlerTrait
-    for HigherHandler<Wpskka, Rvd>
-{
-    fn handle(
+    fn handle_internal(
         &mut self,
         wpskka_data: &[u8],
         output: &mut Vec<ChanneledMessage<HigherOutput>>,
@@ -146,10 +159,10 @@ impl<Wpskka: WpskkaHandlerTrait, Rvd: RvdHandlerTrait> HigherHandlerTrait
         Ok(events)
     }
 
-    fn send<'a, M: Into<sealed::HigherMessage<'a>>>(
+    fn send_internal<'a, M: Into<sealed::HigherMessage<'a>>>(
         &mut self,
         message: M,
-    ) -> Result<ChanneledMessage<HigherOutput>, HigherSendError> {
+    ) -> Result<ChanneledMessage<HigherOutput>, HigherError> {
         match message.into() {
             sealed::HigherMessage::Rvd(rvd) => self.send_rvd(rvd),
             sealed::HigherMessage::Wpskka(wpskka) => Ok(self.send_wpskka(wpskka)?),
@@ -157,6 +170,39 @@ impl<Wpskka: WpskkaHandlerTrait, Rvd: RvdHandlerTrait> HigherHandlerTrait
     }
 }
 
+impl HigherHandlerTrait for HigherHandlerHost {
+    fn handle(
+        &mut self,
+        wpskka_data: &[u8],
+        output: &mut Vec<ChanneledMessage<HigherOutput>>,
+    ) -> Result<Vec<InformEvent>, HigherError> {
+        self.handle_internal(wpskka_data, output)
+    }
+
+    fn send<'a, M: Into<sealed::HigherMessage<'a>>>(
+        &mut self,
+        message: M,
+    ) -> Result<ChanneledMessage<HigherOutput>, HigherError> {
+        self.send_internal(message)
+    }
+}
+
+impl HigherHandlerTrait for HigherHandlerClient {
+    fn handle(
+        &mut self,
+        wpskka_data: &[u8],
+        output: &mut Vec<ChanneledMessage<HigherOutput>>,
+    ) -> Result<Vec<InformEvent>, HigherError> {
+        self.handle_internal(wpskka_data, output)
+    }
+
+    fn send<'a, M: Into<sealed::HigherMessage<'a>>>(
+        &mut self,
+        message: M,
+    ) -> Result<ChanneledMessage<HigherOutput>, HigherError> {
+        self.send_internal(message)
+    }
+}
 
 #[derive(thiserror::Error, Debug)]
 pub enum HigherSendError {

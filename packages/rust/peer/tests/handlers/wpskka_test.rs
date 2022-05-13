@@ -60,12 +60,11 @@ fn srp_authenticate(
 
     events.clear();
 
-    client.process_password(password, &mut write).expect("");
-    assert_eq!(write.len(), 1);
-    assert!(matches!(write[0], WpskkaMessage::AuthMessage(_)));
+    let output = client.process_password(password.to_vec()).expect("");
+    assert!(matches!(output, Some(WpskkaMessage::AuthMessage(_))));
 
     // ClientHello
-    let message = write.remove(0);
+    let message = output.unwrap();
     assert!(host
         ._handle(message, &mut write, &mut events)
         .expect("handler failed")

@@ -1,4 +1,7 @@
-use common::messages::{rvd::ButtonsMask, svsc::LeaseId};
+use common::messages::{
+    rvd::ButtonsMask,
+    svsc::{Cookie, LeaseId},
+};
 use neon::types::Deferred;
 use std::convert::TryFrom;
 
@@ -28,7 +31,7 @@ pub enum RequestContent {
         lease_id: LeaseId,
     },
     ProcessPassword {
-        password: String,
+        password: Vec<u8>,
     },
     MouseInput {
         x_position: i32,
@@ -40,9 +43,11 @@ pub enum RequestContent {
         keycode: u32,
         down: bool,
     },
-    LeaseRequest,
+    LeaseRequest {
+        cookie: Option<Cookie>,
+    },
     UpdateStaticPassword {
-        password: Option<String>,
+        password: Option<Vec<u8>>,
     },
     SetControllable {
         is_controllable: bool,

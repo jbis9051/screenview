@@ -3,7 +3,6 @@ use crate::{
     ChanneledMessage,
     InformEvent,
 };
-use common::messages::svsc::{LeaseId, SvscMessage};
 
 use super::sealed::LowerMessage;
 
@@ -37,12 +36,5 @@ impl LowerHandlerTrait for LowerHandlerDirect {
             LowerMessage::Svsc(..) => panic!("Attempted to send SVSC message to direct handler"),
             LowerMessage::Sel(..) => panic!("Attempted to send SEL message to direct handler"),
         }
-    }
-
-    fn establish_session_request(
-        &mut self,
-        _lease_id: LeaseId,
-    ) -> ChanneledMessage<SvscMessage<'static>> {
-        panic!("Attempted to call establish_session_request on direct handler")
     }
 }

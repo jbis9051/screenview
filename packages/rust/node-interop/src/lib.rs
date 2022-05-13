@@ -5,9 +5,12 @@ mod instance;
 mod node_interface;
 mod protocol;
 
-use common::messages::{rvd::ButtonsMask, svsc::LeaseId};
+use common::messages::{
+    rvd::ButtonsMask,
+    svsc::{Cookie, LeaseId},
+};
 use instance::*;
-use neon::prelude::*;
+use neon::{prelude::*, types::buffer::TypedArray};
 use node_interface::NodeInterface;
 use num_traits::FromPrimitive;
 use protocol::{ConnectionType, Display, DisplayType, Message, RequestContent};
@@ -135,7 +138,7 @@ fn process_password(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
     let password = cx.argument::<JsString>(1)?.value(&mut cx);
 
     send_request(&mut cx, handle, RequestContent::ProcessPassword {
-        password,
+        password: password.into_bytes(),
     })
 }
 
@@ -175,8 +178,18 @@ fn keyboard_input(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
 
 fn lease_request(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
     let handle = cx.argument::<JsBox<InstanceHandle>>(0)?;
+    let cookie: Option<Cookie> = match cx
+        .argument::<JsValue>(1)?
+        .downcast::<JsArrayBuffer, _>(&mut cx)
+    {
+        Ok(array_buf) => match array_buf.as_slice(&mut cx).try_into() {
+            Ok(cookie) => Some(cookie),
+            Err(_) => return throw!(cx, "Cookie is incorrect length"),
+        },
+        Err(_) => None,
+    };
 
-    send_request(&mut cx, handle, RequestContent::LeaseRequest)
+    send_request(&mut cx, handle, RequestContent::LeaseRequest { cookie })
 }
 
 fn update_static_password(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
@@ -185,7 +198,7 @@ fn update_static_password(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise
         .argument::<JsValue>(1)?
         .downcast::<JsString, _>(&mut cx)
         .ok()
-        .map(|string| string.value(&mut cx));
+        .map(|string| string.value(&mut cx).into_bytes());
 
     send_request(&mut cx, handle, RequestContent::UpdateStaticPassword {
         password,

@@ -8,7 +8,7 @@ use crate::{
 };
 use common::messages::{
     sel::SelMessage,
-    svsc::{LeaseId, SvscMessage},
+    svsc::{Cookie, LeaseId, SvscMessage},
     Message,
     MessageComponent,
 };
@@ -57,6 +57,20 @@ impl LowerHandlerSignal {
                 Ok(ChanneledMessage::Unreliable(bytes)),
         }
     }
+
+    pub fn establish_session_request(
+        &mut self,
+        lease_id: LeaseId,
+    ) -> ChanneledMessage<SvscMessage<'static>> {
+        ChanneledMessage::Reliable(self.svsc.establish_session_request(lease_id))
+    }
+
+    pub fn lease_request(
+        &mut self,
+        cookie: Option<Cookie>,
+    ) -> ChanneledMessage<SvscMessage<'static>> {
+        ChanneledMessage::Reliable(self.svsc.lease_request(cookie))
+    }
 }
 
 impl LowerHandlerTrait for LowerHandlerSignal {
@@ -104,12 +118,5 @@ impl LowerHandlerTrait for LowerHandlerSignal {
         };
 
         result.map_err(Into::into)
-    }
-
-    fn establish_session_request(
-        &mut self,
-        lease_id: LeaseId,
-    ) -> ChanneledMessage<SvscMessage<'static>> {
-        ChanneledMessage::Reliable(self.svsc.establish_session_request(lease_id))
     }
 }

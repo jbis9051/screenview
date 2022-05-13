@@ -72,27 +72,27 @@ impl WpskkaClientHandler {
 
     pub fn process_password(
         &mut self,
-        password: &[u8],
-        write: &mut Vec<WpskkaMessage<'_>>,
-    ) -> Result<(), WpskkaClientError> {
-        self.password = Some(password.to_vec());
-        if let Some(auth) = self.current_auth.as_mut() {
-            return match &mut **auth {
-                AuthScheme::SrpAuthClient(client) => {
-                    let outgoing = client
-                        .process_password(password)
-                        .map_err(|_| WpskkaClientError::BadAuthSchemeMessage)?;
-                    write.push(WpskkaMessage::AuthMessage(AuthMessage {
-                        data: outgoing
+        password: Vec<u8>,
+    ) -> Result<Option<WpskkaMessage<'static>>, WpskkaClientError> {
+        let result = match self.current_auth.as_mut() {
+            Some(auth) => match &mut **auth {
+                AuthScheme::SrpAuthClient(client) => client
+                    .process_password(&password)
+                    .map_err(|_| WpskkaClientError::BadAuthSchemeMessage)
+                    .and_then(|outgoing| {
+                        outgoing
                             .to_bytes()
-                            .map_err(|_| WpskkaClientError::BadAuthSchemeMessage)?,
-                    }));
-                    Ok(())
-                }
-                _ => Ok(()),
-            };
-        }
-        Ok(())
+                            .map_err(|_| WpskkaClientError::BadAuthSchemeMessage)
+                    })
+                    .map(|data| Some(WpskkaMessage::AuthMessage(AuthMessage { data }))),
+                _ => Ok(None),
+            },
+            None => Ok(None),
+        };
+
+        self.password = Some(password.to_vec());
+
+        result
     }
 
     pub fn next_auth(
