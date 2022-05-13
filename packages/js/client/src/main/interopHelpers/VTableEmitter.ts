@@ -1,4 +1,4 @@
-import rust from 'node-interop';
+import { rust } from 'node-interop';
 import { EventEmitter } from 'events';
 
 export enum VTableEvent {

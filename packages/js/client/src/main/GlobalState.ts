@@ -1,16 +1,7 @@
 import path from 'path';
 import { Menu } from 'electron';
 import { makeAutoObservable } from 'mobx';
-import {
-    ClientInstance,
-    HostDirectInstance,
-    HostInstance,
-    HostSignalInstance,
-    Instance,
-    InstanceConnectionType,
-    InstancePeerType,
-    JSBox,
-} from 'node-interop';
+import { rust } from 'node-interop';
 import createMainWindow from './factories/createMainWindow';
 import Config from './config';
 import BrowserWindow = Electron.BrowserWindow;
@@ -20,7 +11,7 @@ import MenuItem = Electron.MenuItem;
 import VTableEmitter from './interopHelpers/VTableEmitter';
 
 interface ClientBundle {
-    instance: ClientInstance;
+    instance: rust.ClientInstance;
     window: BrowserWindow | null;
     emitter: VTableEmitter;
 }
@@ -30,9 +21,9 @@ export default class GlobalState {
 
     tray: Tray | null = null;
 
-    signalHostInstance: HostSignalInstance | null = null;
+    signalHostInstance: rust.HostSignalInstance | null = null;
 
-    directHostInstance: HostDirectInstance | null = null;
+    directHostInstance: rust.HostDirectInstance | null = null;
 
     clientBundles: ClientBundle[] = [];
 

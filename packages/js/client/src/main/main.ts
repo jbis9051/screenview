@@ -1,10 +1,5 @@
-import { app, BrowserWindow } from 'electron';
-import rust, {
-    ConnectionType,
-    InstanceConnectionType,
-    InstancePeerType,
-} from 'node-interop';
-import { autorun } from 'mobx';
+import { app, BrowserWindow, ipcMain } from 'electron';
+import { rust, InstanceConnectionType, InstancePeerType } from 'node-interop';
 import GlobalState from './GlobalState';
 import {
     MainToRendererIPCEvents,
@@ -12,7 +7,6 @@ import {
 } from '../common/IPCEvents';
 import createTray from './actions/createTray';
 import createClientWindow from './factories/createClientWindow';
-import ipcMain = Electron.ipcMain;
 import connectInstanceToSignal from './interopHelpers/connectInstanceToSignal';
 import VTableEmitter, { VTableEvent } from './interopHelpers/VTableEmitter';
 import startMainWindow from './mainHelpers/startMainWindow';

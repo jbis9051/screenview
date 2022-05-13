@@ -1,4 +1,4 @@
-export * from './index.node';
+export * as rust from './index.node';
 
 export enum InstancePeerType {
     Host = 'host',

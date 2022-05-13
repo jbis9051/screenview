@@ -1,6 +1,6 @@
 import path from 'path';
+import { Tray } from 'electron';
 import GlobalState from '../GlobalState';
-import Tray = Electron.Tray;
 
 export default function createTray(state: GlobalState) {
     if (state.tray) {

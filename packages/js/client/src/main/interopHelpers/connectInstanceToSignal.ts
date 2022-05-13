@@ -1,4 +1,4 @@
-import rust, { ConnectionType } from 'node-interop';
+import { rust, ConnectionType } from 'node-interop';
 import GlobalState from '../GlobalState';
 
 export default async function connectInstanceToSignal(

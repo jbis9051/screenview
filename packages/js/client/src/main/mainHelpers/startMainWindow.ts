@@ -1,4 +1,4 @@
-import rust, { InstanceConnectionType, InstancePeerType } from 'node-interop';
+import { rust, InstanceConnectionType, InstancePeerType } from 'node-interop';
 import focusMainWindow from '../actions/focusMainWindow';
 import VTableEmitter from '../interopHelpers/VTableEmitter';
 import connectInstanceToSignal from '../interopHelpers/connectInstanceToSignal';
