@@ -2,19 +2,19 @@ use neon::{object::Object, prelude::*};
 use std::sync::Arc;
 
 macro_rules! vtable_arg_map {
-    (number) => {
-        i32
+    (i32) => {
+        JsNumber
     };
-    (string) => {
-        String
+    (String) => {
+        JsString
     };
 }
 
 macro_rules! vtable_methods {
     (
         $(
-          $name: ident => (
-              $($arg: ident => $jstype: ident),*
+          $name: ident(
+              $($arg: ident: $atype: ident),*
           )
         ),*
     ) => {
@@ -37,13 +37,13 @@ macro_rules! vtable_methods {
             }
 
             $(
-                pub fn $name(&self, channel: &Channel $(,$arg: vtable_arg_map!($jstype))*){
+                pub fn $name(&self, channel: &Channel $(,$arg: $atype)*){
                     let vtable = Arc::clone(&self.vtable);
 
                     channel.send(move |mut cx| {
                         let func = vtable.$name.to_inner(&mut cx);
                         let this = cx.null();
-                        let args = [$(cx.$jstype($arg).upcast(),)*];
+                        let args = [$(<vtable_arg_map!($atype)>::new(&mut cx, $arg).upcast(),)*];
                         func.call(&mut cx, this, args).map(|_| ())
                     });
                 }
@@ -53,6 +53,4 @@ macro_rules! vtable_methods {
 }
 
 
-vtable_methods!(
-    example_fn => (arg1 => number, arg2 => string)
-);
+vtable_methods!(example_fn(arg1: i32, arg2: String));
