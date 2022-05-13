@@ -8,7 +8,7 @@
         "dev:webpack:main": "NODE_ENV=development webpack --config webpack.main.config.js --watch",
         "dev:webpack:render": "NODE_ENV=development webpack serve --config webpack.render.config.js",
         "dev:electron": "NODE_ENV=development electron ./build/main/main.js",
-        "dev": "yarn run dev:webpack:main & yarn run dev:webpack:render & yarn run dev:electron"
+        "dev": "yarn run build && (yarn run dev:webpack:main & yarn run dev:webpack:render & yarn run dev:electron)"
     },
     "devDependencies": {
         "@types/react": "^17.0.38",
