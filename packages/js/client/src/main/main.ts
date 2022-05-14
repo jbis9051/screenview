@@ -43,10 +43,12 @@ app.on('ready', async () => {
 
     await startMainWindow(state);
     await createTray(state);
+});
 
-    app.on('activate', () => {
-        if (BrowserWindow.getAllWindows().length === 0) startMainWindow(state);
-    });
+app.on('activate', async () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+        await startMainWindow(state);
+    }
 });
 
 app.on('window-all-closed', () => {

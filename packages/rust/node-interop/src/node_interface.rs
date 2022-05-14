@@ -53,4 +53,4 @@ macro_rules! vtable_methods {
 }
 
 
-vtable_methods!(example_fn(arg1: i32, arg2: String));
+vtable_methods!(session_id_update(session_id: String), session_update());

@@ -11,7 +11,8 @@
         "resolveJsonModule": true,
         "isolatedModules": true,
         "jsx": "react",
-        "outDir": "build"
+        "outDir": "build",
+        "sourceMap": true
     },
     "include": ["**/*.ts", "**/*.tsx"],
     "exclude": ["node_modules"]
