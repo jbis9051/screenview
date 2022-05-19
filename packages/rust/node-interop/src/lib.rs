@@ -1,5 +1,6 @@
 #![deny(rust_2018_idioms)]
 
+mod frames;
 mod handler;
 mod instance;
 mod node_interface;
@@ -13,7 +14,7 @@ use instance::*;
 use neon::{prelude::*, types::buffer::TypedArray};
 use node_interface::NodeInterface;
 use num_traits::FromPrimitive;
-use protocol::{ConnectionType, Display, DisplayType, Message, RequestContent};
+use protocol::{ConnectionType, Display, InvalidEnumDiscriminant, Message, RequestContent};
 use std::{any::type_name, convert::TryFrom, num::FpCategory};
 
 #[macro_export]
@@ -234,12 +235,16 @@ fn share_displays(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
         let native_id = obj
             .get::<JsNumber, _, _>(&mut cx, "native_id")?
             .value(&mut cx);
+        let native_id: u32 = checked_int_cast(&mut cx, native_id)?;
         let display_type = obj.get::<JsString, _, _>(&mut cx, "type")?.value(&mut cx);
 
-        displays.push(Display {
-            native_id: checked_int_cast(&mut cx, native_id)?,
-            display_type: DisplayType::try_from(display_type.as_str()).unwrap(),
-        });
+        let display = match display_type.as_str() {
+            "monitor" => Display::Monitor(native_id),
+            "window" => Display::Window(native_id),
+            _ => return throw!(cx, "invalid display type"),
+        };
+
+        displays.push(display);
     }
 
     send_request(&mut cx, handle, RequestContent::ShareDisplays { displays })

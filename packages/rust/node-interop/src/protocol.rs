@@ -2,6 +2,7 @@ use common::messages::{
     rvd::ButtonsMask,
     svsc::{Cookie, LeaseId},
 };
+use native::api::{MonitorId, WindowId};
 use neon::types::Deferred;
 use std::convert::TryFrom;
 
@@ -78,26 +79,10 @@ impl TryFrom<u8> for ConnectionType {
     }
 }
 
-pub struct Display {
-    pub native_id: u32,
-    pub display_type: DisplayType,
-}
-
-pub enum DisplayType {
-    Monitor,
-    Window,
-}
-
-impl TryFrom<&str> for DisplayType {
-    type Error = InvalidEnumDiscriminant;
-
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        match value {
-            "monitor" => Ok(Self::Monitor),
-            "window" => Ok(Self::Window),
-            _ => Err(InvalidEnumDiscriminant),
-        }
-    }
+#[derive(Clone, Copy)]
+pub enum Display {
+    Monitor(MonitorId),
+    Window(WindowId),
 }
 
 #[derive(Debug)]

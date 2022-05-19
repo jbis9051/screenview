@@ -1,5 +1,6 @@
 use crate::{
     forward,
+    frames::FrameCapture,
     handler::ScreenViewHandler,
     node_interface::NodeInterface,
     protocol::{ConnectionType, Display, Message, RequestContent},
@@ -13,7 +14,7 @@ use common::{
     },
 };
 use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
-use native::{NativeApi, NativeApiError};
+use native::{api::Frame, NativeApi, NativeApiError};
 use neon::{
     prelude::{Channel, Context, Finalize, JsResult, JsUndefined, TaskContext, Value},
     types::Deferred,
@@ -60,6 +61,7 @@ pub struct Instance {
     native: NativeApi,
     sv_handler: ScreenViewHandler,
     node_interface: NodeInterface,
+    captures: Vec<FrameCapture>,
     channel: Channel,
     waker: ThreadWaker,
 }
@@ -79,6 +81,7 @@ impl Instance {
             native: NativeApi::new()?,
             sv_handler: new_sv_handler(),
             node_interface,
+            captures: Vec::new(),
             channel,
             waker: waker.clone(),
         };
@@ -353,7 +356,35 @@ impl Instance {
         promise: Deferred,
         displays: &[Display],
     ) -> Result<(), anyhow::Error> {
-        // TODO: implement
+        let mut to_activate = Vec::with_capacity(displays.len());
+
+        to_activate.extend(
+            self.captures
+                .iter()
+                .enumerate()
+                .filter_map(|(index, capture)| capture.is_inactive().then_some(index))
+                .take(displays.len()),
+        );
+
+        let remaining = displays.len() - to_activate.len();
+        let current_num_captures = self.captures.len();
+
+        for index in current_num_captures .. current_num_captures + remaining {
+            let capture = match FrameCapture::new(self.waker.clone()) {
+                Ok(capture) => capture,
+                Err(error) => {
+                    self.settle_with_result(promise, Err(error), Self::undefined);
+                    return Ok(());
+                }
+            };
+
+            self.captures.push(capture);
+            to_activate.push(index);
+        }
+
+        for (capture_index, display) in to_activate.into_iter().zip(displays.iter().copied()) {
+            self.captures[capture_index].activate(display);
+        }
 
         promise.settle_with(&self.channel, move |mut cx| Ok(cx.undefined()));
 
