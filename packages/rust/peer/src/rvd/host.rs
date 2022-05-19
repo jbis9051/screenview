@@ -29,10 +29,9 @@ pub enum DisplayType {
     Window,
 }
 
-struct DisplayMap {
-    native_id: u32,
-    display_type: DisplayType,
-    information: DisplayInformation,
+struct SharedDisplay {
+    needs_flush: bool,
+    display: RvdDisplay,
 }
 
 pub struct RvdDisplay {
@@ -55,8 +54,7 @@ pub struct RvdHostHandler {
     state: HostState,
     clipboard_readable: bool,
     controllable: bool,
-    shared_displays: Vec<DisplayMap>,
-    share_buffer: Vec<RvdDisplay>,
+    shared_displays: Vec<Option<SharedDisplay>>,
 }
 
 impl Default for RvdHostHandler {
@@ -72,7 +70,6 @@ impl RvdHostHandler {
             clipboard_readable: false,
             controllable: false,
             shared_displays: Vec::new(),
-            share_buffer: Vec::new(),
         }
     }
 
@@ -98,8 +95,50 @@ impl RvdHostHandler {
         // TODO send update
     }
 
-    pub fn share_display(&mut self, display: RvdDisplay) {
-        self.share_buffer.push(display);
+    pub fn share_display(&mut self, display: RvdDisplay) -> ShareDisplayResult {
+        let mut slot_info = None;
+
+        for (index, slot) in self.shared_displays.iter_mut().enumerate() {
+            match slot {
+                Some(shared) => {
+                    if shared.display.native_id == display.native_id
+                        && shared.display.display_type == display.display_type
+                    {
+                        shared.needs_flush = shared.display.width != display.width
+                            || shared.display.height != display.height;
+                        shared.display = display;
+                        return ShareDisplayResult::AlreadySharing(index as DisplayId);
+                    }
+                }
+                None =>
+                    if slot_info.is_none() {
+                        slot_info = Some((index, slot));
+                    },
+            }
+        }
+
+        let (display_id, slot) = match slot_info {
+            Some((position, slot)) => (position as DisplayId, slot),
+            None => {
+                let num_shared_displays = self.shared_displays.len();
+
+                if num_shared_displays >= 255 {
+                    return ShareDisplayResult::IdLimitReached;
+                }
+
+                self.shared_displays.push(None);
+                (
+                    num_shared_displays as DisplayId,
+                    self.shared_displays.last_mut().unwrap(),
+                )
+            }
+        };
+
+        *slot = Some(SharedDisplay {
+            needs_flush: true,
+            display,
+        });
+        ShareDisplayResult::NewlyShared(display_id)
     }
 
     /// Add displays using share_display
@@ -107,50 +146,36 @@ impl RvdHostHandler {
     /// share_buffer is cleared (set to Vec::default() aka Vec::new() aka [])
     pub fn display_update(&mut self) -> RvdMessage {
         self.state = HostState::WaitingForDisplayChangeReceived;
-        let mut access = AccessMask::FLUSH;
+
+        let mut access = AccessMask::empty();
         if self.controllable {
-            access |= AccessMask::CONTROLLABLE;
+            access.insert(AccessMask::CONTROLLABLE);
         }
-        self.share_buffer
-            .dedup_by(|a, b| a.display_type == b.display_type && a.native_id == b.native_id);
-        self.shared_displays = std::mem::take(&mut self.share_buffer)
-            .into_iter()
+
+        let display_information = self
+            .shared_displays
+            .iter_mut()
             .enumerate()
-            .map(|(i, d)| {
-                let mut access = access;
+            .flat_map(|(index, shared)| shared.as_mut().map(|shared| (index as DisplayId, shared)))
+            .map(|(display_id, shared)| {
+                access.set(AccessMask::FLUSH, shared.needs_flush);
+                shared.needs_flush = false;
 
-                if self.shared_displays.iter().any(|a| {
-                    a.display_type == d.display_type
-                        && a.native_id == d.native_id
-                        && a.information.width == d.width
-                        && a.information.height == d.height
-                }) {
-                    access.remove(AccessMask::FLUSH)
-                }
-
-                DisplayMap {
-                    native_id: d.native_id,
-                    display_type: d.display_type,
-                    information: DisplayInformation {
-                        display_id: i as DisplayId,
-                        width: d.width,
-                        height: d.height,
-                        cell_width: 0,  // TODO
-                        cell_height: 0, // TODO
-                        access,
-                        name: d.name,
-                    },
+                DisplayInformation {
+                    display_id,
+                    width: shared.display.width,
+                    height: shared.display.height,
+                    cell_width: 0,
+                    cell_height: 0,
+                    access,
+                    name: shared.display.name.clone(),
                 }
             })
-            .collect();
+            .collect::<Vec<_>>();
 
         RvdMessage::DisplayChange(DisplayChange {
             clipboard_readable: self.clipboard_readable && self.controllable,
-            display_information: self
-                .shared_displays
-                .iter()
-                .map(|d| d.information.clone())
-                .collect(),
+            display_information,
         })
     }
 
@@ -184,19 +209,25 @@ impl RvdHostHandler {
                     if !self.controllable {
                         return Err(RvdHostError::PermissionsError(MouseInput));
                     }
-                    let display = self
+
+                    let (_, shared) = self
                         .shared_displays
                         .iter()
-                        .find(|d| d.information.display_id == msg.display_id)
+                        .enumerate()
+                        .flat_map(|(index, opt)| {
+                            opt.as_ref().map(|shared| (index as DisplayId, shared))
+                        })
+                        .find(|&(id, _)| id == msg.display_id)
                         .ok_or(RvdHostError::DisplayNotFound(msg.display_id))?;
+
                     events.push(InformEvent::RvdHostInform(RvdHostInform::MouseInput(
                         MouseInputEvent {
                             x_location: msg.x_location,
                             y_location: msg.y_location,
                             button_delta: msg.buttons_delta,
                             button_state: msg.buttons_state,
-                            display_type: display.display_type,
-                            native_id: display.native_id,
+                            display_type: shared.display.display_type,
+                            native_id: shared.display.native_id,
                         },
                     )));
                     Ok(())
@@ -287,4 +318,10 @@ pub enum RvdHostInform {
 
     ClipboardRequest(bool, ClipboardType),
     ClipboardNotification(Vec<u8>, ClipboardType),
+}
+
+pub enum ShareDisplayResult {
+    NewlyShared(DisplayId),
+    AlreadySharing(DisplayId),
+    IdLimitReached,
 }

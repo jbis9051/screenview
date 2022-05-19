@@ -2,6 +2,7 @@ use crate::{
     higher_handler::{HigherError, HigherHandlerClient, HigherHandlerHost, HigherHandlerTrait},
     io::{IoHandle, Reliable, SendError, TransportError, TransportResponse, Unreliable},
     lower::{LowerError, LowerHandlerSignal, LowerHandlerTrait},
+    rvd::{RvdDisplay, ShareDisplayResult},
     InformEvent,
 };
 use common::messages::svsc::{Cookie, LeaseId};
@@ -113,9 +114,25 @@ where
     }
 }
 
-impl<L, R, U> HandlerStack<HigherHandlerHost, L, R, U> {
+impl<L, R, U> HandlerStack<HigherHandlerHost, L, R, U>
+where
+    L: LowerHandlerTrait,
+    R: Reliable,
+    U: Unreliable,
+{
     pub fn set_static_password(&mut self, static_password: Option<Vec<u8>>) {
         self.higher.set_static_password(static_password)
+    }
+
+    pub fn share_display(&mut self, display: RvdDisplay) -> ShareDisplayResult {
+        self.higher.share_display(display)
+    }
+
+    pub fn send_display_update(&mut self) -> Result<(), HandlerError> {
+        let message = self.higher.display_update();
+        let higher_output = self.higher.send(message)?;
+        let lower_output = self.lower.send(higher_output)?;
+        self.io_handle.send(lower_output).map_err(Into::into)
     }
 }
 

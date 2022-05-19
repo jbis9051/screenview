@@ -1,6 +1,13 @@
 use crate::{
     helpers::cipher_reliable_peer::CipherError,
-    rvd::{RvdClientHandler, RvdError, RvdHandlerTrait, RvdHostHandler},
+    rvd::{
+        RvdClientHandler,
+        RvdDisplay,
+        RvdError,
+        RvdHandlerTrait,
+        RvdHostHandler,
+        ShareDisplayResult,
+    },
     wpskka::{WpskkaClientHandler, WpskkaError, WpskkaHandlerTrait, WpskkaHostHandler},
     ChanneledMessage,
     InformEvent,
@@ -70,6 +77,14 @@ impl HigherHandlerHost {
 
     pub fn set_static_password(&mut self, static_password: Option<Vec<u8>>) {
         self.wpskka.set_static_password(static_password)
+    }
+
+    pub fn share_display(&mut self, display: RvdDisplay) -> ShareDisplayResult {
+        self.rvd.share_display(display)
+    }
+
+    pub fn display_update(&mut self) -> RvdMessage {
+        self.rvd.display_update()
     }
 }
 

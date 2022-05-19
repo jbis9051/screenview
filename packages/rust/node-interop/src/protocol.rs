@@ -79,7 +79,7 @@ impl TryFrom<u8> for ConnectionType {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Display {
     Monitor(MonitorId),
     Window(WindowId),
