@@ -6,8 +6,6 @@ import createMainWindow from './factories/createMainWindow';
 import Config from './config';
 import BrowserWindow = Electron.BrowserWindow;
 import Tray = Electron.Tray;
-import MenuItemConstructorOptions = Electron.MenuItemConstructorOptions;
-import MenuItem = Electron.MenuItem;
 import VTableEmitter from './interopHelpers/VTableEmitter';
 
 interface ClientBundle {

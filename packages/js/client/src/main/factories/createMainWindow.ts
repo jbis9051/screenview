@@ -8,6 +8,10 @@ async function createMainWindow(): Promise<BrowserWindow> {
         minHeight: 550,
         minWidth: 900,
         titleBarStyle: 'hidden',
+        webPreferences: {
+            nodeIntegration: true, // I know this is bad but I don't care. We aren't loading third party pages.
+            contextIsolation: false,
+        },
     });
 
     mainWindow.webContents.addListener('new-window', (e, url) => {

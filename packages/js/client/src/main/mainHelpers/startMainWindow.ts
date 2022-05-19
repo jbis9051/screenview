@@ -1,4 +1,5 @@
 import { rust, InstanceConnectionType, InstancePeerType } from 'node-interop';
+import { action, runInAction } from 'mobx';
 import focusMainWindow from '../actions/focusMainWindow';
 import VTableEmitter from '../interopHelpers/VTableEmitter';
 import connectInstanceToSignal from '../interopHelpers/connectInstanceToSignal';
@@ -12,9 +13,12 @@ export default async function startMainWindow(state: GlobalState) {
     if (!state.signalHostInstance && state.config.startAsSignalHost) {
         const vtable = new VTableEmitter();
 
-        vtable.on('session_id_update', (id) => {
-            state.sessionId = id;
-        });
+        vtable.on(
+            'session_id_update',
+            action((id) => {
+                state.sessionId = id;
+            })
+        );
 
         const instance = rust.new_instance(
             InstancePeerType.Host,
@@ -25,14 +29,18 @@ export default async function startMainWindow(state: GlobalState) {
         await connectInstanceToSignal(state, instance);
 
         await rust.lease_request(instance); // TODO instance will now emit a lease response event eventually
-        state.signalHostInstance = instance;
+        runInAction(() => {
+            state.signalHostInstance = instance;
+        });
     }
 
     if (!state.directHostInstance && state.config.startAsDirectHost) {
-        state.directHostInstance = rust.new_instance(
-            InstancePeerType.Host,
-            InstanceConnectionType.Direct,
-            new VTableEmitter()
-        );
+        runInAction(() => {
+            state.directHostInstance = rust.new_instance(
+                InstancePeerType.Host,
+                InstanceConnectionType.Direct,
+                new VTableEmitter()
+            );
+        });
     }
 }

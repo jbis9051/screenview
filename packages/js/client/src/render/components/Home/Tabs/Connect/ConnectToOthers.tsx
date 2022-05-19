@@ -1,9 +1,11 @@
+import { ipcRenderer } from 'electron';
 import React, { useEffect, useState } from 'react';
 import styles from './ConnectToOthers.module.scss';
 import Title from './Title';
 import Input from '../../../Utility/Input';
 import formatID from '../../../../helper/formatID';
 import Button from '../../../Utility/Button';
+import { RendererToMainIPCEvents } from '../../../../../common/IPCEvents';
 
 const ConnectToOthers: React.FunctionComponent = () => {
     const [connectID, setConnectID] = useState('');
@@ -42,7 +44,17 @@ const ConnectToOthers: React.FunctionComponent = () => {
                     <span className={styles.optionText}>File Transfer</span>
                 </label>
                 <div className={styles.button}>
-                    <Button>Connect</Button>
+                    <Button
+                        onClick={() => {
+                            ipcRenderer.send(
+                                RendererToMainIPCEvents.EstablishSession,
+                                connectID
+                            );
+                            setConnectID('');
+                        }}
+                    >
+                        Connect
+                    </Button>
                 </div>
             </div>
         </>

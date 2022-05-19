@@ -8,6 +8,10 @@ async function createClientWindow(): Promise<BrowserWindow> {
         minHeight: 550,
         minWidth: 900,
         titleBarStyle: 'hidden',
+        webPreferences: {
+            nodeIntegration: true,
+            contextIsolation: false,
+        },
     });
 
     clientWindow.webContents.addListener('new-window', (e, url) => {

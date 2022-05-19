@@ -1,7 +1,7 @@
 export default class Config {
-    startAsDirectHost = true;
+    startAsDirectHost = false; // TODO change to true once this works
 
-    startAsSignalHost = true;
+    startAsSignalHost = false; // TODO change to true once this works
 
     signalServerReliable = 'example.com:69';
 
