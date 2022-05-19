@@ -180,7 +180,7 @@ impl SvscHandler {
 
                 SvscMessage::SessionEnd(_msg) => {
                     // TODO should we error if session doesn't exist
-                    event.push(InformEvent::SvscInform(SvscInform::SessionUpdate));
+                    event.push(InformEvent::SvscInform(SvscInform::SessionEnd));
                     self.session = None;
                     Ok(None)
                 }
@@ -208,13 +208,13 @@ pub enum SvscError {
 }
 
 pub enum SvscInform {
-    VersionBad,
+    VersionBad, // emitted in handshake
 
-    LeaseUpdate,
-    SessionUpdate,
-    SessionEnd,
+    LeaseUpdate,   // emitted if a lease request or lease extension request is successful
+    SessionUpdate, // emitted if a session is established (either as a notification if you are a host, or if establish session request was successful)
+    SessionEnd,    // emitted when a session is ended
 
-    LeaseRequestRejected,
-    SessionRequestRejected(EstablishSessionStatus),
-    LeaseExtensionRequestRejected,
+    LeaseRequestRejected,                           // error
+    SessionRequestRejected(EstablishSessionStatus), // error
+    LeaseExtensionRequestRejected,                  // error
 }

@@ -1,8 +1,12 @@
-import { rust, InstanceConnectionType, InstancePeerType } from 'node-interop';
+import {
+    ConnectionType,
+    InstanceConnectionType,
+    InstancePeerType,
+    rust,
+} from 'node-interop';
 import { action, runInAction } from 'mobx';
 import focusMainWindow from '../actions/focusMainWindow';
-import VTableEmitter from '../interopHelpers/VTableEmitter';
-import connectInstanceToSignal from '../interopHelpers/connectInstanceToSignal';
+import VTableEmitter, { VTableEvent } from '../interopHelpers/VTableEmitter';
 import GlobalState from '../GlobalState';
 
 export default async function startMainWindow(state: GlobalState) {
@@ -14,7 +18,7 @@ export default async function startMainWindow(state: GlobalState) {
         const vtable = new VTableEmitter();
 
         vtable.on(
-            'session_id_update',
+            VTableEvent.SvscLeaseUpdate,
             action((id) => {
                 state.sessionId = id;
             })
@@ -26,21 +30,36 @@ export default async function startMainWindow(state: GlobalState) {
             vtable
         );
 
-        await connectInstanceToSignal(state, instance);
+        await rust.connect(
+            instance,
+            ConnectionType.Reliable,
+            state.config.signalServerReliable
+        );
 
-        await rust.lease_request(instance); // TODO instance will now emit a lease response event eventually
+        await rust.connect(
+            instance,
+            ConnectionType.Unreliable,
+            state.config.signalServerUnreliable
+        );
+
         runInAction(() => {
             state.signalHostInstance = instance;
         });
+
+        await rust.lease_request(instance);
     }
 
     if (!state.directHostInstance && state.config.startAsDirectHost) {
+        const vtable = new VTableEmitter();
+
+        const instance = rust.new_instance(
+            InstancePeerType.Host,
+            InstanceConnectionType.Direct,
+            vtable
+        );
+
         runInAction(() => {
-            state.directHostInstance = rust.new_instance(
-                InstancePeerType.Host,
-                InstanceConnectionType.Direct,
-                new VTableEmitter()
-            );
+            state.directHostInstance = instance;
         });
     }
 }

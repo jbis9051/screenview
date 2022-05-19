@@ -146,6 +146,7 @@ impl WpskkaClientHandler {
                 WpskkaMessage::AuthScheme(msg) => {
                     self.available_auth_schemes = msg.auth_schemes;
                     self.available_auth_schemes.dedup();
+                    // Put SrpStatic and SrpDynamic in front
                     self.available_auth_schemes.sort_by(|a, b| {
                         let a_is_srp =
                             a == &AuthSchemeType::SrpStatic || a == &AuthSchemeType::SrpDynamic;
@@ -158,7 +159,7 @@ impl WpskkaClientHandler {
                             return Ordering::Less;
                         }
                         Ordering::Equal
-                    }); // Put SrpStatic and SrpDynamic in front
+                    });
                     self.host_public_key = Some(msg.public_key);
                     self.keys = Some(Box::new(
                         keypair().map_err(|_| WpskkaClientError::RingError)?,
@@ -320,8 +321,7 @@ pub enum WpskkaClientError {
 }
 
 pub enum WpskkaClientInform {
-    PasswordPrompt,
-    OutOfAuthenticationSchemes,
-    AuthFailed,
+    PasswordPrompt,             // UI needs to prompt for a password
+    OutOfAuthenticationSchemes, // Authentication Failed
     AuthSuccessful,
 }

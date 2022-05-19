@@ -60,6 +60,9 @@ impl Drop for InstanceHandle {
 
 impl Finalize for InstanceHandle {}
 
+// an instance represents an instance of a rust interop
+// this can be of type Client or Host and Direct or Signal
+
 pub struct Instance {
     native: NativeApi,
     sv_handler: ScreenViewHandler,

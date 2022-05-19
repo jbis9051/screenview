@@ -260,6 +260,8 @@ fn main(mut cx: ModuleContext<'_>) -> NeonResult<()> {
         };
     }
 
+    // these are the functions that node can call
+    // changes to the function signatures require an update in index.node.d.ts
     export! {
         new_instance,
         start_server,

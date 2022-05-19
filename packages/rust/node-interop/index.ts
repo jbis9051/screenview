@@ -34,3 +34,12 @@ export interface Display {
     native_id: number, 
     type: DisplayType
 }
+
+export enum EstablishSessionStatus {
+    Success = 0x00,
+    IDNotFound = 0x01,
+    PeerOffline = 0x02,
+    PeerBusy = 0x03,
+    SelfBusy = 0x04,
+    OtherError = 0x05,
+}

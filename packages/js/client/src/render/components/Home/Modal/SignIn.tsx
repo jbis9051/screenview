@@ -1,4 +1,5 @@
 import React from 'react';
+import { action } from 'mobx';
 import styles from './SignIn.module.scss';
 import Input from '../../Utility/Input';
 import Label from '../../Utility/Label';
@@ -30,9 +31,9 @@ const SignIn: React.FunctionComponent = () => (
             </div>
             <div className={styles.buttonWrapper}>
                 <Button
-                    onClick={() => {
+                    onClick={action(() => {
                         UIStore.modal.signIn = false;
-                    }}
+                    })}
                     type={'button'}
                     className={styles.button}
                 >

@@ -1,11 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
-import {
-    ConnectionType,
-    InstanceConnectionType,
-    InstancePeerType,
-    rust,
-} from 'node-interop';
-import { action } from 'mobx';
+import { app, BrowserWindow } from 'electron';
 import GlobalState from './GlobalState';
 import createTray from './actions/createTray';
 import startMainWindow from './mainHelpers/startMainWindow';

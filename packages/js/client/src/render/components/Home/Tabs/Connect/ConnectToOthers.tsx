@@ -19,7 +19,7 @@ const ConnectToOthers: React.FunctionComponent = () => {
         <>
             <Title>Connect To Remote Computer</Title>
             <label>
-                <div className={styles.labelText}>Partner ID</div>
+                <div className={styles.labelText}>Partner ID or Server</div>
                 <Input
                     value={connectID}
                     onChange={(e) => setConnectID(e.target.value)}

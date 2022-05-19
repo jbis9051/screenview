@@ -2,6 +2,7 @@ import React from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faRedoAlt } from '@fortawesome/free-solid-svg-icons';
 import { observer } from 'mobx-react';
+import { action } from 'mobx';
 import styles from './ConnectToMe.module.scss';
 import Title from './Title';
 import BackendStore from '../../../../store/BackendStore';
@@ -39,9 +40,9 @@ const ConnectToMe: React.FunctionComponent = observer(() => (
                 id={'connectToMe.shareDesktop'}
                 className={styles.checkbox}
                 checked={UIStore.shareAllScreensImmediately}
-                onChange={(e) => {
+                onChange={action((e) => {
                     UIStore.shareAllScreensImmediately = e.target.checked;
-                }}
+                })}
             />
             <Label htmlFor={'connectToMe.shareDesktop'}>
                 Automatically Share My Desktop
@@ -53,9 +54,9 @@ const ConnectToMe: React.FunctionComponent = observer(() => (
                 id={'connectToMe.allowControl'}
                 className={styles.checkbox}
                 checked={UIStore.allowControl}
-                onChange={(e) => {
+                onChange={action((e) => {
                     UIStore.allowControl = e.target.checked;
-                }}
+                })}
             />
             <Label htmlFor={'connectToMe.allowControl'}>Allow Control</Label>
         </div>

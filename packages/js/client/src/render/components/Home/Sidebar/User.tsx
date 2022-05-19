@@ -2,6 +2,7 @@ import React from 'react';
 import { observer } from 'mobx-react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUser } from '@fortawesome/free-solid-svg-icons';
+import { action } from 'mobx';
 import styles from './User.module.scss';
 import UserStore from '../../../store/UserStore';
 import UIStore from '../../../store/UIStore';
@@ -10,11 +11,11 @@ import ConfigStore from '../../../store/ConfigStore';
 const User: React.FunctionComponent = observer(() => (
     <div
         className={styles.wrapper}
-        onClick={() => {
+        onClick={action(() => {
             if (!UserStore.user) {
                 UIStore.modal.signIn = true;
             }
-        }}
+        })}
     >
         {UserStore.user || (
             <>

@@ -2,7 +2,6 @@ import path from 'path';
 import { Menu } from 'electron';
 import { makeAutoObservable } from 'mobx';
 import { rust } from 'node-interop';
-import createMainWindow from './factories/createMainWindow';
 import Config from './config';
 import BrowserWindow = Electron.BrowserWindow;
 import Tray = Electron.Tray;

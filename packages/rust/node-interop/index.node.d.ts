@@ -4,8 +4,9 @@ import type {
   ButtonMask,
   DisplayType,
   Display,
+  EstablishSessionStatus,
+  InstanceConnectionType,
 } from "./index";
-import { InstanceConnectionType } from "./index";
 
 export declare type ClientDirectInstance = JSBox<
   Instance<InstancePeerType.Client, InstanceConnectionType.Direct>
@@ -109,6 +110,16 @@ interface Instance<
 }
 
 export interface VTable {
-  session_id_update: (session_id: string) => void;
-  session_update: () => void;
+  /* svsc */
+  svsc_version_bad(): void;
+  svsc_lease_update(session_id: string): void;
+  svsc_session_update(): void;
+  svsc_session_end(): void;
+  svsc_error_lease_request_rejected(): void;
+  svsc_error_session_request_rejected(status: EstablishSessionStatus): void;
+  svsc_error_lease_extention_request_rejected(): void;
+  /* wpskka - client */
+  wpskka_client_password_prompt(): void;
+  wpskka_client_authentication_successful(): void;
+  wpskka_client_out_of_authentication_schemes(): void;
 }

@@ -1,6 +1,5 @@
 export enum MainToRendererIPCEvents {
-    SessionIDChanged = 'session-id-changed',
-    SessionUpdate = 'session-update',
+    VTableEvent = 'vtable-event',
 }
 export enum RendererToMainIPCEvents {
     EstablishSession = 'establish-session',

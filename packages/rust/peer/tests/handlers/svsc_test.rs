@@ -274,7 +274,7 @@ fn test_session_end() {
     assert_eq!(events.len(), 1);
     assert!(matches!(
         events[0],
-        InformEvent::SvscInform(SvscInform::SessionUpdate)
+        InformEvent::SvscInform(SvscInform::SessionEnd)
     ));
     assert!(handler.session().is_none());
 }
