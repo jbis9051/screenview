@@ -5,27 +5,36 @@ use native::api::Frame;
 
 use super::CaptureResources;
 
-pub struct FrameProcessor {}
+pub trait ProcessFrame: Default + Sized + 'static {
+    type Resources: for<'a> ProcessorResources<'a>;
 
-impl FrameProcessor {
-    pub fn new() -> Self {
-        Self {}
-    }
+    fn process(&mut self, resources: &mut CaptureResources<Self>);
+}
 
-    pub fn process(&mut self, _resources: &mut CaptureResources) {
+pub trait ProcessorResources<'a>: Send + Default {
+    type FrameUpdate;
+
+    fn to_frame_update(&'a self, frame: &'a Frame, display_id: DisplayId) -> Self::FrameUpdate;
+}
+
+#[derive(Default)]
+pub struct DefaultFrameProcessor {}
+
+impl ProcessFrame for DefaultFrameProcessor {
+    type Resources = DefaultFrameProcessorResources;
+
+    fn process(&mut self, _resources: &mut CaptureResources<Self>) {
         // TODO: this will contain the logic that implements a protocol like VP9
     }
 }
 
-pub struct FrameProcessorResources {}
+#[derive(Default)]
+pub struct DefaultFrameProcessorResources {}
 
-impl FrameProcessorResources {
-    pub fn new() -> Self {
-        Self {}
-    }
+impl<'a> ProcessorResources<'a> for DefaultFrameProcessorResources {
+    type FrameUpdate = FrameUpdate<'a>;
 
-    // TODO: remove the `frame` argument when this is actually implemented with state
-    pub fn frame_update<'a>(&'a self, frame: &'a Frame, display_id: DisplayId) -> FrameUpdate<'a> {
+    fn to_frame_update(&'a self, frame: &'a Frame, display_id: DisplayId) -> Self::FrameUpdate {
         FrameUpdate::new(frame, display_id)
     }
 }

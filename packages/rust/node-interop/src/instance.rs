@@ -20,7 +20,7 @@ use neon::{
     types::{Deferred, JsArray},
 };
 use peer::{
-    capture::{CapturePool, DisplayInfoStore},
+    capture::{CapturePool, DefaultFrameProcessor, DisplayInfoStore},
     helpers::native_thumbnails::native_thumbnails,
     io::{DirectServer, TcpHandle},
     rvd::{Display, DisplayType, ShareDisplayResult},
@@ -77,7 +77,7 @@ pub struct Instance {
     native: NativeApi,
     sv_handler: ScreenViewHandler,
     node_interface: NodeInterface,
-    capture_pool: CapturePool,
+    capture_pool: CapturePool<DefaultFrameProcessor>,
     channel: Channel,
 }
 

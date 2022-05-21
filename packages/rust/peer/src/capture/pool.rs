@@ -1,14 +1,14 @@
-use super::FrameCapture;
+use super::{processing::ProcessFrame, FrameCapture};
 use common::{event_loop::ThreadWaker, messages::rvd::DisplayId};
 use native::NativeApiError;
 
-pub struct CapturePool {
-    captures: Vec<FrameCapture>,
+pub struct CapturePool<P: ProcessFrame> {
+    captures: Vec<FrameCapture<P>>,
     next_inactive: usize,
     waker: ThreadWaker,
 }
 
-impl CapturePool {
+impl<P: ProcessFrame> CapturePool<P> {
     pub fn new(waker: ThreadWaker) -> Self {
         Self {
             captures: Vec::new(),
@@ -23,7 +23,7 @@ impl CapturePool {
             .any(|capture| capture.is_capturing(display_id))
     }
 
-    pub fn get_or_create_inactive(&mut self) -> Result<&mut FrameCapture, NativeApiError> {
+    pub fn get_or_create_inactive(&mut self) -> Result<&mut FrameCapture<P>, NativeApiError> {
         let ret = if self.next_inactive >= self.captures.len() {
             self.captures.push(FrameCapture::new(self.waker.clone())?);
             Ok(self.captures.last_mut().unwrap())
@@ -37,7 +37,7 @@ impl CapturePool {
         ret
     }
 
-    pub fn active_captures(&mut self) -> impl Iterator<Item = &'_ mut FrameCapture> {
+    pub fn active_captures(&mut self) -> impl Iterator<Item = &'_ mut FrameCapture<P>> {
         self.captures.iter_mut().take(self.next_inactive)
     }
 }
