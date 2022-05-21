@@ -1,44 +1,99 @@
 use std::{
+    marker::PhantomData,
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicUsize, Ordering},
         Arc,
     },
     thread::{self, JoinHandle, Thread},
 };
 
-pub fn event_loop<F>(waker: ThreadWaker, mut func: F)
-where F: FnMut() -> EventLoopState {
+pub fn event_loop<F>(waker_core: ThreadWakerCore, mut func: F)
+where F: FnMut(&ThreadWakerCore) -> EventLoopState {
     loop {
-        match func() {
-            EventLoopState::Working => {
-                let unparked = waker.unparked.swap(false, Ordering::Acquire);
-                if !unparked {
-                    thread::park();
-                    waker.unparked.store(false, Ordering::Release);
-                }
-            }
+        match func(&waker_core) {
+            EventLoopState::Working => waker_core.maybe_park(),
             EventLoopState::Complete => return,
         }
     }
 }
 
-#[derive(Clone)]
-pub struct ThreadWaker {
-    thread: Thread,
-    unparked: Arc<AtomicBool>,
+pub struct ThreadWakerCore {
+    state: Arc<AtomicUsize>,
+    _not_send_sync: PhantomData<*const u8>,
 }
 
-impl ThreadWaker {
+impl ThreadWakerCore {
+    const UNPARKED: usize = 1usize << (usize::BITS - 1);
+
     pub fn new_current_thread() -> Self {
         Self {
-            thread: thread::current(),
-            unparked: Arc::new(AtomicBool::new(false)),
+            state: Arc::new(AtomicUsize::new(0)),
+            _not_send_sync: PhantomData,
         }
     }
 
+    pub fn check_and_unset(&self, flag_bit: u32) -> bool {
+        Self::check_flag_bit(flag_bit);
+
+        let mask = !(1usize << flag_bit);
+        let old_state = self.state.fetch_and(mask, Ordering::Relaxed);
+        (old_state & mask) != 0
+    }
+
+    pub fn make_waker(&self, flag_bit: u32) -> ThreadWaker {
+        Self::check_flag_bit(flag_bit);
+
+        let state = Arc::clone(&self.state);
+        let thread = thread::current();
+
+        ThreadWaker {
+            state,
+            flag: (1usize << flag_bit) | Self::UNPARKED,
+            thread,
+        }
+    }
+
+    pub fn wake_self(&self, flag_bit: u32) {
+        Self::check_flag_bit(flag_bit);
+
+        self.state
+            .fetch_or((1usize << flag_bit) | Self::UNPARKED, Ordering::Relaxed);
+    }
+
+    pub fn maybe_park(&self) {
+        let old_state = self.state.fetch_and(!Self::UNPARKED, Ordering::Relaxed);
+
+        if Self::is_parked(old_state) {
+            // If we were spuriously unparked, then re-park
+            thread::park();
+            self.state.fetch_and(!Self::UNPARKED, Ordering::Relaxed);
+        }
+    }
+
+    const fn is_parked(state: usize) -> bool {
+        (state & Self::UNPARKED) == 0
+    }
+
+    fn check_flag_bit(flag_bit: u32) {
+        debug_assert!(
+            flag_bit < usize::BITS - 1,
+            "flag cannot set the highest bit of the state"
+        );
+    }
+}
+
+#[derive(Clone)]
+pub struct ThreadWaker {
+    state: Arc<AtomicUsize>,
+    flag: usize,
+    thread: Thread,
+}
+
+impl ThreadWaker {
     pub fn wake(&self) {
-        let unparked = self.unparked.swap(true, Ordering::Relaxed);
-        if !unparked {
+        let old_state = self.state.fetch_or(self.flag, Ordering::Relaxed);
+
+        if ThreadWakerCore::is_parked(old_state) {
             self.thread.unpark();
         }
     }

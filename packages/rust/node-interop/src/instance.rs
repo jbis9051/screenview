@@ -6,7 +6,7 @@ use crate::{
     throw,
 };
 use common::{
-    event_loop::{event_loop, EventLoopState, JoinOnDrop, ThreadWaker},
+    event_loop::{event_loop, EventLoopState, JoinOnDrop, ThreadWaker, ThreadWakerCore},
     messages::{
         rvd::ButtonsMask,
         svsc::{Cookie, LeaseId},
@@ -29,6 +29,14 @@ use std::{
     net::TcpStream,
     thread::{self, JoinHandle},
 };
+
+#[repr(u32)]
+enum Events {
+    RemoteMessage,
+    InteropMessage,
+    DirectServerConnection,
+    FrameUpdate,
+}
 
 pub struct InstanceHandle {
     sender: Sender<Message>,
@@ -71,7 +79,6 @@ pub struct Instance {
     node_interface: NodeInterface,
     capture_pool: CapturePool,
     channel: Channel,
-    waker: ThreadWaker,
 }
 
 impl Instance {
@@ -89,17 +96,20 @@ impl Instance {
         let sv_handler = new_sv_handler();
 
         let thread_handle = start_instance_main(
-            move |waker| {
+            move |waker_core| {
                 let instance = Self {
                     native,
                     sv_handler,
                     node_interface,
-                    capture_pool: CapturePool::new(waker.clone()),
+                    capture_pool: CapturePool::new(
+                        waker_core.make_waker(Events::FrameUpdate as u32),
+                    ),
                     channel,
-                    waker: waker.clone(),
                 };
 
-                waker_tx.send(waker).unwrap();
+                waker_tx
+                    .send(waker_core.make_waker(Events::InteropMessage as u32))
+                    .unwrap();
                 instance
             },
             message_rx,
@@ -170,13 +180,15 @@ impl Instance {
         &mut self,
         content: RequestContent,
         promise: Deferred,
+        waker_core: &ThreadWakerCore,
     ) -> Result<(), anyhow::Error> {
         match content {
             RequestContent::Connect {
                 ref addr,
                 connection_type,
-            } => self.handle_connect(promise, addr, connection_type),
-            RequestContent::StartServer { ref addr } => self.handle_start_server(promise, addr),
+            } => self.handle_connect(promise, waker_core, addr, connection_type),
+            RequestContent::StartServer { ref addr } =>
+                self.handle_start_server(promise, waker_core, addr),
             RequestContent::EstablishSession { lease_id } =>
                 self.handle_establish_session(promise, lease_id),
             RequestContent::ProcessPassword { password } =>
@@ -211,14 +223,16 @@ impl Instance {
     fn handle_connect(
         &mut self,
         promise: Deferred,
+        waker_core: &ThreadWakerCore,
         addr: &str,
         connection_type: ConnectionType,
     ) -> Result<(), anyhow::Error> {
         let io_handle = self.sv_handler.io_handle();
 
+        let waker = waker_core.make_waker(Events::RemoteMessage as u32);
         let result = match connection_type {
-            ConnectionType::Reliable => io_handle.connect_reliable(addr, self.waker.clone()),
-            ConnectionType::Unreliable => io_handle.connect_unreliable(addr, self.waker.clone()),
+            ConnectionType::Reliable => io_handle.connect_reliable(addr, waker),
+            ConnectionType::Unreliable => io_handle.connect_unreliable(addr, waker),
         };
 
         let result = result.map_err(|error| error.to_string());
@@ -234,7 +248,7 @@ impl Instance {
         Ok(())
     }
 
-    fn handle_direct_connect(&mut self, stream: TcpStream) {
+    fn handle_direct_connect(&mut self, waker_core: &ThreadWakerCore, stream: TcpStream) {
         let io_handle = self.sv_handler.io_handle();
 
         // Terminate the connection
@@ -243,13 +257,18 @@ impl Instance {
             return;
         }
 
-        let waker = self.waker.clone();
+        let waker = waker_core.make_waker(Events::RemoteMessage as u32);
         io_handle.connect_reliable_with(move |result_sender| {
             TcpHandle::new_from(stream, result_sender, waker)
         });
     }
 
-    fn handle_start_server(&mut self, promise: Deferred, addr: &str) -> Result<(), anyhow::Error> {
+    fn handle_start_server(
+        &mut self,
+        promise: Deferred,
+        waker_core: &ThreadWakerCore,
+        addr: &str,
+    ) -> Result<(), anyhow::Error> {
         let server = match &mut self.sv_handler {
             ScreenViewHandler::HostDirect(_, server) => server,
             _ => unreachable!(),
@@ -265,7 +284,10 @@ impl Instance {
             return Ok(());
         }
 
-        let result = match DirectServer::new(addr, self.waker.clone()) {
+        let result = match DirectServer::new(
+            addr,
+            waker_core.make_waker(Events::DirectServerConnection as u32),
+        ) {
             Ok(new_server) => {
                 *server = Some(new_server);
                 Ok(())
@@ -490,72 +512,106 @@ impl Instance {
 impl Finalize for Instance {}
 
 fn start_instance_main<F>(make_instance: F, message_receiver: Receiver<Message>) -> JoinHandle<()>
-where F: FnOnce(ThreadWaker) -> Instance + Send + 'static {
+where F: FnOnce(&ThreadWakerCore) -> Instance + Send + 'static {
     thread::spawn(move || {
-        let waker = ThreadWaker::new_current_thread();
-        let instance = make_instance(waker);
-        instance_main(instance, message_receiver)
+        let waker_core = ThreadWakerCore::new_current_thread();
+        let instance = make_instance(&waker_core);
+        instance_main(waker_core, instance, message_receiver)
     })
 }
 
-fn instance_main(mut instance: Instance, message_receiver: Receiver<Message>) {
+fn instance_main(
+    waker_core: ThreadWakerCore,
+    mut instance: Instance,
+    message_receiver: Receiver<Message>,
+) {
     // TODO: do things with ThreadWaker and atomics so we know which channels to check
 
-    event_loop(instance.waker.clone(), move || {
+    event_loop(waker_core, move |waker_core| {
         // Handle incoming messages from node
-        match message_receiver.try_recv() {
-            Ok(Message::Request { content, promise }) => {
-                match instance.handle_node_request(content, promise) {
-                    Ok(()) => { /* yay */ }
-                    Err(error) => panic!("Internal error while handling node request: {}", error),
+        if waker_core.check_and_unset(Events::InteropMessage as u32) {
+            // Infinite loop to clear the channel since node isn't a malicious party
+            loop {
+                match message_receiver.try_recv() {
+                    Ok(Message::Request { content, promise }) => {
+                        match instance.handle_node_request(content, promise, waker_core) {
+                            Ok(()) => { /* yay */ }
+                            Err(error) =>
+                                panic!("Internal error while handling node request: {}", error),
+                        }
+                    }
+                    Ok(Message::Shutdown) => return EventLoopState::Complete,
+                    Err(TryRecvError::Empty) => break,
+                    Err(TryRecvError::Disconnected) => return EventLoopState::Complete,
                 }
             }
-            Ok(Message::Shutdown) => return EventLoopState::Complete,
-            Err(TryRecvError::Empty) => {}
-            Err(TryRecvError::Disconnected) => return EventLoopState::Complete,
         }
 
         // Handle messages from remote party
-        match instance.sv_handler.handle_next_message() {
-            Some(Ok(events)) =>
-                for _event in events {
-                    todo!("Handle event")
-                },
-            Some(Err(error)) => {
-                todo!("Handle this error properly: {}", error)
+        if waker_core.check_and_unset(Events::RemoteMessage as u32) {
+            const MAX_TO_HANDLE: usize = 8;
+            let mut handled = 0;
+
+            while handled < MAX_TO_HANDLE {
+                match instance.sv_handler.handle_next_message() {
+                    Some(Ok(events)) =>
+                        for _event in events {
+                            todo!("Handle event")
+                        },
+                    Some(Err(error)) => {
+                        todo!("Handle this error properly: {}", error)
+                    }
+                    None => break,
+                }
+
+                handled += 1;
             }
-            None => {}
+
+            // We're receiving more remote messages than we can handle, but we don't want to block
+            // the event loop too long, so change our state such that we continue handling remote
+            // messages on the next iteration without parking
+            if handled == MAX_TO_HANDLE {
+                waker_core.wake_self(Events::RemoteMessage as u32);
+            }
         }
 
         // If a server is running, handle incoming connections from there
-        if let ScreenViewHandler::HostDirect(_, Some(ref server)) = instance.sv_handler {
-            match server.recv() {
-                Some(Ok(stream)) => {
-                    instance.handle_direct_connect(stream);
+        if waker_core.check_and_unset(Events::DirectServerConnection as u32) {
+            // We don't need to put this in a loop due to the guarantee provided by `next_incoming`
+            if let ScreenViewHandler::HostDirect(_, Some(ref server)) = instance.sv_handler {
+                match server.next_incoming() {
+                    Some(Ok(stream)) => {
+                        instance.handle_direct_connect(waker_core, stream);
+                    }
+                    Some(Err(error)) => {
+                        todo!("Handle this error properly: {}", error)
+                    }
+                    None => {}
                 }
-                Some(Err(error)) => {
-                    todo!("Handle this error properly: {}", error)
-                }
-                None => {}
             }
         }
 
-        for capture in instance.capture_pool.active_captures() {
-            let frame_update = match capture.next_update() {
-                Some(update) => update,
-                None => continue,
-            };
+        if waker_core.check_and_unset(Events::FrameUpdate as u32) {
+            // We don't need to double-loop here because the channels for frame capturing have a
+            // capacity of 1, so we won't fall behind when processing frames, the capture threads
+            // will just block and wait for us
+            for capture in instance.capture_pool.active_captures() {
+                let frame_update = match capture.next_update() {
+                    Some(update) => update,
+                    None => continue,
+                };
 
-            if let Err(_error) = frame_update.result {
-                todo!("Handle frame update errors properly");
+                if let Err(_error) = frame_update.result {
+                    todo!("Handle frame update errors properly");
+                }
+
+                let result = forward!(instance.sv_handler, [HostSignal, HostDirect], |stack| stack
+                    .send_frame_update(frame_update.frame_update()));
+
+                result.expect("handle errors from sending frame updates properly");
+
+                capture.update(frame_update.resources);
             }
-
-            let result = forward!(instance.sv_handler, [HostSignal, HostDirect], |stack| stack
-                .send_frame_update(frame_update.frame_update()));
-
-            result.expect("handle errors from sending frame updates properly");
-
-            capture.update(frame_update.resources);
         }
 
         EventLoopState::Working

@@ -1,5 +1,5 @@
 use common::event_loop::{JoinOnDrop, ThreadWaker};
-use crossbeam_channel::{unbounded, Receiver, Sender};
+use crossbeam_channel::{bounded, Receiver, Sender};
 use std::{
     io::{self, ErrorKind},
     net::{TcpListener, TcpStream, ToSocketAddrs},
@@ -23,7 +23,7 @@ impl DirectServer {
         listener.set_nonblocking(true)?;
 
         let running = Arc::new(AtomicBool::new(true));
-        let (tx, rx) = unbounded();
+        let (tx, rx) = bounded(1);
         let handle = thread::spawn({
             let running = Arc::clone(&running);
             move || listen(listener, tx, running, waker)
@@ -36,7 +36,10 @@ impl DirectServer {
         })
     }
 
-    pub fn recv(&self) -> Option<Result<TcpStream, io::Error>> {
+    /// Returns the next incoming connection if available. If an incoming connection is available,
+    /// then the thread waker provided when initializing the server will not have its `wake` method
+    /// called until this method is called.
+    pub fn next_incoming(&self) -> Option<Result<TcpStream, io::Error>> {
         self.incoming.try_recv().ok()
     }
 }
@@ -65,6 +68,7 @@ fn listen(
 
             _ => {
                 let _ = sender.send(stream);
+                waker.wake();
             }
         }
     }
