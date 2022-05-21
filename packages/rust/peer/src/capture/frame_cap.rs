@@ -2,14 +2,12 @@ use std::{thread::JoinHandle, time::Instant};
 
 use common::{event_loop::ThreadWaker, messages::rvd::DisplayId};
 use crossbeam_channel::{bounded, Receiver, Sender, TryRecvError};
-use native::{
-    api::{Frame, NativeApiTemplate},
-    NativeApi,
-    NativeApiError,
-};
+use native::{api::NativeApiTemplate, NativeApi, NativeApiError};
 use std::{mem, thread, time::Duration};
 
-use crate::protocol::Display;
+use crate::rvd::Display;
+
+use super::{processing::FrameProcessor, CaptureResources, FrameUpdate};
 
 const BROKEN_PIPE_MSG: &str = "broken pipe in frame capture";
 const FPS: Duration = Duration::from_millis(50);
@@ -34,7 +32,6 @@ impl FrameCapture {
 
         let old_state = mem::replace(&mut self.state, FrameCaptureState::Active {
             display_id,
-            frame_num: 0,
             sender: request_sender,
             receiver: response_receiver,
             handle: None,
@@ -56,7 +53,9 @@ impl FrameCapture {
         match &mut self.state {
             FrameCaptureState::Active { sender, handle, .. } => {
                 sender
-                    .send(WorkerRequest::UpdateFrame(Frame::new(0, 0)))
+                    .send(WorkerRequest::UpdateFrame(
+                        Box::new(CaptureResources::new()),
+                    ))
                     .expect(BROKEN_PIPE_MSG);
                 *handle = Some(new_handle);
             }
@@ -90,11 +89,11 @@ impl FrameCapture {
         self.state = FrameCaptureState::Inactive { native_api, waker };
     }
 
-    pub fn update(&self, frame: Frame) {
+    pub fn update(&self, resources: Box<CaptureResources>) {
         match &self.state {
             FrameCaptureState::Active { sender, .. } => {
                 sender
-                    .send(WorkerRequest::UpdateFrame(frame))
+                    .send(WorkerRequest::UpdateFrame(resources))
                     .expect(BROKEN_PIPE_MSG);
             }
             FrameCaptureState::Inactive { .. } =>
@@ -106,20 +105,14 @@ impl FrameCapture {
         match &mut self.state {
             FrameCaptureState::Active {
                 display_id,
-                frame_num,
                 receiver,
                 ..
             } => match receiver.try_recv() {
-                Ok((frame, result)) => {
-                    let current_frame_num = *frame_num;
-                    *frame_num = frame_num.checked_add(1).expect("frame count overflowed");
-                    Some(FrameUpdateResult {
-                        frame,
-                        display_id: *display_id,
-                        frame_num: current_frame_num,
-                        result,
-                    })
-                }
+                Ok((resources, result)) => Some(FrameUpdateResult {
+                    resources,
+                    display_id: *display_id,
+                    result,
+                }),
                 Err(TryRecvError::Empty) => None,
                 Err(TryRecvError::Disconnected) => panic!("{}", BROKEN_PIPE_MSG),
             },
@@ -131,7 +124,7 @@ impl FrameCapture {
         native_api: NativeApi,
         waker: ThreadWaker,
         display: Display,
-        sender: Sender<(Frame, Result<(), NativeApiError>)>,
+        sender: Sender<(Box<CaptureResources>, Result<(), NativeApiError>)>,
         receiver: Receiver<WorkerRequest>,
     ) -> JoinHandle<(NativeApi, ThreadWaker)> {
         thread::spawn(move || Self::capture_frames(native_api, waker, display, sender, receiver))
@@ -141,23 +134,29 @@ impl FrameCapture {
         mut native_api: NativeApi,
         waker: ThreadWaker,
         display: Display,
-        sender: Sender<(Frame, Result<(), NativeApiError>)>,
+        sender: Sender<(Box<CaptureResources>, Result<(), NativeApiError>)>,
         receiver: Receiver<WorkerRequest>,
     ) -> (NativeApi, ThreadWaker) {
+        let mut frame_processor = FrameProcessor::new();
+
         loop {
             let start = Instant::now();
 
-            let mut frame = match receiver.recv().expect(BROKEN_PIPE_MSG) {
-                WorkerRequest::UpdateFrame(frame) => frame,
+            let mut resources = match receiver.recv().expect(BROKEN_PIPE_MSG) {
+                WorkerRequest::UpdateFrame(resources) => resources,
                 WorkerRequest::Stop => break,
             };
 
             let result = match display {
-                Display::Monitor(id) => native_api.update_monitor_frame(id, &mut frame),
-                Display::Window(id) => native_api.update_window_frame(id, &mut frame),
+                Display::Monitor(id) => native_api.update_monitor_frame(id, resources.frame_mut()),
+                Display::Window(id) => native_api.update_window_frame(id, resources.frame_mut()),
             };
 
-            sender.send((frame, result)).expect(BROKEN_PIPE_MSG);
+            if result.is_ok() {
+                frame_processor.process(&mut *resources);
+            }
+
+            sender.send((resources, result)).expect(BROKEN_PIPE_MSG);
             waker.wake();
 
             let elapsed = start.elapsed();
@@ -195,21 +194,25 @@ enum FrameCaptureState {
     },
     Active {
         display_id: DisplayId,
-        frame_num: u32,
         sender: Sender<WorkerRequest>,
-        receiver: Receiver<(Frame, Result<(), NativeApiError>)>,
+        receiver: Receiver<(Box<CaptureResources>, Result<(), NativeApiError>)>,
         handle: Option<JoinHandle<(NativeApi, ThreadWaker)>>,
     },
 }
 
 enum WorkerRequest {
-    UpdateFrame(Frame),
+    UpdateFrame(Box<CaptureResources>),
     Stop,
 }
 
 pub struct FrameUpdateResult {
-    pub frame: Frame,
+    pub resources: Box<CaptureResources>,
     pub display_id: DisplayId,
-    pub frame_num: u32,
     pub result: Result<(), NativeApiError>,
+}
+
+impl FrameUpdateResult {
+    pub fn frame_update(&self) -> FrameUpdate<'_> {
+        self.resources.frame_update(self.display_id)
+    }
 }

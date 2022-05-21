@@ -34,6 +34,24 @@ pub trait Unreliable: Sized {
     fn close(&mut self);
 }
 
+impl<R: Reliable> Unreliable for R {
+    fn new<A: ToSocketAddrs>(
+        addr: A,
+        result_sender: Sender<TransportResult>,
+        waker: ThreadWaker,
+    ) -> Result<Self, io::Error> {
+        <R as Reliable>::new(addr, result_sender, waker)
+    }
+
+    fn send(&mut self, message: Vec<u8>, _max_len: usize) -> Result<(), SendError> {
+        <R as Reliable>::send(self, message)
+    }
+
+    fn close(&mut self) {
+        <R as Reliable>::close(self)
+    }
+}
+
 #[derive(Debug)]
 pub struct SendError(pub Source);
 

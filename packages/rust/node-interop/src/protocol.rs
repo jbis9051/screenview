@@ -2,8 +2,8 @@ use common::messages::{
     rvd::ButtonsMask,
     svsc::{Cookie, LeaseId},
 };
-use native::api::{MonitorId, WindowId};
 use neon::types::Deferred;
+use peer::rvd::Display;
 use std::convert::TryFrom;
 
 pub enum Message {
@@ -77,12 +77,6 @@ impl TryFrom<u8> for ConnectionType {
             _ => Err(InvalidEnumDiscriminant),
         }
     }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Display {
-    Monitor(MonitorId),
-    Window(WindowId),
 }
 
 #[derive(Debug)]

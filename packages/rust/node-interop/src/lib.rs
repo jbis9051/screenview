@@ -1,6 +1,5 @@
 #![deny(rust_2018_idioms)]
 
-mod capture;
 mod handler;
 mod instance;
 mod node_interface;
@@ -14,7 +13,8 @@ use instance::*;
 use neon::{prelude::*, types::buffer::TypedArray};
 use node_interface::NodeInterface;
 use num_traits::FromPrimitive;
-use protocol::{ConnectionType, Display, Message, RequestContent};
+use peer::rvd::Display;
+use protocol::{ConnectionType, Message, RequestContent};
 use std::{any::type_name, convert::TryFrom, num::FpCategory};
 
 #[macro_export]

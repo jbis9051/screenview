@@ -1,4 +1,5 @@
 use crate::{
+    capture::FrameUpdate,
     helpers::cipher_reliable_peer::CipherError,
     rvd::{
         RvdClientHandler,
@@ -85,6 +86,13 @@ impl HigherHandlerHost {
 
     pub fn display_update(&mut self) -> RvdMessage {
         self.rvd.display_update()
+    }
+
+    pub fn frame_update<'a>(
+        &mut self,
+        fragments: FrameUpdate<'a>,
+    ) -> impl Iterator<Item = RvdMessage> + 'a {
+        self.rvd.frame_update(fragments)
     }
 }
 

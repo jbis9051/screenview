@@ -1,8 +1,6 @@
+use crate::rvd::{Display, DisplayType, RvdDisplay};
 use native::api::{Monitor, NativeApiTemplate, Window, WindowId};
-use peer::rvd::{DisplayType, RvdDisplay};
 use std::collections::HashMap;
-
-use crate::protocol::Display;
 
 pub struct DisplayInfoStore {
     monitors: Vec<Monitor>,

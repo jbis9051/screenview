@@ -1,9 +1,8 @@
 use crate::{
-    capture::{CapturePool, DisplayInfoStore},
     forward,
     handler::ScreenViewHandler,
     node_interface::NodeInterface,
-    protocol::{ConnectionType, Display, Message, RequestContent},
+    protocol::{ConnectionType, Message, RequestContent},
     throw,
 };
 use common::{
@@ -20,8 +19,9 @@ use neon::{
     types::Deferred,
 };
 use peer::{
+    capture::{CapturePool, DisplayInfoStore},
     io::{DirectServer, TcpHandle},
-    rvd::ShareDisplayResult,
+    rvd::{Display, ShareDisplayResult},
 };
 use std::{
     net::TcpStream,
@@ -410,7 +410,7 @@ impl Instance {
         for (display, display_id) in new_displays {
             let capture = match self.capture_pool.get_or_create_inactive() {
                 Ok(capture) => capture,
-                Err(error) => todo!("tell node that we couldn't create a new capture"),
+                Err(_error) => todo!("tell node that we couldn't create a new capture"),
             };
 
             capture.activate(display, display_id);
@@ -431,6 +431,8 @@ fn start_instance_main(instance: Instance, message_receiver: Receiver<Message>) 
 }
 
 fn instance_main(mut instance: Instance, message_receiver: Receiver<Message>) {
+    // TODO: do things with ThreadWaker and atomics so we know which channels to check
+
     event_loop(instance.waker.clone(), move || {
         // Handle incoming messages from node
         match message_receiver.try_recv() {
@@ -448,7 +450,7 @@ fn instance_main(mut instance: Instance, message_receiver: Receiver<Message>) {
         // Handle messages from remote party
         match instance.sv_handler.handle_next_message() {
             Some(Ok(events)) =>
-                for event in events {
+                for _event in events {
                     todo!("Handle event")
                 },
             Some(Err(error)) => {
@@ -476,9 +478,16 @@ fn instance_main(mut instance: Instance, message_receiver: Receiver<Message>) {
                 None => continue,
             };
 
-            if let Err(error) = frame_update.result {}
+            if let Err(_error) = frame_update.result {
+                todo!("Handle frame update errors properly");
+            }
 
-            capture.update(frame_update.frame);
+            let result = forward!(instance.sv_handler, [HostSignal, HostDirect], |stack| stack
+                .send_frame_update(frame_update.frame_update()));
+
+            result.expect("handle errors from sending frame updates properly");
+
+            capture.update(frame_update.resources);
         }
 
         EventLoopState::Working

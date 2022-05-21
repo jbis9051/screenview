@@ -8,6 +8,7 @@ use crate::{
     wpskka::{WpskkaClientInform, WpskkaHostInform},
 };
 
+pub mod capture;
 pub mod helpers;
 pub mod io;
 

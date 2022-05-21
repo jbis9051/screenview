@@ -1,4 +1,5 @@
 use crate::{
+    capture::FrameUpdate,
     higher_handler::{HigherError, HigherHandlerClient, HigherHandlerHost, HigherHandlerTrait},
     io::{IoHandle, Reliable, SendError, TransportError, TransportResponse, Unreliable},
     lower::{LowerError, LowerHandlerSignal, LowerHandlerTrait},
@@ -133,6 +134,16 @@ where
         let higher_output = self.higher.send(message)?;
         let lower_output = self.lower.send(higher_output)?;
         self.io_handle.send(lower_output).map_err(Into::into)
+    }
+
+    pub fn send_frame_update(&mut self, fragments: FrameUpdate<'_>) -> Result<(), HandlerError> {
+        let messages = self.higher.frame_update(fragments);
+        for message in messages {
+            let higher_output = self.higher.send(message)?;
+            let lower_output = self.lower.send(higher_output)?;
+            self.io_handle.send(lower_output)?;
+        }
+        Ok(())
     }
 }
 

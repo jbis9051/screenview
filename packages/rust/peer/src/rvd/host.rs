@@ -1,4 +1,5 @@
 use crate::{
+    capture::FrameUpdate,
     debug,
     rvd::{
         PermissionError::{ClipboardRead, ClipboardWrite, MouseInput},
@@ -16,12 +17,20 @@ use common::{
         DisplayChange,
         DisplayId,
         DisplayInformation,
+        FrameData,
         KeyInput,
         ProtocolVersion,
         RvdMessage,
     },
 };
+use native::api::{MonitorId, WindowId};
 use std::fmt::Debug;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Display {
+    Monitor(MonitorId),
+    Window(WindowId),
+}
 
 #[derive(PartialEq, Copy, Clone)]
 pub enum DisplayType {
@@ -31,6 +40,7 @@ pub enum DisplayType {
 
 struct SharedDisplay {
     needs_flush: bool,
+    frame_number: u32,
     display: RvdDisplay,
 }
 
@@ -136,6 +146,7 @@ impl RvdHostHandler {
 
         *slot = Some(SharedDisplay {
             needs_flush: true,
+            frame_number: 0,
             display,
         });
         ShareDisplayResult::NewlyShared(display_id)
@@ -176,6 +187,32 @@ impl RvdHostHandler {
         RvdMessage::DisplayChange(DisplayChange {
             clipboard_readable: self.clipboard_readable && self.controllable,
             display_information,
+        })
+    }
+
+    pub fn frame_update<'a>(
+        &mut self,
+        fragments: FrameUpdate<'a>,
+    ) -> impl Iterator<Item = RvdMessage> + 'a {
+        let display_id = fragments.display_id;
+        let shared_display = self
+            .shared_displays
+            .get_mut(display_id as usize)
+            .and_then(Option::as_mut)
+            .expect("invalid or stale display id");
+
+        let frame_number = shared_display.frame_number;
+        shared_display.frame_number = frame_number
+            .checked_add(1)
+            .expect("frame number overflowed");
+
+        fragments.map(move |fragment| {
+            RvdMessage::FrameData(FrameData {
+                frame_number,
+                display_id,
+                cell_number: fragment.cell_number,
+                data: fragment.data,
+            })
         })
     }
 
