@@ -47,7 +47,7 @@ const ConnectToOthers: React.FunctionComponent = () => {
                     <Button
                         onClick={() => {
                             ipcRenderer.send(
-                                RendererToMainIPCEvents.EstablishSession,
+                                RendererToMainIPCEvents.Main_EstablishSession,
                                 connectID
                             );
                             setConnectID('');

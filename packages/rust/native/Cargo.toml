@@ -16,7 +16,6 @@ cfg-if = "1.0.0"
 [dependencies.image]
 version = "0.23.14"
 default-features = false
-features = ["png"]
 
 
 [target.'cfg(all(target_os="linux", not(dummy_native)))'.dependencies]

@@ -15,13 +15,15 @@ use common::{
 use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
 use native::{NativeApi, NativeApiError};
 use neon::{
+    object::Object,
     prelude::{Channel, Context, Finalize, JsResult, JsUndefined, TaskContext, Value},
-    types::Deferred,
+    types::{Deferred, JsArray, JsArrayBuffer, JsTypedArray},
 };
 use peer::{
     capture::{CapturePool, DisplayInfoStore},
+    helpers::native_thumbnails::{native_thumbnails, NativeThumbnail, ThumbnailError},
     io::{DirectServer, TcpHandle},
-    rvd::{Display, ShareDisplayResult},
+    rvd::{Display, DisplayType, ShareDisplayResult},
 };
 use std::{
     net::TcpStream,
@@ -188,6 +190,7 @@ impl Instance {
                 self.handle_set_clipboard_readable(promise, is_readable),
             RequestContent::ShareDisplays { ref displays } =>
                 self.handle_share_displays(promise, displays),
+            RequestContent::NativeThumbnails => self.handle_thumbnails(promise),
         }
     }
 
@@ -422,6 +425,49 @@ impl Instance {
         let result = forward!(self.sv_handler, [HostSignal, HostDirect], |stack| stack
             .send_display_update());
         self.settle_with_result(promise, result, Self::undefined);
+
+        Ok(())
+    }
+
+    fn handle_thumbnails(&mut self, promise: Deferred) -> Result<(), anyhow::Error> {
+        let vec = match native_thumbnails(&mut self.native) {
+            Ok(vec) => vec,
+            Err(err) => {
+                self.settle_with_result(promise, Err(err), Self::undefined);
+                return Ok(());
+            }
+        };
+
+        promise.settle_with(&self.channel, move |mut cx| {
+            let array = JsArray::new(&mut cx, vec.len() as u32);
+
+            for (i, thumb) in vec.iter().enumerate() {
+                let obj = cx.empty_object();
+
+                let data = cx.array_buffer(thumb.data.len())?;
+                for (i, u8) in thumb.data.iter().enumerate() {
+                    let num = cx.number(*u8 as f64);
+                    data.set(&mut cx, i as u32, num)?;
+                }
+
+                obj.set(&mut cx, "data", data)?;
+                let str = cx.string(&thumb.name);
+                obj.set(&mut cx, "name", str)?;
+                let num = cx.number(thumb.native_id as f64);
+                obj.set(&mut cx, "native_id", num)?;
+
+                let display_type = match thumb.display_type {
+                    DisplayType::Window => "window",
+                    DisplayType::Monitor => "monitor",
+                };
+                let str = cx.string(display_type);
+                obj.set(&mut cx, "display_type", str)?;
+
+                array.set(&mut cx, i as u32, obj)?;
+            }
+
+            Ok(array)
+        });
 
         Ok(())
     }

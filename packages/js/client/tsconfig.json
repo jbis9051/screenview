@@ -12,7 +12,8 @@
         "isolatedModules": true,
         "jsx": "react",
         "outDir": "build",
-        "sourceMap": true
+        "sourceMap": true,
+        "noImplicitAny": true
     },
     "include": ["**/*.ts", "**/*.tsx"],
     "exclude": ["node_modules"]

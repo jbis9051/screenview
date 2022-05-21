@@ -12,7 +12,7 @@ import GlobalState from '../GlobalState';
 export default async function startMainWindow(state: GlobalState) {
     await focusMainWindow(state);
 
-    // TODO add for main to node communication
+    // permission setup is handled via reactions when state.<some host> changes
 
     if (!state.signalHostInstance && state.config.startAsSignalHost) {
         const vtable = new VTableEmitter();

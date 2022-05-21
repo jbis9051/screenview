@@ -3,6 +3,7 @@ pub mod cipher_reliable_peer;
 pub mod cipher_unreliable_peer;
 pub mod clipboard_type_map;
 pub mod crypto;
+pub mod native_thumbnails;
 pub mod network_mouse_button_to_native;
 pub mod rvd_native_helper;
 

@@ -6,6 +6,7 @@ import type {
   Display,
   EstablishSessionStatus,
   InstanceConnectionType,
+  NativeThumbnail,
 } from "./index";
 
 export declare type ClientDirectInstance = JSBox<
@@ -95,6 +96,10 @@ export declare function share_displays(
   displays: Display[]
 ): Promise<undefined>;
 
+export declare function thumbnails(
+  handle: AnyInstance
+): Promise<NativeThumbnail>;
+
 // this is an opaque type, pointing to an object in rust memory
 interface JSBox<T> {
   readonly __type: T;
@@ -112,14 +117,23 @@ interface Instance<
 export interface VTable {
   /* svsc */
   svsc_version_bad(): void;
+
   svsc_lease_update(session_id: string): void;
+
   svsc_session_update(): void;
+
   svsc_session_end(): void;
+
   svsc_error_lease_request_rejected(): void;
+
   svsc_error_session_request_rejected(status: EstablishSessionStatus): void;
+
   svsc_error_lease_extention_request_rejected(): void;
+
   /* wpskka - client */
   wpskka_client_password_prompt(): void;
+
   wpskka_client_authentication_successful(): void;
+
   wpskka_client_out_of_authentication_schemes(): void;
 }

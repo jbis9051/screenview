@@ -7,7 +7,7 @@ import BrowserWindow = Electron.BrowserWindow;
 import Tray = Electron.Tray;
 import VTableEmitter from './interopHelpers/VTableEmitter';
 
-interface ClientBundle {
+export interface ClientBundle {
     instance: rust.ClientInstance;
     window: BrowserWindow | null;
     emitter: VTableEmitter;

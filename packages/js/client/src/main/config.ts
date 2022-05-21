@@ -6,4 +6,10 @@ export default class Config {
     signalServerReliable = 'example.com:69';
 
     signalServerUnreliable = 'example.com:420';
+
+    staticPassword: string | null = null;
+
+    isControllable = false;
+
+    isClipboardReadable = false;
 }

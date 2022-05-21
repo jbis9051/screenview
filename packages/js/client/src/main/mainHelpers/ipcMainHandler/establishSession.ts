@@ -5,10 +5,46 @@ import {
     rust,
 } from 'node-interop';
 import { action } from 'mobx';
+import { BrowserWindow } from 'electron';
 import VTableEmitter, { VTableEvent } from '../../interopHelpers/VTableEmitter';
 import createClientWindow from '../../factories/createClientWindow';
 import { MainToRendererIPCEvents } from '../../../common/IPCEvents';
 import GlobalState from '../../GlobalState';
+
+async function startSignalSession(
+    instance: rust.ClientSignalInstance,
+    emitter: VTableEmitter,
+    window: BrowserWindow,
+    addr: string,
+    state: GlobalState
+) {
+    await rust.connect(
+        instance,
+        ConnectionType.Reliable,
+        state.config.signalServerReliable
+    );
+    await rust.connect(
+        instance,
+        ConnectionType.Unreliable,
+        state.config.signalServerUnreliable
+    );
+
+    [VTableEvent.SvscVersionBad, VTableEvent.SvscSessionEnd].forEach((e) => {
+        emitter.on(e, () => {
+            window.webContents.send(MainToRendererIPCEvents.VTableEvent, e);
+        });
+    });
+
+    emitter.on(VTableEvent.SvscErrorSessionRequestRejected, (status) => {
+        window.webContents.send(
+            MainToRendererIPCEvents.VTableEvent,
+            VTableEvent.SvscErrorSessionRequestRejected,
+            status
+        );
+    });
+
+    await rust.establish_session(instance, addr);
+}
 
 export default async function establishSession(state: GlobalState, id: string) {
     const emitter = new VTableEmitter();
@@ -49,26 +85,12 @@ export default async function establishSession(state: GlobalState, id: string) {
     });
 
     if (isSessionId) {
-        await rust.connect(
-            instance,
-            ConnectionType.Reliable,
-            state.config.signalServerReliable
-        );
-        await rust.connect(
-            instance,
-            ConnectionType.Unreliable,
-            state.config.signalServerUnreliable
-        );
-        emitter.on(VTableEvent.SvscErrorSessionRequestRejected, (status) => {
-            window.webContents.send(
-                MainToRendererIPCEvents.VTableEvent,
-                VTableEvent.SvscErrorSessionRequestRejected,
-                status
-            );
-        });
-        await rust.establish_session(
+        await startSignalSession(
             instance as rust.ClientSignalInstance,
-            formatted
+            emitter,
+            window,
+            formatted,
+            state
         );
     } else {
         await rust.connect(

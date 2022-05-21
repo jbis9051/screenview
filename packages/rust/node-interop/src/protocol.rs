@@ -4,7 +4,7 @@ use common::messages::{
 };
 use neon::types::Deferred;
 use peer::rvd::Display;
-use std::convert::TryFrom;
+use std::{convert::TryFrom, fmt::Debug};
 
 pub enum Message {
     Request {
@@ -59,6 +59,7 @@ pub enum RequestContent {
     ShareDisplays {
         displays: Vec<Display>,
     },
+    NativeThumbnails,
 }
 
 #[repr(u8)]

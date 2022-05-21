@@ -250,6 +250,13 @@ fn share_displays(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
     send_request(&mut cx, handle, RequestContent::ShareDisplays { displays })
 }
 
+
+fn thumbnails(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
+    let handle = cx.argument::<JsBox<InstanceHandle>>(0)?;
+
+    send_request(&mut cx, handle, RequestContent::NativeThumbnails)
+}
+
 #[neon::main]
 fn main(mut cx: ModuleContext<'_>) -> NeonResult<()> {
     macro_rules! export {
@@ -274,7 +281,8 @@ fn main(mut cx: ModuleContext<'_>) -> NeonResult<()> {
         update_static_password,
         set_controllable,
         set_clipboard_readable,
-        share_displays
+        share_displays,
+        thumbnails
     }
 
     Ok(())

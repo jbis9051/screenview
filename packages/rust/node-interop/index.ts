@@ -43,3 +43,10 @@ export enum EstablishSessionStatus {
     SelfBusy = 0x04,
     OtherError = 0x05,
 }
+
+export interface NativeThumbnail {
+    data: number[],
+    name: string,
+    native_id: number,
+    display_type: DisplayType,
+}

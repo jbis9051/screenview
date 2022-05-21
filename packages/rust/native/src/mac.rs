@@ -8,7 +8,14 @@ use accessibility_sys::{
     AXUIElementPerformAction,
     AXUIElementRef,
 };
-use std::{ffi::CStr, ops::Deref, os::raw::c_uchar, ptr, slice::from_raw_parts};
+use std::{
+    ffi::CStr,
+    fmt::{Display, Formatter},
+    ops::Deref,
+    os::raw::c_uchar,
+    ptr,
+    slice::from_raw_parts,
+};
 
 use cocoa::{
     appkit::{
