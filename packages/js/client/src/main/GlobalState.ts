@@ -20,7 +20,11 @@ export default class GlobalState {
 
     signalHostInstance: rust.HostSignalInstance | null = null;
 
+    signalHostWindow: BrowserWindow | null = null;
+
     directHostInstance: rust.HostDirectInstance | null = null;
+
+    directHostWindow: BrowserWindow | null = null;
 
     clientBundles: ClientBundle[] = [];
 

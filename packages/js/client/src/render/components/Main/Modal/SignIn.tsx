@@ -4,8 +4,8 @@ import styles from './SignIn.module.scss';
 import Input from '../../Utility/Input';
 import Label from '../../Utility/Label';
 import Button from '../../Utility/Button';
-import UIStore from '../../../store/UIStore';
-import ConfigStore from '../../../store/ConfigStore';
+import UIStore from '../../../store/Main/UIStore';
+import ConfigStore from '../../../store/Main/ConfigStore';
 
 const SignIn: React.FunctionComponent = () => (
     <div className={styles.wrapper}>

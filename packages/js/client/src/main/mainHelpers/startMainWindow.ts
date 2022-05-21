@@ -8,6 +8,25 @@ import { action, runInAction } from 'mobx';
 import focusMainWindow from '../actions/focusMainWindow';
 import VTableEmitter, { VTableEvent } from '../interopHelpers/VTableEmitter';
 import GlobalState from '../GlobalState';
+import createHostWindow from '../factories/createHostWindow';
+
+function setupCommonEvents(
+    state: GlobalState,
+    vtable: VTableEmitter,
+    type: InstanceConnectionType
+) {
+    vtable.on(
+        VTableEvent.WpsskaClientAuthenticationSuccessful,
+        action(async () => {
+            const hostWindow = await createHostWindow(type);
+            if (type === InstanceConnectionType.Direct) {
+                state.directHostWindow = hostWindow;
+            } else {
+                state.signalHostWindow = hostWindow;
+            }
+        })
+    );
+}
 
 export default async function startMainWindow(state: GlobalState) {
     await focusMainWindow(state);
@@ -16,6 +35,8 @@ export default async function startMainWindow(state: GlobalState) {
 
     if (!state.signalHostInstance && state.config.startAsSignalHost) {
         const vtable = new VTableEmitter();
+
+        await setupCommonEvents(state, vtable, InstanceConnectionType.Signal);
 
         vtable.on(
             VTableEvent.SvscLeaseUpdate,
@@ -51,6 +72,8 @@ export default async function startMainWindow(state: GlobalState) {
 
     if (!state.directHostInstance && state.config.startAsDirectHost) {
         const vtable = new VTableEmitter();
+
+        await setupCommonEvents(state, vtable, InstanceConnectionType.Direct);
 
         const instance = rust.new_instance(
             InstancePeerType.Host,

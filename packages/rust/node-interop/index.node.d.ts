@@ -98,7 +98,7 @@ export declare function share_displays(
 
 export declare function thumbnails(
   handle: AnyInstance
-): Promise<NativeThumbnail>;
+): Promise<NativeThumbnail[]>;
 
 // this is an opaque type, pointing to an object in rust memory
 interface JSBox<T> {

@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron';
-import { ButtonMask, rust } from 'node-interop';
+import { ButtonMask, InstanceConnectionType, rust } from 'node-interop';
 import GlobalState from '../GlobalState';
 import {
     MainToRendererIPCEvents,
@@ -67,6 +67,33 @@ export default function setupIpcMainListeners(state: GlobalState) {
                 return;
             }
             await rust.keyboard_input(bundle.instance, keyCode, down);
+        }
+    );
+
+    ipcMain.on(
+        RendererToMainIPCEvents.Host_GetDesktopList,
+        async (_, whichHost: InstanceConnectionType) => {
+            let host: rust.HostInstance | null = null;
+            if (whichHost === InstanceConnectionType.Direct) {
+                host = state.directHostInstance;
+            }
+            if (whichHost === InstanceConnectionType.Signal) {
+                host = state.signalHostInstance;
+            }
+            if (!host) {
+                state.mainWindow?.webContents.send(
+                    MainToRendererIPCEvents.DesktopList,
+                    null
+                );
+                throw new Error(
+                    "Host type doesn't exist. So I can't get desktop list."
+                );
+            }
+            const thumbnails = await rust.thumbnails(host);
+            state.mainWindow?.webContents.send(
+                MainToRendererIPCEvents.DesktopList,
+                thumbnails
+            );
         }
     );
 }

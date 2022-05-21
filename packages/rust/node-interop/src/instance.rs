@@ -17,7 +17,7 @@ use native::{NativeApi, NativeApiError};
 use neon::{
     object::Object,
     prelude::{Channel, Context, Finalize, JsResult, JsUndefined, TaskContext, Value},
-    types::{Deferred, JsArray},
+    types::{Deferred, JsArray, JsArrayBuffer},
 };
 use peer::{
     capture::{CapturePool, DefaultFrameProcessor, DisplayInfoStore},
@@ -477,14 +477,10 @@ impl Instance {
         promise.settle_with(&self.channel, move |mut cx| {
             let array = JsArray::new(&mut cx, vec.len() as u32);
 
-            for (i, thumb) in vec.iter().enumerate() {
+            for (i, mut thumb) in vec.into_iter().enumerate() {
                 let obj = cx.empty_object();
 
-                let data = cx.array_buffer(thumb.data.len())?;
-                for (i, u8) in thumb.data.iter().enumerate() {
-                    let num = cx.number(*u8 as f64);
-                    data.set(&mut cx, i as u32, num)?;
-                }
+                let data = JsArrayBuffer::external(&mut cx, &mut thumb.data);
 
                 obj.set(&mut cx, "data", data)?;
                 let str = cx.string(&thumb.name);

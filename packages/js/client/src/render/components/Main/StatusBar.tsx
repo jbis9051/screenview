@@ -2,7 +2,7 @@ import React from 'react';
 import cl from 'classnames';
 import { observer } from 'mobx-react';
 import styles from './StatusBar.module.scss';
-import Backend from '../../store/BackendStore';
+import Backend from '../../store/Main/BackendStore';
 
 const StatusBar: React.FunctionComponent = observer(() => (
     <div className={styles.wrapper}>

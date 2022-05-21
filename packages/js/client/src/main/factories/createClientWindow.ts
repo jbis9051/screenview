@@ -20,9 +20,7 @@ async function createClientWindow(): Promise<BrowserWindow> {
     });
 
     if (process.env.NODE_ENV === 'development') {
-        await clientWindow.loadURL(
-            `http://localhost:8080/#${PageType.REMOTE_DISPLAY}`
-        );
+        await clientWindow.loadURL(`http://localhost:8080/#${PageType.Client}`);
     }
     return clientWindow;
     // clientWindow.loadFile(path.join(__dirname, '../index.html'));

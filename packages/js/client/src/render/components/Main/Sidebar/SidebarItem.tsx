@@ -5,8 +5,8 @@ import { observer } from 'mobx-react';
 import cl from 'classnames';
 import { action } from 'mobx';
 import styles from './SidebarItem.module.scss';
-import UIStore, { Tab } from '../../../store/UIStore';
-import UserStore from '../../../store/UserStore';
+import UIStore, { Tab } from '../../../store/Main/UIStore';
+import UserStore from '../../../store/Main/UserStore';
 
 interface SidebarItemProps {
     icon: IconProp;

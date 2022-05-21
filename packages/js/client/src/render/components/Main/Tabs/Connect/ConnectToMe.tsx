@@ -5,9 +5,9 @@ import { observer } from 'mobx-react';
 import { action } from 'mobx';
 import styles from './ConnectToMe.module.scss';
 import Title from './Title';
-import BackendStore from '../../../../store/BackendStore';
+import BackendStore from '../../../../store/Main/BackendStore';
 import Input from '../../../Utility/Input';
-import UIStore from '../../../../store/UIStore';
+import UIStore from '../../../../store/Main/UIStore';
 import formatID from '../../../../helper/formatID';
 import Label from '../../../Utility/Label';
 

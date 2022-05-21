@@ -4,9 +4,9 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUser } from '@fortawesome/free-solid-svg-icons';
 import { action } from 'mobx';
 import styles from './User.module.scss';
-import UserStore from '../../../store/UserStore';
-import UIStore from '../../../store/UIStore';
-import ConfigStore from '../../../store/ConfigStore';
+import UserStore from '../../../store/Main/UserStore';
+import UIStore from '../../../store/Main/UIStore';
+import ConfigStore from '../../../store/Main/ConfigStore';
 
 const User: React.FunctionComponent = observer(() => (
     <div

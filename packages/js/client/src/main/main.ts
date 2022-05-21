@@ -14,7 +14,7 @@ app.on('ready', async () => {
     // TODO load config from preferences
 
     await startMainWindow(state);
-    await createTray(state);
+    // await createTray(state);
 });
 
 app.on('activate', async () => {
