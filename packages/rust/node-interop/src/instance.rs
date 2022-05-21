@@ -12,16 +12,16 @@ use common::{
         svsc::{Cookie, LeaseId},
     },
 };
-use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
+use crossbeam_channel::{bounded, unbounded, Receiver, Sender, TryRecvError};
 use native::{NativeApi, NativeApiError};
 use neon::{
     object::Object,
     prelude::{Channel, Context, Finalize, JsResult, JsUndefined, TaskContext, Value},
-    types::{Deferred, JsArray, JsArrayBuffer, JsTypedArray},
+    types::{Deferred, JsArray},
 };
 use peer::{
     capture::{CapturePool, DisplayInfoStore},
-    helpers::native_thumbnails::{native_thumbnails, NativeThumbnail, ThumbnailError},
+    helpers::native_thumbnails::native_thumbnails,
     io::{DirectServer, TcpHandle},
     rvd::{Display, DisplayType, ShareDisplayResult},
 };
@@ -83,19 +83,33 @@ impl Instance {
     where
         F: FnOnce() -> ScreenViewHandler,
     {
-        let (tx, rx) = unbounded();
-        let waker = ThreadWaker::new_current_thread();
-        let instance = Self {
-            native: NativeApi::new()?,
-            sv_handler: new_sv_handler(),
-            node_interface,
-            capture_pool: CapturePool::new(waker.clone()),
-            channel,
-            waker: waker.clone(),
-        };
-        let thread_handle = start_instance_main(instance, rx);
+        let (waker_tx, waker_rx) = bounded(1);
+        let (message_tx, message_rx) = unbounded();
+        let native = NativeApi::new()?;
+        let sv_handler = new_sv_handler();
 
-        Ok(InstanceHandle::new(tx, waker, thread_handle))
+        let thread_handle = start_instance_main(
+            move |waker| {
+                let instance = Self {
+                    native,
+                    sv_handler,
+                    node_interface,
+                    capture_pool: CapturePool::new(waker.clone()),
+                    channel,
+                    waker: waker.clone(),
+                };
+
+                waker_tx.send(waker).unwrap();
+                instance
+            },
+            message_rx,
+        );
+
+        Ok(InstanceHandle::new(
+            message_tx,
+            waker_rx.recv().unwrap(),
+            thread_handle,
+        ))
     }
 
     pub fn new_host_signal(
@@ -475,8 +489,13 @@ impl Instance {
 
 impl Finalize for Instance {}
 
-fn start_instance_main(instance: Instance, message_receiver: Receiver<Message>) -> JoinHandle<()> {
-    thread::spawn(move || instance_main(instance, message_receiver))
+fn start_instance_main<F>(make_instance: F, message_receiver: Receiver<Message>) -> JoinHandle<()>
+where F: FnOnce(ThreadWaker) -> Instance + Send + 'static {
+    thread::spawn(move || {
+        let waker = ThreadWaker::new_current_thread();
+        let instance = make_instance(waker);
+        instance_main(instance, message_receiver)
+    })
 }
 
 fn instance_main(mut instance: Instance, message_receiver: Receiver<Message>) {
