@@ -1,13 +1,11 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
-import { InstanceConnectionType } from 'node-interop';
 import { runInAction } from 'mobx';
 import Main from './Pages/Main';
 import PageType from './Pages/PageType';
 import Client from './Pages/Client';
 import BackendStore from './store/Host/BackendStore';
-import UIStore from './store/Host/UIStore';
-import getDesktopList from './helper/getDesktopList';
+import interop from './nodeInterop';
 
 // we render different pages based on the hash aka # after the URL. This isn't dynamic meaning you can't change pages. This makes sense for our app.
 (async () => {
@@ -19,10 +17,9 @@ import getDesktopList from './helper/getDesktopList';
             await runInAction(async () => {
                 BackendStore.type =
                     page === PageType.DirectHost
-                        ? InstanceConnectionType.Direct
-                        : InstanceConnectionType.Signal;
-
-                UIStore.thumbnails = await getDesktopList();
+                        ? interop.InstanceConnectionType.Direct
+                        : interop.InstanceConnectionType.Signal;
+                //  UIStore.thumbnails = await getDesktopList();
             });
             break;
         }

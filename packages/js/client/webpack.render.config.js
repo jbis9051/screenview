@@ -35,6 +35,10 @@ module.exports = {
                 test: /\.(woff|woff2|eot|ttf|otf)$/i,
                 type: 'asset/resource',
             },
+            {
+                test: /\.node$/,
+                loader: 'node-loader',
+            },
         ],
     },
     plugins: [
