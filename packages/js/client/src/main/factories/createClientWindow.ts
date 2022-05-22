@@ -20,7 +20,9 @@ async function createClientWindow(): Promise<BrowserWindow> {
     });
 
     if (process.env.NODE_ENV === 'development') {
-        await clientWindow.loadURL(`http://localhost:8080/#${PageType.Client}`);
+        clientWindow
+            .loadURL(`http://localhost:8080/#${PageType.Client}`)
+            .catch(console.error);
     }
     return clientWindow;
     // clientWindow.loadFile(path.join(__dirname, '../index.html'));

@@ -56,7 +56,8 @@
             "error",
             { "ignoreImports": true, "properties": "never" }
         ],
-        "no-param-reassign": ["error", { "props": false }]
+        "no-param-reassign": ["error", { "props": false }],
+        "no-underscore-dangle": "off"
     },
     "ignorePatterns": ["**/build/*"]
 }

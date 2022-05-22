@@ -23,13 +23,15 @@ async function createHostWindow(
     });
 
     if (process.env.NODE_ENV === 'development') {
-        await hostWindow.loadURL(
-            `http://localhost:8080/#${
-                type === InstanceConnectionType.Signal
-                    ? PageType.SignalHost
-                    : PageType.DirectHost
-            }`
-        );
+        hostWindow
+            .loadURL(
+                `http://localhost:8080/#${
+                    type === InstanceConnectionType.Signal
+                        ? PageType.SignalHost
+                        : PageType.DirectHost
+                }`
+            )
+            .catch(console.error);
     }
     return hostWindow;
     // hostWindow.loadFile(path.join(__dirname, '../index.html'));

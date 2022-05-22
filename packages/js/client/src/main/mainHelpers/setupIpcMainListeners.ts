@@ -8,7 +8,7 @@ import {
 import establishSession from './ipcMainHandler/establishSession';
 
 function findClientBundle(state: GlobalState, id: number) {
-    return state.clientBundles.find((b) => b.window?.webContents.id === id);
+    return state.clientBundles.find((b) => b.window?.id === id);
 }
 
 export default function setupIpcMainListeners(state: GlobalState) {
@@ -70,30 +70,21 @@ export default function setupIpcMainListeners(state: GlobalState) {
         }
     );
 
-    ipcMain.on(
-        RendererToMainIPCEvents.Host_GetDesktopList,
-        async (_, whichHost: InstanceConnectionType) => {
-            let host: rust.HostInstance | null = null;
-            if (whichHost === InstanceConnectionType.Direct) {
-                host = state.directHostInstance;
-            }
-            if (whichHost === InstanceConnectionType.Signal) {
-                host = state.signalHostInstance;
-            }
-            if (!host) {
-                state.mainWindow?.webContents.send(
-                    MainToRendererIPCEvents.DesktopList,
-                    null
-                );
-                throw new Error(
-                    "Host type doesn't exist. So I can't get desktop list."
-                );
-            }
-            const thumbnails = await rust.thumbnails(host);
-            state.mainWindow?.webContents.send(
-                MainToRendererIPCEvents.DesktopList,
-                thumbnails
+    ipcMain.on(RendererToMainIPCEvents.Host_GetDesktopList, async (event) => {
+        let host: rust.HostInstance | null = null;
+        if (event.sender.id === state.directHostWindow?.id) {
+            host = state.directHostInstance;
+        }
+        if (event.sender.id === state.signalHostWindow?.id) {
+            host = state.signalHostInstance;
+        }
+        if (!host) {
+            event.sender.send(MainToRendererIPCEvents.DesktopList, null);
+            throw new Error(
+                "Host type doesn't exist. So I can't get desktop list."
             );
         }
-    );
+        const thumbnails = await rust.thumbnails(host);
+        event.sender.send(MainToRendererIPCEvents.DesktopList, thumbnails);
+    });
 }

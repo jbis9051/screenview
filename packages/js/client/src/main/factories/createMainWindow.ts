@@ -20,11 +20,9 @@ async function createMainWindow(): Promise<BrowserWindow> {
     });
 
     if (process.env.NODE_ENV === 'development') {
-        await mainWindow
+        mainWindow
             .loadURL(`http://localhost:8080/#${PageType.Main}`)
-            .catch(() => {
-                console.error('Unable to load development page');
-            });
+            .catch(console.error);
     }
     return mainWindow;
     // mainWindow.loadFile(path.join(__dirname, '../index.html'));
