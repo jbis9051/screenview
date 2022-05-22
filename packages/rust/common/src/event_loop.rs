@@ -35,9 +35,9 @@ impl ThreadWakerCore {
     pub fn check_and_unset(&self, flag_bit: u32) -> bool {
         Self::check_flag_bit(flag_bit);
 
-        let mask = !(1usize << flag_bit);
-        let old_state = self.state.fetch_and(mask, Ordering::Relaxed);
-        (old_state & mask) != 0
+        let flag = 1usize << flag_bit;
+        let old_state = self.state.fetch_and(!flag, Ordering::Relaxed);
+        (old_state & flag) != 0
     }
 
     pub fn make_waker(&self, flag_bit: u32) -> ThreadWaker {
@@ -96,6 +96,12 @@ impl ThreadWaker {
         if ThreadWakerCore::is_parked(old_state) {
             self.thread.unpark();
         }
+    }
+}
+
+impl Drop for ThreadWaker {
+    fn drop(&mut self) {
+        self.wake();
     }
 }
 
