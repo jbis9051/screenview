@@ -80,7 +80,7 @@ impl ProcessFrame for ProcessThumbnail {
 
         resources.clear();
         let result = DynamicImage::ImageRgb8(frame)
-            .resize(300, 300, FilterType::CatmullRom)
+            .resize(200, 200, FilterType::Nearest)
             .write_to(resources, ImageFormat::Jpeg);
 
         if result.is_ok() {
