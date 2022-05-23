@@ -5,7 +5,7 @@ const HtmlWebpackPlugin = require('html-webpack-plugin');
 
 module.exports = {
     entry: ['./src/render/index.tsx'],
-    target: 'web',
+    target: 'electron-renderer',
     output: {
         path: path.join(__dirname, 'build', 'render'),
         filename: 'bundle.js',
@@ -34,6 +34,10 @@ module.exports = {
             {
                 test: /\.(woff|woff2|eot|ttf|otf)$/i,
                 type: 'asset/resource',
+            },
+            {
+                test: /\.node$/,
+                loader: 'node-loader',
             },
         ],
     },

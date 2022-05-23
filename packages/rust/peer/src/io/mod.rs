@@ -1,12 +1,17 @@
-pub mod handle;
-pub mod tcp;
-pub mod udp;
+mod direct_server;
+mod handle;
+mod tcp;
+mod udp;
 
+pub use direct_server::*;
 pub use handle::*;
-use std::thread::JoinHandle;
+pub use tcp::*;
+pub use udp::*;
 
+pub(crate) const LENGTH_FIELD_WIDTH: usize = 2;
 const INIT_BUFFER_CAPACITY: usize = 4096;
 const UDP_READ_SIZE: usize = 65507;
+const UDP_TIMEOUT: u64 = 50;
 pub const DEFAULT_UNRELIABLE_MESSAGE_SIZE: usize = 1500;
 
 #[macro_export]
@@ -18,21 +23,9 @@ macro_rules! return_if_err {
     };
 }
 
-struct JoinOnDrop<T> {
-    handle: Option<JoinHandle<T>>,
-}
-
-impl<T> JoinOnDrop<T> {
-    fn new(handle: JoinHandle<T>) -> Self {
-        Self {
-            handle: Some(handle),
-        }
-    }
-}
-
-impl<T> Drop for JoinOnDrop<T> {
-    fn drop(&mut self) {
-        // Drop can only ever be called once so unwrap will never fail
-        drop(self.handle.take().unwrap().join());
-    }
+#[inline]
+fn parse_length_field(message: &[u8]) -> usize {
+    let mut length_bytes = [0u8; LENGTH_FIELD_WIDTH];
+    length_bytes.copy_from_slice(&message[0 .. LENGTH_FIELD_WIDTH]);
+    usize::from(u16::from_le_bytes(length_bytes))
 }

@@ -45,7 +45,7 @@ fn test_transport_data_unreliable() {
     let message: TransportDataMessageUnreliable =
         TransportDataMessageUnreliable::read(&mut Cursor::new(bytes)).unwrap();
     assert_eq!(&message.counter, b_to_u64!(b"COUNTERC"));
-    assert_eq!(&message.data, b"YELLOW SUBMARINE");
+    assert_eq!(message.data.0.as_ref(), b"YELLOW SUBMARINE");
     test_write(&message, bytes);
 }
 
@@ -54,6 +54,6 @@ fn test_transport_data_reliable() {
     let bytes = include_bytes!("binary/wpskka/transport_data_reliable.bin");
     let message: TransportDataMessageReliable =
         TransportDataMessageReliable::read(&mut Cursor::new(bytes)).unwrap();
-    assert_eq!(&message.data, b"YELLOW SUBMARINE");
+    assert_eq!(message.data.0.as_ref(), b"YELLOW SUBMARINE");
     test_write(&message, bytes);
 }

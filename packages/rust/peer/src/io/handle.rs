@@ -1,15 +1,23 @@
+use crate::ChanneledMessage;
+
 use super::DEFAULT_UNRELIABLE_MESSAGE_SIZE;
-use common::messages::{sel::*, Error};
+use common::{messages::Error, sync::event_loop::ThreadWaker};
 use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
-use std::{io, net::ToSocketAddrs};
+use std::{
+    error::Error as StdError,
+    fmt::{self, Debug, Display, Formatter},
+    io,
+    net::ToSocketAddrs,
+};
 
 pub trait Reliable: Sized {
     fn new<A: ToSocketAddrs>(
         addr: A,
         result_sender: Sender<TransportResult>,
+        waker: ThreadWaker,
     ) -> Result<Self, io::Error>;
 
-    fn send(&mut self, message: SelMessage) -> bool;
+    fn send(&mut self, message: Vec<u8>) -> Result<(), SendError>;
 
     fn close(&mut self);
 }
@@ -18,12 +26,42 @@ pub trait Unreliable: Sized {
     fn new<A: ToSocketAddrs>(
         addr: A,
         result_sender: Sender<TransportResult>,
+        waker: ThreadWaker,
     ) -> Result<Self, io::Error>;
 
-    fn send(&mut self, message: SelMessage, max_len: usize) -> bool;
+    fn send(&mut self, message: Vec<u8>, max_len: usize) -> Result<(), SendError>;
 
     fn close(&mut self);
 }
+
+impl<R: Reliable> Unreliable for R {
+    fn new<A: ToSocketAddrs>(
+        addr: A,
+        result_sender: Sender<TransportResult>,
+        waker: ThreadWaker,
+    ) -> Result<Self, io::Error> {
+        <R as Reliable>::new(addr, result_sender, waker)
+    }
+
+    fn send(&mut self, message: Vec<u8>, _max_len: usize) -> Result<(), SendError> {
+        <R as Reliable>::send(self, message)
+    }
+
+    fn close(&mut self) {
+        <R as Reliable>::close(self)
+    }
+}
+
+#[derive(Debug)]
+pub struct SendError(pub Source);
+
+impl Display for SendError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "send error in {:?}", self.0)
+    }
+}
+
+impl StdError for SendError {}
 
 pub struct IoHandle<R, U> {
     reliable: Option<R>,
@@ -58,7 +96,7 @@ impl<R, U> IoHandle<R, U> {
     }
 
     /// Tries to receive a [`TransportResult`] from either the reliable channel or unreliiable
-    /// socket without blocking, returning it if it exists.
+    /// socket according to the method provided.
     ///
     /// [`TransportResult`]: crate::io::TransportResult
     pub fn recv(&self) -> Option<TransportResult> {
@@ -67,6 +105,11 @@ impl<R, U> IoHandle<R, U> {
             Err(TryRecvError::Empty) => None,
             Err(TryRecvError::Disconnected) => unreachable!(),
         }
+    }
+
+    /// Returns whether or not the reliable channel is connected.
+    pub fn is_reliable_connected(&self) -> bool {
+        self.reliable.is_some()
     }
 
     /// Returns the current maximum unreliable message size. This is the strictly enforced limit on the
@@ -93,11 +136,24 @@ impl<R: Reliable, U> IoHandle<R, U> {
     ///
     /// This function will return an error if the channel it constructs fails to bind to the
     /// given address.
-    pub fn connect_reliable<A: ToSocketAddrs>(&mut self, addr: A) -> Result<(), io::Error> {
+    pub fn connect_reliable<A: ToSocketAddrs>(
+        &mut self,
+        addr: A,
+        waker: ThreadWaker,
+    ) -> Result<(), io::Error> {
         self.disconnect_reliable();
-        let handle = R::new(addr, self.result_sender.clone())?;
+        let handle = R::new(addr, self.result_sender.clone(), waker)?;
         self.reliable = Some(handle);
         Ok(())
+    }
+
+    /// Terminates any existing connection and attempts to replace that connection using the given
+    /// closure.
+    pub fn connect_reliable_with<F>(&mut self, f: F)
+    where F: FnOnce(Sender<TransportResult>) -> R {
+        self.disconnect_reliable();
+        let handle = f(self.result_sender.clone());
+        self.reliable = Some(handle);
     }
 
     /// Sends a message through the reliable channel, returning true if it was successfully sent to
@@ -108,7 +164,7 @@ impl<R: Reliable, U> IoHandle<R, U> {
     /// Panics if called before a successful call to [`connect_reliable`] is made.
     ///
     /// [`connect_reliable`](crate::io::IoHandle::connect_reliable)
-    pub fn send_reliable(&mut self, message: SelMessage) -> bool {
+    pub fn send_reliable(&mut self, message: Vec<u8>) -> Result<(), SendError> {
         self.reliable
             .as_mut()
             .expect("reliable connection not established")
@@ -130,9 +186,13 @@ impl<R, U: Unreliable> IoHandle<R, U> {
     /// # Errors
     ///
     /// This function will return an error if it fails to bind to the given remote address.
-    pub fn connect_unreliable<A: ToSocketAddrs>(&mut self, addr: A) -> Result<(), io::Error> {
+    pub fn connect_unreliable<A: ToSocketAddrs>(
+        &mut self,
+        addr: A,
+        waker: ThreadWaker,
+    ) -> Result<(), io::Error> {
         self.disconnect_unreliable();
-        let handle = U::new(addr, self.result_sender.clone())?;
+        let handle = U::new(addr, self.result_sender.clone(), waker)?;
         self.unreliable = Some(handle);
         Ok(())
     }
@@ -148,7 +208,7 @@ impl<R, U: Unreliable> IoHandle<R, U> {
     ///
     /// [`connect_unreliable`](crate::io::IoHandle::connect_unreliable)
     /// [`max_unreliable_message_size`](crate::io::IoHandle::max_unreliable_message_size)
-    pub fn send_unreliable(&mut self, message: SelMessage) -> bool {
+    pub fn send_unreliable(&mut self, message: Vec<u8>) -> Result<(), SendError> {
         self.unreliable
             .as_mut()
             .expect("unreliable connection not established")
@@ -163,14 +223,47 @@ impl<R, U: Unreliable> IoHandle<R, U> {
     }
 }
 
-pub enum TransportResult {
-    Ok(SelMessage),
-    TooLarge(SelMessage),
-    Recoverable { source: Source, error: Error },
-    Fatal { source: Source, error: io::Error },
+impl<R: Reliable, U: Unreliable> IoHandle<R, U> {
+    pub fn send(&mut self, message: ChanneledMessage<Vec<u8>>) -> Result<(), SendError> {
+        match message {
+            ChanneledMessage::Reliable(message) => self.send_reliable(message),
+            ChanneledMessage::Unreliable(message) => self.send_unreliable(message),
+        }
+    }
+}
+
+pub enum TransportResponse {
+    Message(Vec<u8>),
     Shutdown(Source),
 }
 
+#[derive(Debug)]
+pub enum TransportError {
+    TooLarge(usize),
+    Recoverable { source: Source, error: Error },
+    Fatal { source: Source, error: io::Error },
+}
+
+impl Display for TransportError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::TooLarge(size) => write!(
+                f,
+                "attempted to send too large of a message ({} bytes) through unreliable channel",
+                size
+            ),
+            Self::Recoverable { source, error } =>
+                write!(f, "recoverable error in {:?}: {}", source, error),
+            Self::Fatal { source, error } => write!(f, "fatal error in {:?}: {}", source, error),
+        }
+    }
+}
+
+impl StdError for TransportError {}
+
+pub type TransportResult = Result<TransportResponse, TransportError>;
+
+#[derive(Debug)]
 pub enum Source {
     ReadReliable,
     WriteReliable,

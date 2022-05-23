@@ -1,3 +1,4 @@
+use super::{Data, Message};
 use crate::messages::{Error, MessageComponent};
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use parser::{message_id, MessageComponent};
@@ -39,7 +40,7 @@ impl From<&AuthSchemeType> for u8 {
     }
 }
 
-impl MessageComponent for AuthSchemeType {
+impl MessageComponent<'_> for AuthSchemeType {
     fn read(cursor: &mut Cursor<&[u8]>) -> Result<Self, Error> {
         let byte = cursor.read_u8()?;
         Self::try_from(byte)
@@ -81,25 +82,30 @@ pub struct AuthResult {
 
 #[derive(Debug, MessageComponent)]
 #[message_id(5)]
-pub struct TransportDataMessageReliable {
-    #[parse(len_prefixed(2))]
-    pub data: Vec<u8>,
+#[lifetime('a)]
+pub struct TransportDataMessageReliable<'a> {
+    pub data: Data<'a>,
 }
 
 #[derive(Debug, MessageComponent)]
 #[message_id(6)]
-pub struct TransportDataMessageUnreliable {
+#[lifetime('a)]
+pub struct TransportDataMessageUnreliable<'a> {
     pub counter: u64,
-    #[parse(len_prefixed(2))]
-    pub data: Vec<u8>,
+    pub data: Data<'a>,
 }
 
 #[derive(MessageComponent, Debug)]
-pub enum WpskkaMessage {
+#[lifetime('a)]
+pub enum WpskkaMessage<'a> {
     AuthScheme(AuthScheme),
     TryAuth(TryAuth),
     AuthMessage(AuthMessage),
     AuthResult(AuthResult),
-    TransportDataMessageReliable(TransportDataMessageReliable),
-    TransportDataMessageUnreliable(TransportDataMessageUnreliable),
+    TransportDataMessageReliable(TransportDataMessageReliable<'a>),
+    TransportDataMessageUnreliable(TransportDataMessageUnreliable<'a>),
+}
+
+impl<'a> Message for WpskkaMessage<'a> {
+    const LEN_PREFIX_WIDTH: usize = 2;
 }

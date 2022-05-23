@@ -1,11 +1,14 @@
 export default function formatID(id: string) {
-    let format = id.substring(0, 13).replaceAll(/[^0-9]/g, '');
+    if (!id.match(/^[\d\s]+$/)) {
+        return id;
+    }
+    let format = id.substring(0, 13).replaceAll(/\D/g, '');
     if (format.length > 9) {
         format = `${format[0]} ${format
             .substring(1)
-            .replaceAll(/([0-9]{3})/g, '$1 ')}`;
+            .replaceAll(/(\d{3})/g, '$1 ')}`;
     } else {
-        format = format.replaceAll(/([0-9]{3})/g, '$1 ');
+        format = format.replaceAll(/(\d{3})/g, '$1 ');
     }
     return format.trim();
 }

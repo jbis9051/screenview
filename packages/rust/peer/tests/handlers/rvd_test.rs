@@ -15,7 +15,7 @@ use common::messages::rvd::{
     ProtocolVersion,
     RvdMessage,
 };
-use peer::services::{
+use peer::{
     rvd::{
         DisplayType,
         RvdClientHandler,
@@ -42,7 +42,7 @@ fn test_rvd_version_mismatch() {
     });
 
     client
-        .handle(protocol_message, &mut write, &mut events)
+        ._handle(protocol_message, &mut write, &mut events)
         .expect("handler failed");
     assert_eq!(events.len(), 1);
     assert_eq!(write.len(), 1);
@@ -54,7 +54,7 @@ fn test_rvd_version_mismatch() {
     let msg = write.remove(0);
     assert!(matches!(&msg, &RvdMessage::ProtocolVersionResponse(_)));
 
-    host.handle(msg, &mut events).expect("handler failed");
+    host._handle(msg, &mut events).expect("handler failed");
     assert_eq!(events.len(), 1);
     assert!(matches!(
         events[0],
@@ -75,7 +75,7 @@ fn test_rvd_handshake() {
     let protocol_message = RvdHostHandler::protocol_version();
 
     client
-        .handle(protocol_message, &mut write, &mut events)
+        ._handle(protocol_message, &mut write, &mut events)
         .expect("handler failed");
     assert_eq!(events.len(), 0);
     assert_eq!(write.len(), 1);
@@ -84,7 +84,7 @@ fn test_rvd_handshake() {
 
     assert!(matches!(&msg, &RvdMessage::ProtocolVersionResponse(_)));
 
-    host.handle(msg, &mut events).expect("handler failed");
+    host._handle(msg, &mut events).expect("handler failed");
     assert_eq!(events.len(), 0);
 }
 
@@ -112,7 +112,7 @@ fn test_rvd_client() {
     let msg = RvdMessage::DisplayChange(change.clone());
 
     client
-        .handle(msg, &mut write, &mut events)
+        ._handle(msg, &mut write, &mut events)
         .expect("handler failed");
     assert_eq!(write.len(), 1);
     assert_eq!(events.len(), 1);
@@ -134,7 +134,7 @@ fn test_rvd_client() {
     let msg = RvdMessage::MouseLocation(location.clone());
 
     client
-        .handle(msg, &mut write, &mut events)
+        ._handle(msg, &mut write, &mut events)
         .expect("handler failed");
     assert_eq!(write.len(), 0);
     assert_eq!(events.len(), 1);
@@ -159,7 +159,7 @@ fn test_rvd_client() {
     let msg = RvdMessage::ClipboardNotification(notification.clone());
 
     client
-        .handle(msg, &mut write, &mut events)
+        ._handle(msg, &mut write, &mut events)
         .expect("handler failed");
     assert_eq!(write.len(), 0);
     assert_eq!(events.len(), 1);
@@ -194,7 +194,7 @@ fn test_rvd_host() {
     let msg = host.display_update();
     assert!(matches!(msg, RvdMessage::DisplayChange(_)));
 
-    host.handle(
+    host._handle(
         RvdMessage::DisplayChangeReceived(DisplayChangeReceived {}),
         &mut events,
     )
@@ -211,7 +211,7 @@ fn test_rvd_host() {
         buttons_state: ButtonsMask::empty(),
     };
 
-    host.handle(RvdMessage::MouseInput(mouse_input), &mut events)
+    host._handle(RvdMessage::MouseInput(mouse_input), &mut events)
         .expect("handler failed");
     assert_eq!(events.len(), 1);
 
@@ -235,7 +235,7 @@ fn test_rvd_host() {
         key: 20,
     };
 
-    host.handle(RvdMessage::KeyInput(key_input.clone()), &mut events)
+    host._handle(RvdMessage::KeyInput(key_input.clone()), &mut events)
         .expect("handler failed");
     assert_eq!(events.len(), 1);
 
@@ -248,7 +248,7 @@ fn test_rvd_host() {
 
     // ClipboardRequest
 
-    host.handle(
+    host._handle(
         RvdMessage::ClipboardRequest(ClipboardRequest {
             info: ClipboardMeta {
                 clipboard_type: ClipboardType::Text,
@@ -280,7 +280,7 @@ fn test_rvd_host() {
     };
     let msg = RvdMessage::ClipboardNotification(notification.clone());
 
-    host.handle(msg, &mut events).expect("handler failed");
+    host._handle(msg, &mut events).expect("handler failed");
     assert_eq!(events.len(), 1);
 
     let event = events.remove(0);

@@ -1,6 +1,7 @@
 enum PageType {
-    HOME = 'home',
-    REMOTE_DISPLAY = 'remote_display',
-    TOOLBOX = 'toolbox',
+    Main = 'home',
+    Client = 'client',
+    SignalHost = 'signal-host',
+    DirectHost = 'direct-host',
 }
 export default PageType;

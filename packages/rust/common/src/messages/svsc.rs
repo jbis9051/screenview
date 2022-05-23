@@ -1,4 +1,4 @@
-use super::{Error, MessageComponent};
+use super::{Data, Error, Message, MessageComponent};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use chrono::{DateTime, LocalResult, TimeZone, Utc};
 use parser::{message_id, MessageComponent};
@@ -35,7 +35,7 @@ pub struct LeaseResponse {
 
 pub type ExpirationTime = DateTime<Utc>;
 
-impl MessageComponent for ExpirationTime {
+impl MessageComponent<'_> for ExpirationTime {
     fn read(cursor: &mut Cursor<&[u8]>) -> Result<Self, Error> {
         let date = cursor.read_i64::<LittleEndian>()?;
         match Utc.timestamp_opt(date, 0) {
@@ -90,7 +90,7 @@ pub enum EstablishSessionStatus {
     OtherError = 0x05,
 }
 
-impl MessageComponent for EstablishSessionStatus {
+impl MessageComponent<'_> for EstablishSessionStatus {
     fn read(cursor: &mut Cursor<&[u8]>) -> Result<Self, Error> {
         match cursor.read_u8()? {
             0 => Ok(Self::Success),
@@ -128,7 +128,7 @@ pub struct EstablishSessionResponse {
     pub lease_id: LeaseId,
     pub status: EstablishSessionStatus,
     #[parse(condition = "status == EstablishSessionStatus::Success")]
-    pub response_data: Option<SessionData>,
+    pub response_data: Option<Box<SessionData>>,
 }
 
 #[derive(Debug, MessageComponent)]
@@ -147,16 +147,18 @@ pub struct SessionEndNotification {}
 
 #[derive(Debug, MessageComponent)]
 #[message_id(11)]
-pub struct SessionDataSend {
-    #[parse(len_prefixed(3))]
-    pub data: Vec<u8>,
+#[lifetime('a)]
+pub struct SessionDataSend<'a> {
+    // #[parse(len_prefixed(3))]
+    pub data: Data<'a>,
 }
 
 #[derive(Debug, MessageComponent)]
 #[message_id(12)]
-pub struct SessionDataReceive {
-    #[parse(len_prefixed(3))]
-    pub data: Vec<u8>,
+#[lifetime('a)]
+pub struct SessionDataReceive<'a> {
+    // #[parse(len_prefixed(3))]
+    pub data: Data<'a>,
 }
 
 #[derive(Debug, MessageComponent)]
@@ -164,7 +166,8 @@ pub struct SessionDataReceive {
 pub struct KeepAlive {}
 
 #[derive(MessageComponent, Debug)]
-pub enum SvscMessage {
+#[lifetime('a)]
+pub enum SvscMessage<'a> {
     ProtocolVersion(ProtocolVersion),
     ProtocolVersionResponse(ProtocolVersionResponse),
     LeaseRequest(LeaseRequest),
@@ -176,7 +179,11 @@ pub enum SvscMessage {
     EstablishSessionNotification(EstablishSessionNotification),
     SessionEnd(SessionEnd),
     SessionEndNotification(SessionEndNotification),
-    SessionDataSend(SessionDataSend),
-    SessionDataReceive(SessionDataReceive),
+    SessionDataSend(SessionDataSend<'a>),
+    SessionDataReceive(SessionDataReceive<'a>),
     KeepAlive(KeepAlive),
+}
+
+impl<'a> Message for SvscMessage<'a> {
+    const LEN_PREFIX_WIDTH: usize = 0;
 }

@@ -16,6 +16,8 @@ WPSKKA begins with a handshake to choose an authentication scheme. The goal of a
         \hline
         \textbf{Bytes}   & \textbf{Name}    & \textbf{Value} \\
         \hline
+        2                & length           &                \\
+        \hline
         1                & type             & 1              \\
         \hline
         32               & public-key       &                \\
@@ -58,9 +60,11 @@ The TryAuth messages indicates a Client would to attempt authentication with a p
         \hline
         \textbf{Bytes} & \textbf{Name}      & \textbf{Value} \\
         \hline
+        2              & length             & 34             \\
+        \hline
         1              & type               & 2              \\
         \hline
-        32               & public-key       &                \\
+        32             & public-key         &                \\
         \hline
         1              & auth-scheme-number &                \\
         \hline
@@ -81,11 +85,11 @@ Messages used in the authentication scheme are encapsulated in this message.
         \hline
         \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
         \hline
-        1              & type          & 3              \\
-        \hline
         2              & length        &                \\
         \hline
-        length         & auth-message  &                \\
+        1              & type          & 3              \\
+        \hline
+        length-1       & auth-message  &                \\
         \hline
     \end{tabular}
 \end{center}
@@ -99,6 +103,8 @@ Messages used in the authentication scheme are encapsulated in this message.
     \begin{tabular}{|c|c|c|}
         \hline
         \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
+        \hline
+        2              & length        & 2              \\
         \hline
         1              & type          & 4              \\
         \hline
@@ -131,13 +137,13 @@ Transport Data Messages MUST NOT be sent until authentication is complete.
     Host $\leftrightarrow$ Client\\
     \begin{tabular}{|c|c|c|}
         \hline
-        \textbf{Bytes}     & \textbf{Name} & \textbf{Value} \\
+        \textbf{Bytes}  & \textbf{Name} & \textbf{Value} \\
         \hline
-        1                  & type          & 5              \\
+        2               & data-length   &                \\
         \hline
-        2                  & data-length   &                \\
+        1               & type          & 5              \\
         \hline
-        \emph{data-length} & data          &                \\
+        remaining bytes & data          &                \\
         \hline
     \end{tabular}
 \end{center}
@@ -160,15 +166,15 @@ $\mathit{NT}_{m}$ is an 64 bit counter that MUST NOT wrap. After a transport mes
     Host $\leftrightarrow$ Client\\
     \begin{tabular}{|c|c|c|}
         \hline
-        \textbf{Bytes}     & \textbf{Name} & \textbf{Value} \\
+        \textbf{Bytes}  & \textbf{Name} & \textbf{Value} \\
         \hline
-        1                  & type          & 6              \\
+        2               & data-length   &                \\
         \hline
-        8                  & counter       &                \\
+        1               & type          & 6              \\
         \hline
-        2                  & data-length   &                \\
+        8               & counter       &                \\
         \hline
-        \emph{data-length} & data          &                \\
+        remaining bytes & data          &                \\
         \hline
     \end{tabular}
 \end{center}
@@ -205,7 +211,7 @@ client.\\
         \hline
         16             & salt          &                \\
         \hline
-        256             & srp-B         &                \\
+        256            & srp-B         &                \\
         \hline
     \end{tabular}
 \end{center}
@@ -229,7 +235,7 @@ client.\\
         \hline
         1              & type          & 2              \\
         \hline
-        256             & srp-A         &                \\
+        256            & srp-A         &                \\
         \hline
         32             & mac           &                \\
         \hline

@@ -1,32 +1,38 @@
+use super::{Data, Message};
 use parser::{message_id, MessageComponent};
 
 #[derive(Debug, MessageComponent)]
 #[message_id(1)]
-pub struct TransportDataMessageReliable {
-    #[parse(greedy)]
-    pub data: Vec<u8>,
+#[lifetime('a)]
+pub struct TransportDataMessageReliable<'a> {
+    pub data: Data<'a>,
 }
 
 #[derive(Debug, MessageComponent)]
 #[message_id(2)]
-pub struct TransportDataPeerMessageUnreliable {
+#[lifetime('a)]
+pub struct TransportDataPeerMessageUnreliable<'a> {
     pub peer_id: [u8; 16],
     pub counter: u64,
-    #[parse(greedy)]
-    pub data: Vec<u8>,
+    pub data: Data<'a>,
 }
 
 #[derive(Debug, MessageComponent)]
 #[message_id(3)]
-pub struct TransportDataServerMessageUnreliable {
+#[lifetime('a)]
+pub struct TransportDataServerMessageUnreliable<'a> {
     pub counter: u64,
-    #[parse(greedy)]
-    pub data: Vec<u8>,
+    pub data: Data<'a>,
 }
 
 #[derive(MessageComponent, Debug)]
-pub enum SelMessage {
-    TransportDataMessageReliable(TransportDataMessageReliable),
-    TransportDataPeerMessageUnreliable(TransportDataPeerMessageUnreliable),
-    TransportDataServerMessageUnreliable(TransportDataServerMessageUnreliable),
+#[lifetime('a)]
+pub enum SelMessage<'a> {
+    TransportDataMessageReliable(TransportDataMessageReliable<'a>),
+    TransportDataPeerMessageUnreliable(TransportDataPeerMessageUnreliable<'a>),
+    TransportDataServerMessageUnreliable(TransportDataServerMessageUnreliable<'a>),
+}
+
+impl<'a> Message for SelMessage<'a> {
+    const LEN_PREFIX_WIDTH: usize = 2;
 }

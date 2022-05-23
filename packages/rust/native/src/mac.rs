@@ -8,7 +8,14 @@ use accessibility_sys::{
     AXUIElementPerformAction,
     AXUIElementRef,
 };
-use std::{ffi::CStr, ops::Deref, os::raw::c_uchar, ptr, slice::from_raw_parts};
+use std::{
+    ffi::CStr,
+    fmt::{Display, Formatter},
+    ops::Deref,
+    os::raw::c_uchar,
+    ptr,
+    slice::from_raw_parts,
+};
 
 use cocoa::{
     appkit::{
@@ -112,6 +119,8 @@ pub struct MacApi {
     modifier_keys: CGEventFlags,
     _nsapplication: id,
 }
+
+unsafe impl Send for MacApi {} // TODO make it thread-safe
 
 extern "C" {
     fn NSMouseInRect(aPoint: NSPoint, aRect: NSRect, flipped: BOOL) -> BOOL;

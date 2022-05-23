@@ -1,14 +1,26 @@
-import { app, BrowserWindow, shell, Tray } from 'electron';
-import createMenu from './menu';
-import createMainWindow from './mainWindow';
+import { app, BrowserWindow } from 'electron';
+import GlobalState from './GlobalState';
+import createTray from './actions/createTray';
+import startMainWindow from './mainHelpers/startMainWindow';
+import setupReactions from './mainHelpers/setupReactions';
+import setupIpcMainListeners from './mainHelpers/setupIpcMainListeners';
 
-app.on('ready', () => {
-    createMainWindow();
-    createMenu(null);
+const state = new GlobalState();
 
-    app.on('activate', () => {
-        if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
-    });
+setupReactions(state);
+setupIpcMainListeners(state);
+
+app.on('ready', async () => {
+    // TODO load config from preferences
+
+    await startMainWindow(state);
+    // await createTray(state);
+});
+
+app.on('activate', async () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+        await startMainWindow(state);
+    }
 });
 
 app.on('window-all-closed', () => {

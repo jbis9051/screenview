@@ -1,4 +1,4 @@
-use super::{Error, MessageComponent};
+use super::{Error, Message, MessageComponent};
 use crate::messages::impl_bitflags_message_component;
 use bitflags::bitflags;
 use byteorder::{ReadBytesExt, WriteBytesExt};
@@ -158,7 +158,7 @@ impl From<&ClipboardType> for u8 {
 #[derive(Debug)]
 struct ClipboardCustomName<'a>(pub Cow<'a, str>);
 
-impl<'a> MessageComponent for ClipboardCustomName<'a> {
+impl<'a> MessageComponent<'_> for ClipboardCustomName<'a> {
     fn read(cursor: &mut Cursor<&[u8]>) -> Result<Self, Error> {
         // The length of this field takes up one byte
         let length = usize::from(cursor.read_u8()?);
@@ -254,7 +254,7 @@ pub struct ClipboardMeta {
     pub content_request: bool,
 }
 
-impl MessageComponent for ClipboardMeta {
+impl MessageComponent<'_> for ClipboardMeta {
     fn read(cursor: &mut Cursor<&[u8]>) -> Result<Self, Error> {
         ClipboardMetaInter::read(cursor)?.try_into()
     }
@@ -302,4 +302,8 @@ pub enum RvdMessage {
     ClipboardRequest(ClipboardRequest),
     ClipboardNotification(ClipboardNotification),
     FrameData(FrameData),
+}
+
+impl Message for RvdMessage {
+    const LEN_PREFIX_WIDTH: usize = 0;
 }

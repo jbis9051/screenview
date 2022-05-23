@@ -4,12 +4,16 @@ use proc_macro2::{Span, TokenStream};
 use proc_macro_crate::{crate_name, FoundCrate};
 use quote::quote;
 use syn::{
+    parenthesized,
+    parse::{Parse, ParseStream},
+    parse2,
     parse_macro_input,
     Data,
     DeriveInput,
     Error,
     GenericArgument,
     Ident,
+    Lifetime,
     LitInt,
     PathArguments,
     Result,
@@ -19,10 +23,34 @@ use syn::{
 mod gen;
 mod parse;
 
-#[proc_macro_derive(MessageComponent, attributes(parse))]
+struct ParenthesizedLifetime(Lifetime);
+
+impl Parse for ParenthesizedLifetime {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let content;
+        parenthesized!(content in input);
+        content.parse::<Lifetime>().map(Self)
+    }
+}
+
+#[proc_macro_derive(MessageComponent, attributes(lifetime, parse))]
 pub fn derive_message_component(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(item as DeriveInput);
     let crate_common = common();
+
+    let lifetime = match input
+        .attrs
+        .iter()
+        .find(|&attr| attr.path.is_ident("lifetime"))
+        .map(|attr| parse2::<ParenthesizedLifetime>(attr.tokens.clone()))
+        .transpose()
+    {
+        Ok(lifetime) => lifetime
+            .map(|lt| lt.0)
+            .unwrap_or_else(|| parse2::<Lifetime>(quote! { '_ }).unwrap()),
+        Err(error) => return error.to_compile_error().into(),
+    };
+
 
     match &input.data {
         Data::Struct(data_struct) => {
@@ -30,9 +58,10 @@ pub fn derive_message_component(item: proc_macro::TokenStream) -> proc_macro::To
                 Ok(fields) => fields,
                 Err(e) => return e.into_compile_error().into(),
             };
-            gen::gen_struct_impl(&crate_common, &input, &fields).into()
+            gen::gen_struct_impl(&crate_common, &input, &fields, &lifetime).into()
         }
-        Data::Enum(data_enum) => gen::gen_enum_impl(&crate_common, &input, data_enum).into(),
+        Data::Enum(data_enum) =>
+            gen::gen_enum_impl(&crate_common, &input, data_enum, &lifetime).into(),
         _ => Error::new_spanned(&input, "ADT not supported")
             .into_compile_error()
             .into(),
