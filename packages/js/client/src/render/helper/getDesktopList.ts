@@ -1,27 +1,54 @@
 import { ipcRenderer, IpcRendererEvent } from 'electron';
+import { runInAction, toJS } from 'mobx';
 import { NativeThumbnail } from 'node-interop';
 import {
     MainToRendererIPCEvents,
     RendererToMainIPCEvents,
 } from '../../common/IPCEvents';
+import UIStore, { SelectedDisplay } from '../store/Host/UIStore';
 
-export default function getDesktopList(): Promise<NativeThumbnail[]> {
+export default function getDesktopList(): Promise<SelectedDisplay[]> {
     return new Promise((resolve, reject) => {
         ipcRenderer.send(RendererToMainIPCEvents.Host_GetDesktopList);
 
         function onDesktopList(
             _: IpcRendererEvent,
-            list: NativeThumbnail[] | null
+            newList: NativeThumbnail[] | null
         ) {
-            ipcRenderer.removeListener(
-                MainToRendererIPCEvents.DesktopList,
-                onDesktopList
-            );
-            if (list === null) {
+            if (UIStore.selectedDisplays) {
+                ipcRenderer.removeListener(
+                    MainToRendererIPCEvents.DesktopList,
+                    onDesktopList
+                );
+                ipcRenderer.send(RendererToMainIPCEvents.Host_StopDesktopList);
+                const selectedDisplays = toJS(UIStore.selectedDisplays);
+                UIStore.selectedDisplays = null;
+                UIStore.thumbnails = null;
+                resolve(selectedDisplays);
+                return;
+            }
+            if (newList === null) {
                 reject(new Error('Unable to get displays'));
                 return;
             }
-            resolve(list);
+            runInAction(() => {
+                if (!UIStore.thumbnails) {
+                    UIStore.thumbnails = newList;
+                    return;
+                }
+                UIStore.thumbnails = [
+                    ...UIStore.thumbnails.filter(
+                        (thumb) =>
+                            !newList.find(
+                                (newListItem) =>
+                                    thumb.native_id === newListItem.native_id &&
+                                    thumb.display_type ===
+                                        newListItem.display_type
+                            )
+                    ),
+                    ...newList,
+                ].sort((a, b) => a.native_id - b.native_id);
+            });
         }
 
         ipcRenderer.on(MainToRendererIPCEvents.DesktopList, onDesktopList);

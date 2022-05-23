@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron';
+import { ipcMain, webContents } from 'electron';
 import { ButtonMask, InstanceConnectionType, rust } from 'node-interop';
 import GlobalState from '../GlobalState';
 import {
@@ -71,20 +71,28 @@ export default function setupIpcMainListeners(state: GlobalState) {
     );
 
     ipcMain.on(RendererToMainIPCEvents.Host_GetDesktopList, async (event) => {
-        let host: rust.HostInstance | null = null;
-        if (event.sender.id === state.directHostWindow?.id) {
-            host = state.directHostInstance;
-        }
-        if (event.sender.id === state.signalHostWindow?.id) {
-            host = state.signalHostInstance;
-        }
-        if (!host) {
-            event.sender.send(MainToRendererIPCEvents.DesktopList, null);
-            throw new Error(
-                "Host type doesn't exist. So I can't get desktop list."
-            );
-        }
-        const thumbnails = await rust.thumbnails(host);
-        event.sender.send(MainToRendererIPCEvents.DesktopList, thumbnails);
+        let handle: rust.ThumbnailHandle | undefined;
+
+        handle = rust.thumbnails((thumbnails) => {
+            const contents = webContents.fromId(event.sender.id); // if the window is closed without canceling the thumbnails, we check if the webcontents id still exists
+            if (!contents && handle) {
+                // if the webcontents id does not exist, we cancel the thumbnails
+                rust.close_thumbnails(handle);
+                handle = undefined;
+                return;
+            }
+            // otherwise just send the thumbnails
+            event.sender.send(MainToRendererIPCEvents.DesktopList, thumbnails);
+        });
+
+        ipcMain.on(
+            RendererToMainIPCEvents.Host_StopDesktopList,
+            (stopEvent) => {
+                if (stopEvent.sender.id === event.sender.id && handle) {
+                    rust.close_thumbnails(handle);
+                    handle = undefined;
+                }
+            }
+        );
     });
 }

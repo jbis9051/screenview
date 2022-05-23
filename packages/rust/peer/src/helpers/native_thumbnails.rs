@@ -79,6 +79,7 @@ impl ProcessFrame for ProcessThumbnail {
         let frame = mem::take(frame);
 
         resources.clear();
+        // TODO this can be sped up close to 10x using the resize library for this operation
         let result = DynamicImage::ImageRgb8(frame)
             .resize(200, 200, FilterType::Nearest)
             .write_to(resources, ImageFormat::Jpeg);

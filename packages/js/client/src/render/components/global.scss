@@ -26,6 +26,12 @@ body,
 
 @font-face {
     font-family: 'Inter';
+    src: url('../assets/Inter/Inter-Bold.ttf');
+    font-weight: bold;
+}
+
+@font-face {
+    font-family: 'Inter';
     src: url('../assets/Inter/Inter-Regular.ttf');
     font-weight: normal;
 }

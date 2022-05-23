@@ -42,9 +42,7 @@ import getDesktopList from './helper/getDesktopList';
                         : interop.InstanceConnectionType.Signal;
             });
             const thumbs = await getDesktopList();
-            await runInAction(() => {
-                UIStore.thumbnails = thumbs;
-            });
+            console.log(thumbs);
             break;
         }
         default:

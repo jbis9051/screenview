@@ -97,8 +97,12 @@ export declare function share_displays(
 ): Promise<undefined>;
 
 export declare function thumbnails(
-  handle: AnyInstance
-): Promise<NativeThumbnail[]>;
+  callback: (thumbnails: NativeThumbnail[]) => void
+): ThumbnailHandle;
+
+export declare function close_thumbnails(handle: ThumbnailHandle): void;
+
+export declare type ThumbnailHandle = JSBox<ThumbnailHandleType>;
 
 // this is an opaque type, pointing to an object in rust memory
 interface JSBox<T> {
@@ -112,6 +116,10 @@ interface Instance<
   readonly __type: unique symbol;
   readonly __phantom_1: T;
   readonly __phantom_2: U;
+}
+
+interface ThumbnailHandleType {
+  readonly __type: unique symbol;
 }
 
 export interface VTable {

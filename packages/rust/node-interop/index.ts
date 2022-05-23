@@ -45,7 +45,7 @@ export enum EstablishSessionStatus {
 }
 
 export interface NativeThumbnail {
-  data: ArrayBuffer[];
+  data: ArrayBuffer;
   name: string;
   native_id: number;
   display_type: DisplayType;
