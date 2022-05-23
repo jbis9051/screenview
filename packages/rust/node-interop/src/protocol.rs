@@ -59,7 +59,6 @@ pub enum RequestContent {
     ShareDisplays {
         displays: Vec<Display>,
     },
-    NativeThumbnails,
 }
 
 #[repr(u8)]

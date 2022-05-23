@@ -1,4 +1,4 @@
-use common::event_loop::{JoinOnDrop, ThreadWaker};
+use common::sync::{event_loop::ThreadWaker, JoinOnDrop};
 use crossbeam_channel::{bounded, Receiver, Sender};
 use std::{
     io::{self, ErrorKind},

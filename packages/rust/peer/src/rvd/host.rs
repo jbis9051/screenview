@@ -32,6 +32,22 @@ pub enum Display {
     Window(WindowId),
 }
 
+impl Display {
+    pub fn id(&self) -> u32 {
+        match *self {
+            Self::Monitor(id) => id,
+            Self::Window(id) => id,
+        }
+    }
+
+    pub fn display_type(&self) -> DisplayType {
+        match self {
+            Self::Monitor(_) => DisplayType::Monitor,
+            Self::Window(_) => DisplayType::Window,
+        }
+    }
+}
+
 #[derive(PartialEq, Copy, Clone)]
 pub enum DisplayType {
     Monitor,

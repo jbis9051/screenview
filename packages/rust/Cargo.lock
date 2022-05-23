@@ -202,6 +202,7 @@ dependencies = [
  "byteorder",
  "chacha20poly1305",
  "chrono",
+ "crossbeam-channel",
  "hkdf",
  "hmac",
  "parser",

@@ -1,5 +1,5 @@
 use super::{processing::ProcessFrame, FrameCapture};
-use common::{event_loop::ThreadWaker, messages::rvd::DisplayId};
+use common::{messages::rvd::DisplayId, sync::event_loop::ThreadWaker};
 use native::NativeApiError;
 
 pub struct CapturePool<P: ProcessFrame> {

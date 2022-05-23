@@ -6,24 +6,26 @@ use crate::{
     throw,
 };
 use common::{
-    event_loop::{event_loop, EventLoopState, JoinOnDrop, ThreadWaker, ThreadWakerCore},
     messages::{
         rvd::ButtonsMask,
         svsc::{Cookie, LeaseId},
     },
+    sync::{
+        event_loop::{event_loop, EventLoopState, ThreadWaker, ThreadWakerCore},
+        oneshot,
+        JoinOnDrop,
+    },
 };
-use crossbeam_channel::{bounded, unbounded, Receiver, Sender, TryRecvError};
+use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
 use native::{NativeApi, NativeApiError};
 use neon::{
-    object::Object,
     prelude::{Channel, Context, Finalize, JsResult, JsUndefined, TaskContext, Value},
-    types::{Deferred, JsArray, JsArrayBuffer},
+    types::Deferred,
 };
 use peer::{
     capture::{CapturePool, DefaultFrameProcessor, DisplayInfoStore},
-    helpers::native_thumbnails::native_thumbnails,
     io::{DirectServer, TcpHandle},
-    rvd::{Display, DisplayType, ShareDisplayResult},
+    rvd::{Display, ShareDisplayResult},
 };
 use std::{
     net::TcpStream,
@@ -90,7 +92,7 @@ impl Instance {
     where
         F: FnOnce() -> ScreenViewHandler,
     {
-        let (waker_tx, waker_rx) = bounded(1);
+        let (waker_tx, waker_rx) = oneshot::channel();
         let (message_tx, message_rx) = unbounded();
         let native = NativeApi::new()?;
         let sv_handler = new_sv_handler();
@@ -216,7 +218,6 @@ impl Instance {
                 self.handle_set_clipboard_readable(promise, is_readable),
             RequestContent::ShareDisplays { ref displays } =>
                 self.handle_share_displays(promise, displays),
-            RequestContent::NativeThumbnails => self.handle_thumbnails(promise),
         }
     }
 
@@ -461,45 +462,6 @@ impl Instance {
         let result = forward!(self.sv_handler, [HostSignal, HostDirect], |stack| stack
             .send_display_update());
         self.settle_with_result(promise, result, Self::undefined);
-
-        Ok(())
-    }
-
-    fn handle_thumbnails(&mut self, promise: Deferred) -> Result<(), anyhow::Error> {
-        let vec = match native_thumbnails(&mut self.native) {
-            Ok(vec) => vec,
-            Err(err) => {
-                self.settle_with_result(promise, Err(err), Self::undefined);
-                return Ok(());
-            }
-        };
-
-        promise.settle_with(&self.channel, move |mut cx| {
-            let array = JsArray::new(&mut cx, vec.len() as u32);
-
-            for (i, mut thumb) in vec.into_iter().enumerate() {
-                let obj = cx.empty_object();
-
-                let data = JsArrayBuffer::external(&mut cx, &mut thumb.data);
-
-                obj.set(&mut cx, "data", data)?;
-                let str = cx.string(&thumb.name);
-                obj.set(&mut cx, "name", str)?;
-                let num = cx.number(thumb.native_id as f64);
-                obj.set(&mut cx, "native_id", num)?;
-
-                let display_type = match thumb.display_type {
-                    DisplayType::Window => "window",
-                    DisplayType::Monitor => "monitor",
-                };
-                let str = cx.string(display_type);
-                obj.set(&mut cx, "display_type", str)?;
-
-                array.set(&mut cx, i as u32, obj)?;
-            }
-
-            Ok(array)
-        });
 
         Ok(())
     }

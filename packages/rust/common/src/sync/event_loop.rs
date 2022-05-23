@@ -4,7 +4,7 @@ use std::{
         atomic::{AtomicUsize, Ordering},
         Arc,
     },
-    thread::{self, JoinHandle, Thread},
+    thread::{self, Thread},
 };
 
 pub fn event_loop<F>(waker_core: ThreadWakerCore, mut func: F)
@@ -109,23 +109,4 @@ impl Drop for ThreadWaker {
 pub enum EventLoopState {
     Working,
     Complete,
-}
-
-pub struct JoinOnDrop<T> {
-    handle: Option<JoinHandle<T>>,
-}
-
-impl<T> JoinOnDrop<T> {
-    pub fn new(handle: JoinHandle<T>) -> Self {
-        Self {
-            handle: Some(handle),
-        }
-    }
-}
-
-impl<T> Drop for JoinOnDrop<T> {
-    fn drop(&mut self) {
-        // Drop can only ever be called once so unwrap will never fail
-        drop(self.handle.take().unwrap().join());
-    }
 }

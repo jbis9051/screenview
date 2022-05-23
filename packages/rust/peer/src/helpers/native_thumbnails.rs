@@ -1,75 +1,124 @@
-use crate::rvd::DisplayType;
-use image::{imageops::FilterType, DynamicImage, ImageError, ImageFormat};
-use native::api::{Frame, NativeApiTemplate};
+use crate::{
+    capture::{CapturePool, FrameProcessResult, ProcessFrame, ViewResources},
+    rvd::Display,
+};
+use common::{messages::rvd::DisplayId, sync::event_loop::ThreadWaker};
+use image::{imageops::FilterType, DynamicImage, ImageFormat};
+use native::{
+    api::{Frame, NativeApiTemplate},
+    NativeApi,
+    NativeApiError,
+};
+use std::mem;
+
+pub struct ThumbnailCapture {
+    pool: CapturePool<ProcessThumbnail>,
+    captures: Vec<ThumbnailData>,
+}
+
+impl ThumbnailCapture {
+    pub fn new(mut native: NativeApi, waker: ThreadWaker) -> Result<Self, NativeApiError> {
+        let monitors = native.monitors()?;
+        let windows = native.windows()?;
+
+        let mut captures = Vec::with_capacity(monitors.len() + windows.len());
+        captures.extend(monitors.into_iter().map(|monitor| ThumbnailData {
+            name: monitor.name,
+            display: Display::Monitor(monitor.id),
+        }));
+        captures.extend(windows.into_iter().map(|window| ThumbnailData {
+            name: window.name,
+            display: Display::Window(window.id),
+        }));
+
+        let mut pool = CapturePool::new(waker);
+
+        for (index, capture) in captures.iter().enumerate().take(256) {
+            pool.get_or_create_inactive()?
+                .activate(capture.display, index as u8);
+        }
+
+        Ok(Self { pool, captures })
+    }
+
+    pub fn handle_thumbnail_updates<F>(&mut self, mut handler: F)
+    where F: FnMut(NativeThumbnail) {
+        for capture in self.pool.active_captures() {
+            let update = match capture.next_update() {
+                Some(update) => update,
+                None => continue,
+            };
+
+            let raw = update.frame_update();
+            let data = self
+                .captures
+                .get(raw.id)
+                .expect("invalid or stale thumbnail id");
+            handler(NativeThumbnail {
+                data: raw.data.into(),
+                name: data.name.clone(),
+                display: data.display,
+            });
+
+            capture.update(update.resources);
+        }
+    }
+}
+
+#[derive(Default)]
+struct ProcessThumbnail;
+
+impl ProcessFrame for ProcessThumbnail {
+    type Resources = Vec<u8>;
+
+    fn process(
+        &mut self,
+        frame: &mut Frame,
+        resources: &mut Self::Resources,
+    ) -> FrameProcessResult {
+        let frame = mem::take(frame);
+
+        resources.clear();
+        let result = DynamicImage::ImageRgb8(frame)
+            .resize(300, 300, FilterType::CatmullRom)
+            .write_to(resources, ImageFormat::Jpeg);
+
+        if result.is_ok() {
+            FrameProcessResult::Success
+        } else {
+            FrameProcessResult::Failure
+        }
+    }
+}
+
+impl<'a> ViewResources<'a> for ProcessThumbnail {
+    type FrameUpdate = RawThumbnailData<'a>;
+    type Resources = <Self as ProcessFrame>::Resources;
+
+    fn to_frame_update(
+        resources: &'a Self::Resources,
+        _frame: &'a Frame,
+        display_id: DisplayId,
+    ) -> Self::FrameUpdate {
+        RawThumbnailData {
+            data: resources,
+            id: usize::from(display_id),
+        }
+    }
+}
+
+pub struct RawThumbnailData<'a> {
+    data: &'a [u8],
+    id: usize,
+}
 
 pub struct NativeThumbnail {
-    pub data: Vec<u8>,
+    pub data: Box<[u8]>,
     pub name: String,
-    pub native_id: u32,
-    pub display_type: DisplayType,
+    pub display: Display,
 }
 
-fn process_frame<T: NativeApiTemplate>(frame: Frame) -> Result<Vec<u8>, ThumbnailError<T>> {
-    let mut bytes = Vec::new();
-
-    DynamicImage::ImageRgb8(frame)
-        .resize(300, 300, FilterType::CatmullRom)
-        .write_to(&mut bytes, ImageFormat::Jpeg)
-        .map_err(ThumbnailError::Image)?;
-
-    Ok(bytes)
-}
-
-pub fn native_thumbnails<T: NativeApiTemplate>(
-    native: &mut T,
-) -> Result<Vec<NativeThumbnail>, ThumbnailError<T>> {
-    let mut thumbs = Vec::new();
-    let windows = native.windows().map_err(ThumbnailError::Native)?;
-    let monitors = native.monitors().map_err(ThumbnailError::Native)?;
-
-    for window in windows {
-        let frame = {
-            match native.capture_window_frame(window.id) {
-                Ok(frame) => frame,
-                Err(_) => continue,
-            }
-        };
-
-        let bytes = process_frame(frame)?;
-
-        thumbs.push(NativeThumbnail {
-            data: bytes.to_vec(),
-            name: window.name,
-            native_id: window.id,
-            display_type: DisplayType::Window,
-        });
-    }
-
-    for monitor in monitors {
-        let frame = {
-            match native.capture_monitor_frame(monitor.id) {
-                Ok(frame) => frame,
-                Err(_) => continue,
-            }
-        };
-
-        let bytes = process_frame(frame)?;
-
-        thumbs.push(NativeThumbnail {
-            data: bytes,
-            name: monitor.name,
-            native_id: monitor.id,
-            display_type: DisplayType::Monitor,
-        });
-    }
-
-    Ok(thumbs)
-}
-
-#[derive(thiserror::Error, Debug)]
-pub enum ThumbnailError<T: NativeApiTemplate> {
-    #[error("Native error: {0:?}")]
-    Native(T::Error),
-    #[error("Image error: {0}")]
-    Image(ImageError),
+struct ThumbnailData {
+    name: String,
+    display: Display,
 }

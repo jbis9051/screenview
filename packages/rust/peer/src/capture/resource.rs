@@ -1,11 +1,11 @@
 use native::api::Frame;
 
-use super::processing::{ProcessFrame, ProcessorResources};
+use super::{processing::ProcessFrame, ViewResources};
 use common::messages::rvd::DisplayId;
 
 pub struct CaptureResources<P: ProcessFrame> {
-    frame: Frame,
-    processing: P::Resources,
+    pub(super) frame: Frame,
+    pub(super) processing: P::Resources,
 }
 
 impl<P: ProcessFrame> CaptureResources<P> {
@@ -15,15 +15,17 @@ impl<P: ProcessFrame> CaptureResources<P> {
             processing: <P::Resources as Default>::default(),
         }
     }
+}
 
-    pub(super) fn frame_mut(&mut self) -> &mut Frame {
-        &mut self.frame
-    }
-
+impl<P> CaptureResources<P>
+where
+    P: ProcessFrame,
+    P: for<'a> ViewResources<'a, Resources = <P as ProcessFrame>::Resources>,
+{
     pub(super) fn frame_update(
         &self,
         display_id: DisplayId,
-    ) -> <P::Resources as ProcessorResources<'_>>::FrameUpdate {
-        self.processing.to_frame_update(&self.frame, display_id)
+    ) -> <P as ViewResources<'_>>::FrameUpdate {
+        <P as ViewResources<'_>>::to_frame_update(&self.processing, &self.frame, display_id)
     }
 }

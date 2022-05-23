@@ -11,8 +11,8 @@ use super::{
 };
 use crate::return_if_err;
 use common::{
-    event_loop::{JoinOnDrop, ThreadWaker},
     messages::Error,
+    sync::{event_loop::ThreadWaker, JoinOnDrop},
 };
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use std::{

@@ -3,7 +3,7 @@ use crate::{
     io::{parse_length_field, TransportError, TransportResponse, LENGTH_FIELD_WIDTH},
     return_if_err,
 };
-use common::event_loop::{JoinOnDrop, ThreadWaker};
+use common::sync::{event_loop::ThreadWaker, JoinOnDrop};
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use std::{
     io::{self, ErrorKind},

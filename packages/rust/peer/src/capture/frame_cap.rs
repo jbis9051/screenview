@@ -1,19 +1,18 @@
 use std::{thread::JoinHandle, time::Instant};
 
-use common::{event_loop::ThreadWaker, messages::rvd::DisplayId};
+use common::{messages::rvd::DisplayId, sync::event_loop::ThreadWaker};
 use crossbeam_channel::{bounded, Receiver, Sender, TryRecvError};
 use native::{api::NativeApiTemplate, NativeApi, NativeApiError};
 use std::{mem, thread, time::Duration};
 
 use crate::rvd::Display;
 
-use super::{
-    processing::{ProcessFrame, ProcessorResources},
-    CaptureResources,
-};
+use super::{processing::ProcessFrame, CaptureResources, ViewResources};
 
 const BROKEN_PIPE_MSG: &str = "broken pipe in frame capture";
 const FPS: Duration = Duration::from_millis(50);
+
+type CaptureReply<P> = (Box<CaptureResources<P>>, Result<(), NativeApiError>);
 
 pub struct FrameCapture<P: ProcessFrame> {
     state: FrameCaptureState<P>,
@@ -127,7 +126,7 @@ impl<P: ProcessFrame> FrameCapture<P> {
         native_api: NativeApi,
         waker: ThreadWaker,
         display: Display,
-        sender: Sender<(Box<CaptureResources<P>>, Result<(), NativeApiError>)>,
+        sender: Sender<CaptureReply<P>>,
         receiver: Receiver<WorkerRequest<P>>,
     ) -> JoinHandle<(NativeApi, ThreadWaker)> {
         thread::spawn(move || Self::capture_frames(native_api, waker, display, sender, receiver))
@@ -137,7 +136,7 @@ impl<P: ProcessFrame> FrameCapture<P> {
         mut native_api: NativeApi,
         waker: ThreadWaker,
         display: Display,
-        sender: Sender<(Box<CaptureResources<P>>, Result<(), NativeApiError>)>,
+        sender: Sender<CaptureReply<P>>,
         receiver: Receiver<WorkerRequest<P>>,
     ) -> (NativeApi, ThreadWaker) {
         let mut frame_processor = P::default();
@@ -151,12 +150,12 @@ impl<P: ProcessFrame> FrameCapture<P> {
             };
 
             let result = match display {
-                Display::Monitor(id) => native_api.update_monitor_frame(id, resources.frame_mut()),
-                Display::Window(id) => native_api.update_window_frame(id, resources.frame_mut()),
+                Display::Monitor(id) => native_api.update_monitor_frame(id, &mut resources.frame),
+                Display::Window(id) => native_api.update_window_frame(id, &mut resources.frame),
             };
 
             if result.is_ok() {
-                frame_processor.process(&mut *resources);
+                frame_processor.process(&mut resources.frame, &mut resources.processing);
             }
 
             sender.send((resources, result)).expect(BROKEN_PIPE_MSG);
@@ -198,7 +197,7 @@ enum FrameCaptureState<P: ProcessFrame> {
     Active {
         display_id: DisplayId,
         sender: Sender<WorkerRequest<P>>,
-        receiver: Receiver<(Box<CaptureResources<P>>, Result<(), NativeApiError>)>,
+        receiver: Receiver<CaptureReply<P>>,
         handle: Option<JoinHandle<(NativeApi, ThreadWaker)>>,
     },
 }
@@ -214,8 +213,12 @@ pub struct FrameUpdateResult<P: ProcessFrame> {
     pub result: Result<(), NativeApiError>,
 }
 
-impl<P: ProcessFrame> FrameUpdateResult<P> {
-    pub fn frame_update(&self) -> <P::Resources as ProcessorResources<'_>>::FrameUpdate {
+impl<P> FrameUpdateResult<P>
+where
+    P: ProcessFrame,
+    P: for<'a> ViewResources<'a, Resources = <P as ProcessFrame>::Resources>,
+{
+    pub fn frame_update(&self) -> <P as ViewResources<'_>>::FrameUpdate {
         self.resources.frame_update(self.display_id)
     }
 }

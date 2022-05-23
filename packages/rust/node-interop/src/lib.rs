@@ -4,6 +4,7 @@ mod handler;
 mod instance;
 mod node_interface;
 mod protocol;
+mod thumbnail_driver;
 
 use common::messages::{
     rvd::ButtonsMask,
@@ -16,6 +17,7 @@ use num_traits::FromPrimitive;
 use peer::rvd::Display;
 use protocol::{ConnectionType, Message, RequestContent};
 use std::{any::type_name, convert::TryFrom, num::FpCategory};
+use thumbnail_driver::ThumbnailHandle;
 
 #[macro_export]
 macro_rules! throw {
@@ -251,10 +253,22 @@ fn share_displays(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
 }
 
 
-fn thumbnails(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
-    let handle = cx.argument::<JsBox<InstanceHandle>>(0)?;
+fn thumbnails(mut cx: FunctionContext<'_>) -> JsResult<'_, JsBox<ThumbnailHandle>> {
+    let callback = cx.argument::<JsFunction>(0)?.root(&mut cx);
+    let channel = cx.channel();
 
-    send_request(&mut cx, handle, RequestContent::NativeThumbnails)
+    let handle = match ThumbnailHandle::new(channel, callback) {
+        Ok(handle) => handle,
+        Err(error) => return throw!(cx, format!("{}", error)),
+    };
+
+    Ok(cx.boxed(handle))
+}
+
+fn close_thumbnails(mut cx: FunctionContext<'_>) -> JsResult<'_, JsUndefined> {
+    let handle = cx.argument::<JsBox<ThumbnailHandle>>(0)?;
+    handle.close();
+    Ok(cx.undefined())
 }
 
 #[neon::main]
@@ -282,7 +296,8 @@ fn main(mut cx: ModuleContext<'_>) -> NeonResult<()> {
         set_controllable,
         set_clipboard_readable,
         share_displays,
-        thumbnails
+        thumbnails,
+        close_thumbnails
     }
 
     Ok(())
