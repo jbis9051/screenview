@@ -7,6 +7,7 @@ import UI, { Tab } from '../store/Main/UIStore';
 import Connect from '../components/Main/Tabs/Connect/Connect';
 import StatusBar from '../components/Main/StatusBar';
 import Modal from '../components/Main/Modal/Modal';
+import Settings from '../components/Main/Tabs/Settings/Settings';
 
 const Main = observer(() => (
     <div className={styles.wrapper}>
@@ -19,6 +20,7 @@ const Main = observer(() => (
             <div className={styles.rightContent}>
                 <div className={styles.mainContent}>
                     {UI.currentTab === Tab.CONNECT && <Connect />}
+                    {UI.currentTab === Tab.SETTINGS && <Settings />}
                 </div>
                 <div className={styles.statusBottom}>
                     <StatusBar />

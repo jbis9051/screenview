@@ -29,7 +29,7 @@ const User: React.FunctionComponent = observer(() => (
                     <a
                         onClick={(e) => e.stopPropagation()}
                         className={styles.signUp}
-                        href={`${ConfigStore.authUrl}/auth/sign_up`}
+                        href={`${ConfigStore.backend.authUrl}/auth/sign_up`}
                         target={'_blank'}
                     >
                         Don't have an account?

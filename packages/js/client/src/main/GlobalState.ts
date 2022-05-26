@@ -1,6 +1,6 @@
 import { makeAutoObservable, observable, toJS } from 'mobx';
 import { rust } from 'node-interop';
-import Config from './config';
+import Config from '../common/Config';
 import BrowserWindow = Electron.BrowserWindow;
 import Tray = Electron.Tray;
 import VTableEmitter from './interopHelpers/VTableEmitter';

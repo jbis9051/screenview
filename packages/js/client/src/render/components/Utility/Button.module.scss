@@ -11,6 +11,13 @@
     white-space: nowrap;
 }
 
+.button[disabled] {
+    background-color: #e6e6e6;
+    border: 1px solid #e6e6e6;
+    color: #8e8e8e;
+    cursor: not-allowed;
+}
+
 .button:active {
     transition: background-color 30ms;
     background-color: #1851b4;

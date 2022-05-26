@@ -6,6 +6,8 @@ import {
     RendererToMainIPCEvents,
 } from '../../common/IPCEvents';
 import establishSession from './ipcMainHandler/establishSession';
+import Config from '../../common/Config';
+import { saveConfig } from './configHelper';
 
 function findClientBundle(state: GlobalState, id: number) {
     return state.clientBundles.find((b) => b.window?.id === id);
@@ -95,4 +97,12 @@ export default function setupIpcMainListeners(state: GlobalState) {
             }
         );
     });
+
+    ipcMain.on(
+        RendererToMainIPCEvents.Main_ConfigUpdate,
+        async (_, config: Config) => {
+            state.config = config;
+            await saveConfig(config);
+        }
+    );
 }
