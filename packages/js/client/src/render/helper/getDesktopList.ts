@@ -17,7 +17,7 @@ export default function getDesktopList(): Promise<SelectedDisplay[]> {
         ) {
             if (UIStore.selectedDisplays) {
                 ipcRenderer.removeListener(
-                    MainToRendererIPCEvents.DesktopList,
+                    MainToRendererIPCEvents.Host_DesktopList,
                     onDesktopList
                 );
                 ipcRenderer.send(RendererToMainIPCEvents.Host_StopDesktopList);
@@ -51,6 +51,6 @@ export default function getDesktopList(): Promise<SelectedDisplay[]> {
             });
         }
 
-        ipcRenderer.on(MainToRendererIPCEvents.DesktopList, onDesktopList);
+        ipcRenderer.on(MainToRendererIPCEvents.Host_DesktopList, onDesktopList);
     });
 }

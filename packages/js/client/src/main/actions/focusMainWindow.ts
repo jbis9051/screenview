@@ -8,7 +8,7 @@ export default async function focusMainWindow(state: GlobalState) {
         state.mainWindow.show();
         return;
     }
-    const [pageLoad, window] = await createMainWindow();
+    const [_, window] = await createMainWindow();
 
     window.on(
         'close',
@@ -18,12 +18,5 @@ export default async function focusMainWindow(state: GlobalState) {
     );
     runInAction(() => {
         state.mainWindow = window;
-    });
-
-    pageLoad.then(() => {
-        window.webContents.send(
-            MainToRendererIPCEvents.Config,
-            toJS(state.config)
-        );
     });
 }

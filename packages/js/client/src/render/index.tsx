@@ -1,43 +1,18 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
-import { action, runInAction } from 'mobx';
-import { ipcRenderer } from 'electron';
+import { runInAction } from 'mobx';
 import Main from './Pages/Main';
 import PageType from './Pages/PageType';
 import Client from './Pages/Client';
 import BackendStore from './store/Host/BackendStore';
 import interop from './nodeInterop';
 import Host from './Pages/Host';
-import UIStore from './store/Host/UIStore';
 import getDesktopList from './helper/getDesktopList';
-import Config from '../common/Config';
-import ConfigStore from './store/Main/ConfigStore';
-import {
-    MainToRendererIPCEvents,
-    RendererToMainIPCEvents,
-} from '../common/IPCEvents';
+import setupPreferences from './helper/setupPreferences';
 
 // we render different pages based on the hash aka # after the URL. This isn't dynamic meaning you can't change pages. This makes sense for our app.
 (async () => {
-    await new Promise<void>((resolve) => {
-        function handle(_: any, config: Config) {
-            console.log('config', config);
-            ipcRenderer.removeListener(MainToRendererIPCEvents.Config, handle);
-            runInAction(() => {
-                ConfigStore.backend = config;
-            });
-            resolve();
-        }
-        ipcRenderer.on(MainToRendererIPCEvents.Config, handle);
-    });
-
-    action(() => {
-        console.log('sending conifg update');
-        ipcRenderer.send(
-            RendererToMainIPCEvents.Main_ConfigUpdate,
-            ConfigStore.backend
-        );
-    });
+    await setupPreferences();
 
     const page = window.location.hash.substring(1) as PageType;
 

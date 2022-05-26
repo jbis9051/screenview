@@ -13,10 +13,6 @@ export default class Config {
 
     staticPassword: string | null = null;
 
-    isControllable = false;
-
-    isClipboardReadable = false;
-
     // frontend
 
     authUrl = 'https://example.com';

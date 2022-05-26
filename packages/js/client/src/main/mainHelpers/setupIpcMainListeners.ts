@@ -1,5 +1,6 @@
 import { ipcMain, webContents } from 'electron';
 import { ButtonMask, InstanceConnectionType, rust } from 'node-interop';
+import { toJS } from 'mobx';
 import GlobalState from '../GlobalState';
 import {
     MainToRendererIPCEvents,
@@ -84,7 +85,10 @@ export default function setupIpcMainListeners(state: GlobalState) {
                 return;
             }
             // otherwise just send the thumbnails
-            event.sender.send(MainToRendererIPCEvents.DesktopList, thumbnails);
+            event.sender.send(
+                MainToRendererIPCEvents.Host_DesktopList,
+                thumbnails
+            );
         });
 
         ipcMain.on(
@@ -95,6 +99,13 @@ export default function setupIpcMainListeners(state: GlobalState) {
                     handle = undefined;
                 }
             }
+        );
+    });
+
+    ipcMain.on(RendererToMainIPCEvents.Main_ConfigRequest, (event) => {
+        event.sender.send(
+            MainToRendererIPCEvents.Main_ConfigResponse,
+            toJS(state.config)
         );
     });
 

@@ -11,7 +11,7 @@ import Input from '../../../Utility/Input';
 enum Tab {
     General = 'General',
     Host = 'Host',
-    Client = 'Client',
+    // Client = 'Client',
 }
 
 const StandardInput: React.FunctionComponent<
@@ -137,7 +137,6 @@ const Settings: React.FunctionComponent = observer(() => {
                         </StandardInput>
                     </>
                 )}
-                {tab === Tab.Client && <>Client</>}
             </div>
             <div className={styles.buttonContainer}>
                 <Button
@@ -151,11 +150,7 @@ const Settings: React.FunctionComponent = observer(() => {
                     disabled={!changed}
                     className={styles.button}
                     onClick={action(() => {
-                        Object.keys(localConfig).forEach((key) => {
-                            const akey = key as keyof typeof ConfigStore;
-                            // @ts-ignore
-                            ConfigStore[akey] = localConfig[akey];
-                        });
+                        ConfigStore.backend = localConfig.backend;
                     })}
                 >
                     Apply
