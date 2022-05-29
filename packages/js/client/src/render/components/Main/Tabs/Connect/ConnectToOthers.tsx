@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import styles from './ConnectToOthers.module.scss';
 import Title from './Title';
 import Input from '../../../Utility/Input';
-import formatID from '../../../../helper/formatID';
+import formatID from '../../../../helper/Main/formatID';
 import Button from '../../../Utility/Button';
 import { RendererToMainIPCEvents } from '../../../../../common/IPCEvents';
 

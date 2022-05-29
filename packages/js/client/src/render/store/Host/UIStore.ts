@@ -1,15 +1,12 @@
 import { makeAutoObservable } from 'mobx';
-import { DisplayType, NativeThumbnail } from 'node-interop';
-
-export interface SelectedDisplay {
-    native_id: number;
-    display_type: DisplayType;
-}
+import { NativeThumbnail, Display } from 'node-interop';
 
 class UIStore {
-    thumbnails: NativeThumbnail[] | null = null; // when not null, thumbnails are displayed
+    inSelectionMode = false;
 
-    selectedDisplays: SelectedDisplay[] | null = null;
+    thumbnails: NativeThumbnail[] | null = null; // Internal, do not depend on
+
+    selectedDisplays: Display[] | null = null; // Internal, do not depend on
 
     constructor() {
         makeAutoObservable(this);

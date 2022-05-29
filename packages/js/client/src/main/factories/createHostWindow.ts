@@ -1,21 +1,27 @@
 import { BrowserWindow, shell } from 'electron';
 import { InstanceConnectionType } from 'node-interop';
 import PageType from '../../render/Pages/PageType';
+import { HostHeight, HostWidth } from '../contants';
 
 async function createHostWindow(
     type: InstanceConnectionType
 ): Promise<BrowserWindow> {
     const hostWindow = new BrowserWindow({
-        height: 550,
-        width: 950,
-        minHeight: 550,
-        minWidth: 900,
-        titleBarStyle: 'hidden',
+        height: HostHeight,
+        width: HostWidth,
+        resizable: false,
+        frame: false,
+        alwaysOnTop: true,
+        transparent: true,
+        roundedCorners: false,
         webPreferences: {
             nodeIntegration: true,
             contextIsolation: false,
         },
     });
+
+    hostWindow.center();
+    hostWindow.setPosition(hostWindow.getPosition()[0], 0, true);
 
     hostWindow.webContents.addListener('new-window', (e, url) => {
         e.preventDefault();

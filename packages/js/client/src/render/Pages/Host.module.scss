@@ -17,5 +17,41 @@
         flex: 1;
         display: flex;
         overflow: auto;
+
+        .menu {
+            width: 100%;
+            height: 100%;
+            background: #53cf55;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            -webkit-app-region: drag;
+        }
+
+        .statusText {
+            flex: 1;
+            text-align: center;
+            padding: 0 20px;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+
+        button {
+            border: none;
+            height: 100%;
+            font-weight: bold;
+            cursor: pointer;
+            color: white;
+        }
+
+        .stopSharingButton {
+            background: #ff5244;
+        }
+
+        .changeSelectionButton {
+            background: #fffd68;
+            color: black;
+        }
     }
 }

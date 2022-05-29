@@ -1,15 +1,19 @@
 import { ipcRenderer, IpcRendererEvent } from 'electron';
-import { runInAction, toJS } from 'mobx';
-import { NativeThumbnail } from 'node-interop';
+import { action, runInAction, toJS } from 'mobx';
+import { Display, NativeThumbnail } from 'node-interop';
 import {
     MainToRendererIPCEvents,
     RendererToMainIPCEvents,
-} from '../../common/IPCEvents';
-import UIStore, { SelectedDisplay } from '../store/Host/UIStore';
+} from '../../../common/IPCEvents';
+import UIStore from '../../store/Host/UIStore';
 
-export default function getDesktopList(): Promise<SelectedDisplay[]> {
+export default function getDesktopList(): Promise<Display[]> {
     return new Promise((resolve, reject) => {
         ipcRenderer.send(RendererToMainIPCEvents.Host_GetDesktopList);
+
+        runInAction(() => {
+            UIStore.inSelectionMode = true;
+        });
 
         function onDesktopList(
             _: IpcRendererEvent,
@@ -24,6 +28,12 @@ export default function getDesktopList(): Promise<SelectedDisplay[]> {
                 const selectedDisplays = toJS(UIStore.selectedDisplays);
                 UIStore.selectedDisplays = null;
                 UIStore.thumbnails = null;
+                setTimeout(
+                    action(() => {
+                        UIStore.inSelectionMode = false; // this is horrendous learn to code
+                    }),
+                    500
+                );
                 resolve(selectedDisplays);
                 return;
             }

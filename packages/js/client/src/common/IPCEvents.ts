@@ -11,6 +11,8 @@ export enum RendererToMainIPCEvents {
     Main_ConfigRequest = 'host-config-request',
     Host_GetDesktopList = 'host-get-desktop-list',
     Host_StopDesktopList = 'stop-get-desktop-list',
+    Host_UpdateDesktopList = 'host-desktop-list',
+    Host_Disconnect = 'host-disconnect',
     Client_PasswordInput = 'client-password-input',
     Client_MouseInput = 'client-mouse-input',
     Client_KeyboardInput = 'client-keyboard-input',

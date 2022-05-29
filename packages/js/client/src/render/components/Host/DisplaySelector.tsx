@@ -1,12 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { observer } from 'mobx-react';
 import cl from 'classnames';
-import { NativeThumbnail } from 'node-interop';
+import { Display, NativeThumbnail } from 'node-interop';
 import { action } from 'mobx';
 import styles from './DisplaySelector.module.scss';
 import interop from '../../nodeInterop';
 import Button from '../Utility/Button';
-import UIStore, { SelectedDisplay } from '../../store/Host/UIStore';
+import UIStore from '../../store/Host/UIStore';
 
 enum Tab {
     Monitors,
@@ -34,7 +33,7 @@ const TabComp: React.FunctionComponent<{
 const DisplaySelector: React.FunctionComponent<{
     thumbnails: NativeThumbnail[];
 }> = ({ thumbnails }) => {
-    const [selected, setSelected] = useState<SelectedDisplay[]>([]);
+    const [selected, setSelected] = useState<Display[]>([]);
     const [tab, setTab] = useState<Tab>(Tab.Monitors);
     const [thumbURLs, setThumbURLs] = useState<string[]>([]);
 
@@ -63,19 +62,19 @@ const DisplaySelector: React.FunctionComponent<{
         };
     }, [thumbnails]);
 
-    function toggleSelect(selectedDisplay: SelectedDisplay) {
+    function toggleSelect(selectedDisplay: Display) {
         if (
             selected.find(
                 (s) =>
                     s.native_id === selectedDisplay.native_id &&
-                    s.display_type === selectedDisplay.display_type
+                    s.type === selectedDisplay.type
             )
         ) {
             setSelected(
                 selected.filter(
                     (s) =>
                         s.native_id !== selectedDisplay.native_id ||
-                        s.display_type !== selectedDisplay.display_type
+                        s.type !== selectedDisplay.type
                 )
             );
         } else {
@@ -106,14 +105,13 @@ const DisplaySelector: React.FunctionComponent<{
                                         (s) =>
                                             s.native_id ===
                                                 nativeThumb.native_id &&
-                                            s.display_type ===
-                                                nativeThumb.display_type
+                                            s.type === nativeThumb.display_type
                                     ),
                                 })}
                                 onClick={() => {
                                     toggleSelect({
                                         native_id: nativeThumb.native_id,
-                                        display_type: nativeThumb.display_type,
+                                        type: nativeThumb.display_type,
                                     });
                                 }}
                             >

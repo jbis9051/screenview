@@ -7,12 +7,14 @@
     flex-direction: column;
     align-items: center;
     font-size: 12px;
+    background: white;
+    padding: 10px;
 
     .tabSelectorWrapper {
         border: var.$accent-color solid 2px;
         border-radius: 5px;
         display: flex;
-        margin: 10px;
+        margin-bottom: 10px;
         font-weight: bold;
         color: var.$accent-color;
 

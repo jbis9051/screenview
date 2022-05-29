@@ -8,7 +8,7 @@ import Title from './Title';
 import BackendStore from '../../../../store/Main/BackendStore';
 import Input from '../../../Utility/Input';
 import UIStore from '../../../../store/Main/UIStore';
-import formatID from '../../../../helper/formatID';
+import formatID from '../../../../helper/Main/formatID';
 import Label from '../../../Utility/Label';
 import CheckBox from '../../../Utility/CheckBox';
 

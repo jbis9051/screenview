@@ -1,10 +1,12 @@
 import { app, BrowserWindow } from 'electron';
+import { InstanceConnectionType } from 'node-interop';
 import GlobalState from './GlobalState';
 import startMainWindow from './mainHelpers/startMainWindow';
 import setupReactions from './mainHelpers/setupReactions';
 import setupIpcMainListeners from './mainHelpers/setupIpcMainListeners';
 import { loadConfig, saveConfig } from './mainHelpers/configHelper';
 import Config from '../common/Config';
+import createHostWindow from './factories/createHostWindow';
 
 const state = new GlobalState();
 
@@ -19,7 +21,10 @@ const storedPreferences = loadConfig().catch(async () => {
 
 app.on('ready', async () => {
     state.config = await storedPreferences;
-    await startMainWindow(state);
+    state.directHostWindow = await createHostWindow(
+        InstanceConnectionType.Direct
+    );
+    // await startMainWindow(state);
     // await createTray(state);
 });
 
