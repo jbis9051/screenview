@@ -1,18 +1,24 @@
 import { app, BrowserWindow } from 'electron';
 import GlobalState from './GlobalState';
-import createTray from './actions/createTray';
 import startMainWindow from './mainHelpers/startMainWindow';
 import setupReactions from './mainHelpers/setupReactions';
 import setupIpcMainListeners from './mainHelpers/setupIpcMainListeners';
+import { loadConfig, saveConfig } from './mainHelpers/configHelper';
+import Config from '../common/Config';
 
 const state = new GlobalState();
 
 setupReactions(state);
 setupIpcMainListeners(state);
 
-app.on('ready', async () => {
-    // TODO load config from preferences
+const storedPreferences = loadConfig().catch(async () => {
+    const tmp = new Config();
+    await saveConfig(tmp);
+    return tmp;
+});
 
+app.on('ready', async () => {
+    state.config = await storedPreferences;
     await startMainWindow(state);
     // await createTray(state);
 });

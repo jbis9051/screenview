@@ -1,11 +1,14 @@
 export enum MainToRendererIPCEvents {
     VTableEvent = 'vtable-event',
-    SessionId = 'session-id',
-    DesktopList = 'desktop-list',
+    Main_SessionId = 'session-id',
+    Host_DesktopList = 'desktop-list',
+    Main_ConfigResponse = 'config',
 }
 
 export enum RendererToMainIPCEvents {
     Main_EstablishSession = 'main-establish-session',
+    Main_ConfigUpdate = 'host-config-update',
+    Main_ConfigRequest = 'host-config-request',
     Host_GetDesktopList = 'host-get-desktop-list',
     Host_StopDesktopList = 'stop-get-desktop-list',
     Client_PasswordInput = 'client-password-input',

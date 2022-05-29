@@ -1,11 +1,14 @@
 import { ipcMain, webContents } from 'electron';
 import { ButtonMask, InstanceConnectionType, rust } from 'node-interop';
+import { toJS } from 'mobx';
 import GlobalState from '../GlobalState';
 import {
     MainToRendererIPCEvents,
     RendererToMainIPCEvents,
 } from '../../common/IPCEvents';
 import establishSession from './ipcMainHandler/establishSession';
+import Config from '../../common/Config';
+import { saveConfig } from './configHelper';
 
 function findClientBundle(state: GlobalState, id: number) {
     return state.clientBundles.find((b) => b.window?.id === id);
@@ -82,7 +85,10 @@ export default function setupIpcMainListeners(state: GlobalState) {
                 return;
             }
             // otherwise just send the thumbnails
-            event.sender.send(MainToRendererIPCEvents.DesktopList, thumbnails);
+            event.sender.send(
+                MainToRendererIPCEvents.Host_DesktopList,
+                thumbnails
+            );
         });
 
         ipcMain.on(
@@ -95,4 +101,19 @@ export default function setupIpcMainListeners(state: GlobalState) {
             }
         );
     });
+
+    ipcMain.on(RendererToMainIPCEvents.Main_ConfigRequest, (event) => {
+        event.sender.send(
+            MainToRendererIPCEvents.Main_ConfigResponse,
+            toJS(state.config)
+        );
+    });
+
+    ipcMain.on(
+        RendererToMainIPCEvents.Main_ConfigUpdate,
+        async (_, config: Config) => {
+            state.config = config;
+            await saveConfig(config);
+        }
+    );
 }

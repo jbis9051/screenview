@@ -1,0 +1,23 @@
+@use '../_var.scss';
+
+.checkbox {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+    cursor: pointer;
+}
+
+.checkbox input {
+    appearance: none;
+    display: inline-block;
+    width: 15px;
+    height: 15px;
+    border: 1px solid darken(var.$accent-color, 2);
+    border-radius: 2px;
+    margin-right: 10px;
+    transition: background-color 100ms;
+}
+
+.checkbox input:checked {
+    background-color: var.$accent-color;
+}

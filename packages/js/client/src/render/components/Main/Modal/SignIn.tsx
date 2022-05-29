@@ -24,7 +24,7 @@ const SignIn: React.FunctionComponent = () => (
                 <a
                     className={styles.forgotPassword}
                     target={'_blank'}
-                    href={`${ConfigStore.authUrl}/auth/forgot_password`}
+                    href={`${ConfigStore.backend.authUrl}/auth/forgot_password`}
                 >
                     Forgot Password?
                 </a>

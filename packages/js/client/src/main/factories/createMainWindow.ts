@@ -1,7 +1,7 @@
 import { BrowserWindow, shell } from 'electron';
 import PageType from '../../render/Pages/PageType';
 
-async function createMainWindow(): Promise<BrowserWindow> {
+async function createMainWindow(): Promise<[Promise<void>, BrowserWindow]> {
     const mainWindow = new BrowserWindow({
         height: 550,
         width: 950,
@@ -20,11 +20,14 @@ async function createMainWindow(): Promise<BrowserWindow> {
     });
 
     if (process.env.NODE_ENV === 'development') {
-        mainWindow
-            .loadURL(`http://localhost:8080/#${PageType.Main}`)
-            .catch(console.error);
+        return [
+            mainWindow
+                .loadURL(`http://localhost:8080/#${PageType.Main}`)
+                .catch(console.error),
+            mainWindow,
+        ];
     }
-    return mainWindow;
+    return [Promise.resolve(), mainWindow];
     // mainWindow.loadFile(path.join(__dirname, '../index.html'));
 }
 export default createMainWindow;

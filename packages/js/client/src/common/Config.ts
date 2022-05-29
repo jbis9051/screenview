@@ -1,3 +1,7 @@
+import { app } from 'electron';
+import path from 'path';
+import fs from 'fs/promises';
+
 export default class Config {
     startAsDirectHost = false; // TODO change to true once this works
 
@@ -9,7 +13,7 @@ export default class Config {
 
     staticPassword: string | null = null;
 
-    isControllable = false;
+    // frontend
 
-    isClipboardReadable = false;
+    authUrl = 'https://example.com';
 }

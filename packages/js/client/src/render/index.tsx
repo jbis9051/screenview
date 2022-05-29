@@ -7,11 +7,13 @@ import Client from './Pages/Client';
 import BackendStore from './store/Host/BackendStore';
 import interop from './nodeInterop';
 import Host from './Pages/Host';
-import UIStore from './store/Host/UIStore';
 import getDesktopList from './helper/getDesktopList';
+import setupPreferences from './helper/setupPreferences';
 
 // we render different pages based on the hash aka # after the URL. This isn't dynamic meaning you can't change pages. This makes sense for our app.
 (async () => {
+    await setupPreferences();
+
     const page = window.location.hash.substring(1) as PageType;
 
     const Page: React.FunctionComponent<{ pageType: PageType }> = ({

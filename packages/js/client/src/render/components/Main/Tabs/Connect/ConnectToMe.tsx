@@ -10,6 +10,7 @@ import Input from '../../../Utility/Input';
 import UIStore from '../../../../store/Main/UIStore';
 import formatID from '../../../../helper/formatID';
 import Label from '../../../Utility/Label';
+import CheckBox from '../../../Utility/CheckBox';
 
 const ConnectToMe: React.FunctionComponent = observer(() => (
     <>
@@ -35,31 +36,25 @@ const ConnectToMe: React.FunctionComponent = observer(() => (
             </div>
         </div>
         <div className={styles.label}>
-            <Input
-                type={'checkbox'}
-                id={'connectToMe.shareDesktop'}
+            <CheckBox
                 className={styles.checkbox}
                 checked={UIStore.shareAllScreensImmediately}
-                onChange={action((e) => {
-                    UIStore.shareAllScreensImmediately = e.target.checked;
+                onChange={action((checked) => {
+                    UIStore.shareAllScreensImmediately = checked;
                 })}
-            />
-            <Label htmlFor={'connectToMe.shareDesktop'}>
+            >
                 Automatically Share My Desktop
-            </Label>
+            </CheckBox>
         </div>
-        <div className={styles.label}>
-            <Input
-                type={'checkbox'}
-                id={'connectToMe.allowControl'}
-                className={styles.checkbox}
-                checked={UIStore.allowControl}
-                onChange={action((e) => {
-                    UIStore.allowControl = e.target.checked;
-                })}
-            />
-            <Label htmlFor={'connectToMe.allowControl'}>Allow Control</Label>
-        </div>
+        <CheckBox
+            className={styles.checkbox}
+            checked={UIStore.allowControl}
+            onChange={action((checked) => {
+                UIStore.allowControl = checked;
+            })}
+        >
+            Allow Control
+        </CheckBox>
     </>
 ));
 export default ConnectToMe;

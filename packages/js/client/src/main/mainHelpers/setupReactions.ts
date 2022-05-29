@@ -8,7 +8,7 @@ export default function setupReactions(state: GlobalState) {
     autorun(() => {
         if (state.mainWindow) {
             state.mainWindow.webContents.send(
-                MainToRendererIPCEvents.SessionId,
+                MainToRendererIPCEvents.Main_SessionId,
                 state.sessionId
             );
         }
@@ -24,14 +24,6 @@ export default function setupReactions(state: GlobalState) {
                 await rust.update_static_password(
                     instance,
                     state.config.staticPassword
-                );
-                await rust.set_controllable(
-                    instance,
-                    state.config.isControllable
-                );
-                await rust.set_clipboard_readable(
-                    instance,
-                    state.config.isClipboardReadable
                 );
             }
         );
