@@ -32,7 +32,7 @@ export enum DisplayType {
 
 export interface Display {
   native_id: number;
-  type: DisplayType;
+  type: DisplayType; // TODO consistent with NativeThumbnail
 }
 
 export enum EstablishSessionStatus {

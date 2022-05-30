@@ -1,15 +1,19 @@
 import { ipcRenderer, IpcRendererEvent } from 'electron';
-import { runInAction, toJS } from 'mobx';
-import { NativeThumbnail } from 'node-interop';
+import { action, runInAction, toJS } from 'mobx';
+import { Display, NativeThumbnail } from 'node-interop';
 import {
     MainToRendererIPCEvents,
     RendererToMainIPCEvents,
-} from '../../common/IPCEvents';
-import UIStore, { SelectedDisplay } from '../store/Host/UIStore';
+} from '../../../common/IPCEvents';
+import UIStore from '../../store/Host/UIStore';
 
-export default function getDesktopList(): Promise<SelectedDisplay[]> {
+export default function getDesktopList(): Promise<Display[]> {
     return new Promise((resolve, reject) => {
         ipcRenderer.send(RendererToMainIPCEvents.Host_GetDesktopList);
+
+        runInAction(() => {
+            UIStore.inSelectionMode = true;
+        });
 
         function onDesktopList(
             _: IpcRendererEvent,
@@ -22,8 +26,10 @@ export default function getDesktopList(): Promise<SelectedDisplay[]> {
                 );
                 ipcRenderer.send(RendererToMainIPCEvents.Host_StopDesktopList);
                 const selectedDisplays = toJS(UIStore.selectedDisplays);
+                UIStore.numDisplaysShared = selectedDisplays.length; // TODO this is very much not the source of truth, we should have rust inform of how many displays are shared
                 UIStore.selectedDisplays = null;
                 UIStore.thumbnails = null;
+                UIStore.inSelectionMode = false;
                 resolve(selectedDisplays);
                 return;
             }

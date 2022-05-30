@@ -1,12 +1,13 @@
 import { BrowserWindow, shell } from 'electron';
 import PageType from '../../render/Pages/PageType';
+import { MainHeight, MainWidth } from '../../common/contants';
 
 async function createMainWindow(): Promise<[Promise<void>, BrowserWindow]> {
     const mainWindow = new BrowserWindow({
-        height: 550,
-        width: 950,
-        minHeight: 550,
-        minWidth: 900,
+        height: MainHeight,
+        width: MainWidth,
+        minHeight: MainHeight,
+        minWidth: MainWidth,
         titleBarStyle: 'hidden',
         webPreferences: {
             nodeIntegration: true, // I know this is bad but I don't care. We aren't loading third party pages.

@@ -1,14 +1,15 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
 import { runInAction } from 'mobx';
+import { ipcRenderer } from 'electron';
 import Main from './Pages/Main';
 import PageType from './Pages/PageType';
 import Client from './Pages/Client';
 import BackendStore from './store/Host/BackendStore';
 import interop from './nodeInterop';
 import Host from './Pages/Host';
-import getDesktopList from './helper/getDesktopList';
 import setupPreferences from './helper/setupPreferences';
+import startDesktopSelection from './helper/Host/startDesktopSelection';
 
 // we render different pages based on the hash aka # after the URL. This isn't dynamic meaning you can't change pages. This makes sense for our app.
 (async () => {
@@ -43,8 +44,7 @@ import setupPreferences from './helper/setupPreferences';
                         ? interop.InstanceConnectionType.Direct
                         : interop.InstanceConnectionType.Signal;
             });
-            const thumbs = await getDesktopList();
-            console.log(thumbs);
+            await startDesktopSelection();
             break;
         }
         default:
