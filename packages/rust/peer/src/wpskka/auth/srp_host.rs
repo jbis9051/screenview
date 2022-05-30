@@ -1,6 +1,9 @@
 use crate::{
     debug,
-    helpers::crypto::{hmac, hmac_verify, kdf1, random_bytes, random_srp_private_value},
+    helpers::{
+        crypto::{hmac, hmac_verify, kdf1, random_bytes, random_srp_private_value},
+        left_pad::left_pad,
+    },
     wpskka::auth::srp_host::State::Done,
 };
 use common::{
@@ -53,7 +56,7 @@ impl SrpAuthHost {
 
         let b = random_srp_private_value();
         let srp_server = SrpServer::<'static, HashAlgo>::new(SRP_PARAM);
-        let b_pub = srp_server.compute_public_ephemeral(&b, &verifier);
+        let b_pub = left_pad(&srp_server.compute_public_ephemeral(&b, &verifier), 256);
 
         self.verifier = Some(verifier);
         self.b = Some(b);
