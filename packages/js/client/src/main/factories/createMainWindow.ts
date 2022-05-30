@@ -1,6 +1,6 @@
 import { BrowserWindow, shell } from 'electron';
 import PageType from '../../render/Pages/PageType';
-import { MainHeight, MainWidth } from '../contants';
+import { MainHeight, MainWidth } from '../../common/contants';
 
 async function createMainWindow(): Promise<[Promise<void>, BrowserWindow]> {
     const mainWindow = new BrowserWindow({

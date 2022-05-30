@@ -1,10 +1,11 @@
-import { ipcMain, webContents, IpcMainEvent } from 'electron';
 import {
-    ButtonMask,
-    Display,
-    InstanceConnectionType,
-    rust,
-} from 'node-interop';
+    BrowserWindow,
+    ipcMain,
+    IpcMainEvent,
+    screen,
+    webContents,
+} from 'electron';
+import { ButtonMask, Display, rust } from 'node-interop';
 import { toJS } from 'mobx';
 import GlobalState from '../GlobalState';
 import {
@@ -19,7 +20,8 @@ import {
     HostSelectionHeight,
     HostSelectionWidth,
     HostWidth,
-} from '../contants';
+} from '../../common/contants';
+import setHostMenubarPosition from './setHostMenubarPosition';
 
 function findClientBundle(state: GlobalState, id: number) {
     return state.clientBundles.find((b) => b.window?.id === id);
@@ -126,26 +128,31 @@ export default function setupIpcMainListeners(state: GlobalState) {
             event.reply(MainToRendererIPCEvents.Host_DesktopList, thumbnails);
         });
 
-        function stopHandle(stopEvent: IpcMainEvent) {
-            if (stopEvent.sender.id !== event.sender.id) {
+        function stopHandle(stopEvent?: IpcMainEvent) {
+            if (stopEvent && stopEvent.sender.id !== event.sender.id) {
                 return;
             }
             if (handle) {
                 rust.close_thumbnails(handle);
                 handle = undefined;
             }
-
-            hostWindow?.setMinimumSize(HostWidth, HostHeight);
-            hostWindow?.setSize(HostWidth, HostHeight, true);
-            hostWindow?.center();
-            hostWindow?.setPosition(hostWindow.getPosition()[0], 0, true);
-            hostWindow?.setResizable(false);
-
+            if (hostWindow) {
+                hostWindow.setMinimumSize(HostWidth, HostHeight);
+                hostWindow.setSize(HostWidth, HostHeight, true);
+                setHostMenubarPosition(hostWindow);
+                hostWindow.setResizable(false);
+                hostWindow.webContents.removeListener(
+                    'did-start-loading',
+                    stopHandle
+                );
+            }
             ipcMain.removeListener(
                 RendererToMainIPCEvents.Host_StopDesktopList,
                 stopHandle
             );
         }
+
+        hostWindow.webContents.once('did-start-loading', stopHandle); // in case the user reloads the page (or developer mode)
 
         ipcMain.on(RendererToMainIPCEvents.Host_StopDesktopList, stopHandle);
     });

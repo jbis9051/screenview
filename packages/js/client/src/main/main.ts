@@ -21,10 +21,7 @@ const storedPreferences = loadConfig().catch(async () => {
 
 app.on('ready', async () => {
     state.config = await storedPreferences;
-    state.directHostWindow = await createHostWindow(
-        InstanceConnectionType.Direct
-    );
-    // await startMainWindow(state);
+    await startMainWindow(state);
     // await createTray(state);
 });
 

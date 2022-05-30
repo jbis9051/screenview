@@ -1,7 +1,8 @@
 import { BrowserWindow, shell } from 'electron';
 import { InstanceConnectionType } from 'node-interop';
 import PageType from '../../render/Pages/PageType';
-import { HostHeight, HostWidth } from '../contants';
+import { HostHeight, HostWidth } from '../../common/contants';
+import setHostMenubarPosition from '../mainHelpers/setHostMenubarPosition';
 
 async function createHostWindow(
     type: InstanceConnectionType
@@ -14,14 +15,14 @@ async function createHostWindow(
         alwaysOnTop: true,
         transparent: true,
         roundedCorners: false,
+        hasShadow: false,
         webPreferences: {
             nodeIntegration: true,
             contextIsolation: false,
         },
     });
 
-    hostWindow.center();
-    hostWindow.setPosition(hostWindow.getPosition()[0], 0, true);
+    setHostMenubarPosition(hostWindow);
 
     hostWindow.webContents.addListener('new-window', (e, url) => {
         e.preventDefault();

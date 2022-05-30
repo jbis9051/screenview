@@ -7,6 +7,7 @@ import UIStore from '../store/Host/UIStore';
 import DisplaySelector from '../components/Host/DisplaySelector';
 import startDesktopSelection from '../helper/Host/startDesktopSelection';
 import { RendererToMainIPCEvents } from '../../common/IPCEvents';
+import { HostHeight } from '../../common/contants';
 
 const Host = observer(() => (
     <div className={styles.wrapper}>
@@ -16,10 +17,10 @@ const Host = observer(() => (
                 <DisplaySelector thumbnails={UIStore.thumbnails} />
             )}
             {!UIStore.inSelectionMode && (
-                <div className={styles.menu}>
-                    {/* should be dynamic */}
+                <div className={styles.menu} style={{ maxHeight: HostHeight }}>
                     <span className={styles.statusText}>
-                        You are currently sharing your screen.
+                        You are currently sharing {UIStore.numDisplaysShared}{' '}
+                        displays.
                     </span>
                     <button
                         onClick={() => startDesktopSelection()}

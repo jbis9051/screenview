@@ -8,6 +8,8 @@ class UIStore {
 
     selectedDisplays: Display[] | null = null; // Internal, do not depend on
 
+    numDisplaysShared = 0;
+
     constructor() {
         makeAutoObservable(this);
     }

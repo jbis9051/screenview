@@ -26,14 +26,10 @@ export default function getDesktopList(): Promise<Display[]> {
                 );
                 ipcRenderer.send(RendererToMainIPCEvents.Host_StopDesktopList);
                 const selectedDisplays = toJS(UIStore.selectedDisplays);
+                UIStore.numDisplaysShared = selectedDisplays.length; // TODO this is very much not the source of truth, we should have rust inform of how many displays are shared
                 UIStore.selectedDisplays = null;
                 UIStore.thumbnails = null;
-                setTimeout(
-                    action(() => {
-                        UIStore.inSelectionMode = false; // this is horrendous learn to code
-                    }),
-                    500
-                );
+                UIStore.inSelectionMode = false;
                 resolve(selectedDisplays);
                 return;
             }
