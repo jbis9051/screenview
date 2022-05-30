@@ -1,6 +1,9 @@
 use crate::{
     debug,
-    helpers::crypto::{hmac, hmac_verify, kdf1, random_srp_private_value},
+    helpers::{
+        crypto::{hmac, hmac_verify, kdf1, random_srp_private_value},
+        left_pad::left_pad,
+    },
     wpskka::WpskkaClientInform,
 };
 use common::{
@@ -53,7 +56,8 @@ impl SrpAuthClient {
         let verifier = srp_client
             .process_reply(&a, &msg.username, password, &msg.salt, &*msg.b_pub)
             .map_err(SrpClientError::SrpAuthError)?;
-        let a_pub = srp_client.compute_public_ephemeral(&a);
+        let a_pub = left_pad(&srp_client.compute_public_ephemeral(&a), 256);
+
         let srp_key = verifier.key();
 
         let srp_key_kdf = kdf1(srp_key);
