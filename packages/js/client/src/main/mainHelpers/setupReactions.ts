@@ -1,5 +1,5 @@
 import { autorun } from 'mobx';
-import { rust } from 'node-interop';
+import { rust } from '@screenview/node-interop';
 import { MainToRendererIPCEvents } from '../../common/IPCEvents';
 import GlobalState from '../GlobalState';
 

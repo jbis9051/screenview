@@ -10,6 +10,7 @@ use common::{
         DisplayChange,
         DisplayChangeReceived,
         DisplayId,
+        FrameData,
         MouseLocation,
         ProtocolVersionResponse,
         RvdMessage,
@@ -67,8 +68,11 @@ impl RvdClientHandler {
                 )),
             },
             ClientState::Data => match msg {
-                RvdMessage::FrameData(_) => {
-                    todo!()
+                RvdMessage::FrameData(msg) => {
+                    events.push(InformEvent::RvdClientInform(RvdClientInform::FrameData(
+                        msg,
+                    )));
+                    Ok(())
                 }
                 RvdMessage::DisplayChange(msg) => {
                     events.push(InformEvent::RvdClientInform(
@@ -131,6 +135,7 @@ pub enum RvdClientError {
 pub enum RvdClientInform {
     VersionBad,
 
+    FrameData(FrameData),
     MouseHidden(DisplayId),
     MouseLocation(MouseLocation),
     DisplayChange(DisplayChange),

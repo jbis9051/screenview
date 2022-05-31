@@ -1,5 +1,6 @@
-import { rust, EstablishSessionStatus } from 'node-interop';
 import { EventEmitter } from 'events';
+import { EstablishSessionStatus } from './index';
+import { VTable } from './index.node';
 
 export enum VTableEvent {
     SvscVersionBad = 'svsc_version_bad',
@@ -12,9 +13,10 @@ export enum VTableEvent {
     WpsskaClientPasswordPrompt = 'wpsska_client_password_prompt',
     WpsskaClientAuthenticationSuccessful = 'wpsska_client_authentication_successful',
     WpsskaClientOutOfAuthenticationSchemes = 'wpsska_client_out_of_authentication_schemes',
+    RvdFrameData = 'rvd_frame_data',
 }
 
-declare interface VTableEmitter extends EventEmitter {
+export declare interface VTableEmitter extends EventEmitter {
     on(
         event: VTableEvent.SvscLeaseUpdate,
         listener: (sessionId: string) => void
@@ -28,7 +30,14 @@ declare interface VTableEmitter extends EventEmitter {
     on(event: VTableEvent, listener: () => void): this;
 }
 
-class VTableEmitter extends EventEmitter implements rust.VTable {
+export class VTableEmitter extends EventEmitter implements VTable {
+    emit(eventName: string | symbol, ...args): boolean {
+        if (eventName !== 'event') {
+            this.emit('event', eventName, ...args);
+        }
+        return super.emit(eventName, ...args);
+    }
+
     /* svsc */
     svsc_version_bad() {
         this.emit(VTableEvent.SvscVersionBad);
@@ -69,6 +78,12 @@ class VTableEmitter extends EventEmitter implements rust.VTable {
 
     wpskka_client_out_of_authentication_schemes() {
         this.emit(VTableEvent.WpsskaClientOutOfAuthenticationSchemes);
+    }
+
+    /* rvd */
+
+    rvd_frame_data(displayId: number, data: ArrayBuffer) {
+        this.emit(VTableEvent.RvdFrameData, displayId, data);
     }
 }
 

@@ -5,7 +5,7 @@ import {
     screen,
     webContents,
 } from 'electron';
-import { ButtonMask, Display, rust } from 'node-interop';
+import { ButtonMask, Display, rust } from '@screenview/node-interop';
 import { toJS } from 'mobx';
 import GlobalState from '../GlobalState';
 import {

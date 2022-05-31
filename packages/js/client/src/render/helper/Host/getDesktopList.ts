@@ -1,6 +1,6 @@
 import { ipcRenderer, IpcRendererEvent } from 'electron';
 import { action, runInAction, toJS } from 'mobx';
-import { Display, NativeThumbnail } from 'node-interop';
+import { Display, NativeThumbnail } from '@screenview/node-interop';
 import {
     MainToRendererIPCEvents,
     RendererToMainIPCEvents,

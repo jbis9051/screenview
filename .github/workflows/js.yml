@@ -25,9 +25,9 @@ jobs:
         with:
           node-version: "17"
       - run: npm install -g yarn
-      - run: cd ../rust/node-interop && yarn --ignore-scripts && touch index.node && yarn ts-build && cd ../../js
+      - run: cd node-interop && touch index.node && yarn --ignore-scripts && yarn ts-build && cd ..
       - run: yarn install --ignore-scripts
-      - run: yarn build
+      - run: yarn build:ci
 
   quality:
     runs-on: ubuntu-latest
@@ -37,6 +37,6 @@ jobs:
         with:
           node-version: "17"
       - run: npm install -g yarn
-      - run: cd ../rust/node-interop && yarn --ignore-scripts && touch index.node && yarn ts-build && cd ../../js
+      - run: cd node-interop && touch index.node && yarn --ignore-scripts && yarn ts-build && cd ..
       - run: yarn install --ignore-scripts
       - run: yarn lint:check
