@@ -1,5 +1,5 @@
 import { makeAutoObservable } from 'mobx';
-import { NativeThumbnail, Display } from 'node-interop';
+import { NativeThumbnail, Display } from '@screenview/node-interop';
 
 class UIStore {
     inSelectionMode = false;

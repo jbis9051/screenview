@@ -1,0 +1,24 @@
+{
+    "name": "@screenview/node-interop",
+    "version": "0.0.0",
+    "main": "build/index.js",
+    "types": "build/index.d.ts",
+    "scripts": {
+        "rust-build": "cd ../../rust/node-interop && cargo-cp-artifact -nc index.node -- cargo build --message-format=json-render-diagnostics",
+        "rust-build-debug": "yarn rust-build --",
+        "rust-build-release": "yarn rust-build -- --release",
+        "cp-artifact": "cp ../../rust/node-interop/index.node index.node",
+        "ts-build": "tsc index.ts --declaration --outDir build && cp *.d.ts build && cp index.node build",
+        "build-debug": "yarn rust-build-debug && yarn ts-build",
+        "build": "yarn rust-build-release && yarn cp-artifact && yarn ts-build",
+        "install": "yarn build",
+        "test": "cargo test"
+    },
+    "dependencies": {
+        "cargo-cp-artifact": "^0.1"
+    },
+    "devDependencies": {
+        "@types/node": "^17.0.36",
+        "typescript": "^4.6.3"
+    }
+}

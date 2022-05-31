@@ -58,7 +58,8 @@
         ],
         "no-param-reassign": ["error", { "props": false }],
         "no-underscore-dangle": "off",
-        "@typescript-eslint/ban-ts-comment": "off" // why in fucks name would anyone want to use this?
+        "@typescript-eslint/ban-ts-comment": "off", // why in fucks name would anyone want to use this?,
+        "no-bitwise": "off"
     },
     "ignorePatterns": ["**/build/*"]
 }

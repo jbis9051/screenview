@@ -3,10 +3,11 @@ import {
     InstanceConnectionType,
     InstancePeerType,
     rust,
-} from 'node-interop';
+    VTableEmitter,
+    VTableEvent,
+} from '@screenview/node-interop';
 import { action } from 'mobx';
 import { BrowserWindow } from 'electron';
-import VTableEmitter, { VTableEvent } from '../../interopHelpers/VTableEmitter';
 import createClientWindow from '../../factories/createClientWindow';
 import { MainToRendererIPCEvents } from '../../../common/IPCEvents';
 import GlobalState from '../../GlobalState';

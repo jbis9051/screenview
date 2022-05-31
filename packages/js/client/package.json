@@ -1,5 +1,6 @@
 {
     "name": "@screenview/client",
+    "private": true,
     "version": "0.0.0",
     "scripts": {
         "build:main": "NODE_ENV=production webpack --config webpack.main.config.js",
@@ -36,7 +37,7 @@
         "classnames": "^2.3.1",
         "mobx": "^6.3.13",
         "mobx-react": "^7.2.1",
-        "node-interop": "file:../../rust",
+        "@screenview/node-interop": "0.0.0",
         "react": "^17.0.2",
         "react-dom": "^17.0.2"
     }

@@ -1,4 +1,4 @@
-import { rust, EstablishSessionStatus } from 'node-interop';
+import { rust, EstablishSessionStatus } from '@screenview/node-interop';
 import EventEmitter from 'events';
 
 export enum VTableEvent {

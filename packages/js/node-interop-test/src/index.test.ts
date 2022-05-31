@@ -3,7 +3,7 @@ import {
     InstanceConnectionType,
     InstancePeerType,
     rust,
-} from 'node-interop';
+} from '@screenview/node-interop';
 import VTableMocker, { VTableEvent } from './VTableMocker';
 
 test('thumbnails', (done) => {

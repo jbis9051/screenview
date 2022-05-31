@@ -1,5 +1,5 @@
 import { app, BrowserWindow } from 'electron';
-import { InstanceConnectionType } from 'node-interop';
+import { InstanceConnectionType } from '@screenview/node-interop';
 import GlobalState from './GlobalState';
 import startMainWindow from './mainHelpers/startMainWindow';
 import setupReactions from './mainHelpers/setupReactions';

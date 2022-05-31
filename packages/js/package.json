@@ -11,7 +11,9 @@
         "build": "lerna run build --stream"
     },
     "workspaces": [
-        "client"
+        "client",
+        "node-interop",
+        "node-interop-test"
     ],
     "version": "0.0.0",
     "main": "index.js",

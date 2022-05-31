@@ -1,9 +1,8 @@
 import { makeAutoObservable, observable, toJS } from 'mobx';
-import { rust } from 'node-interop';
+import { rust, VTableEmitter } from '@screenview/node-interop';
 import Config from '../common/Config';
 import BrowserWindow = Electron.BrowserWindow;
 import Tray = Electron.Tray;
-import VTableEmitter from './interopHelpers/VTableEmitter';
 
 export interface ClientBundle {
     // Internals aren't tracked by MobX. See below.

@@ -3,10 +3,11 @@ import {
     InstanceConnectionType,
     InstancePeerType,
     rust,
-} from 'node-interop';
+    VTableEmitter,
+    VTableEvent,
+} from '@screenview/node-interop';
 import { action, runInAction } from 'mobx';
 import focusMainWindow from '../actions/focusMainWindow';
-import VTableEmitter, { VTableEvent } from '../interopHelpers/VTableEmitter';
 import GlobalState from '../GlobalState';
 import createHostWindow from '../factories/createHostWindow';
 

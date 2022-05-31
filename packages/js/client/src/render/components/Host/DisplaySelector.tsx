@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import cl from 'classnames';
-import { Display, NativeThumbnail } from 'node-interop';
+import { Display, NativeThumbnail } from '@screenview/node-interop';
 import { action } from 'mobx';
 import styles from './DisplaySelector.module.scss';
 import interop from '../../nodeInterop';

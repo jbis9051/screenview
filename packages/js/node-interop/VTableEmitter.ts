@@ -1,5 +1,6 @@
-import { rust, EstablishSessionStatus } from 'node-interop';
 import { EventEmitter } from 'events';
+import { EstablishSessionStatus } from './index';
+import { VTable } from './index.node';
 
 export enum VTableEvent {
     SvscVersionBad = 'svsc_version_bad',
@@ -15,7 +16,7 @@ export enum VTableEvent {
     RvdFrameData = 'rvd_frame_data',
 }
 
-declare interface VTableEmitter extends EventEmitter {
+export declare interface VTableEmitter extends EventEmitter {
     on(
         event: VTableEvent.SvscLeaseUpdate,
         listener: (sessionId: string) => void
@@ -29,7 +30,7 @@ declare interface VTableEmitter extends EventEmitter {
     on(event: VTableEvent, listener: () => void): this;
 }
 
-class VTableEmitter extends EventEmitter implements rust.VTable {
+export class VTableEmitter extends EventEmitter implements VTable {
     /* svsc */
     svsc_version_bad() {
         this.emit(VTableEvent.SvscVersionBad);
