@@ -2,29 +2,40 @@ use common::messages::svsc::EstablishSessionStatus;
 use neon::{object::Object, prelude::*};
 use std::sync::Arc;
 
-macro_rules! vtable_arg_map {
-    (i32, $cx: ident, $arg: ident) => {
-        JsNumber::new(&mut $cx, $arg).upcast()
-    };
-    (u8, $cx: ident, $arg: ident) => {
-        JsNumber::new(&mut $cx, $arg).upcast()
-    };
-    (String, $cx: ident, $arg: ident) => {
-        JsString::new(&mut $cx, $arg).upcast()
-    };
-    (EstablishSessionStatus, $cx: ident, $arg: ident) => {
-        JsNumber::new(&mut $cx, $arg as u8).upcast()
-    };
-    (VecU8, $cx: ident, $arg: ident) => {
-        JsArrayBuffer::external(&mut $cx, $arg).upcast()
-    };
+trait ToJsType {
+    fn to_js_type<'a, C: Context<'a>>(self, cx: &mut C) -> Handle<'a, JsValue>;
 }
+
+macro_rules! impl_to_js_type {
+    (
+        $(
+            $atype:ty => |$cx:ident, $arg:ident| $code:expr
+        ),*
+    ) => {
+        $(
+            impl ToJsType for $atype {
+                fn to_js_type<'a, C: Context<'a>>(self, $cx: &mut C) -> Handle<'a, JsValue> {
+                    let $arg = self;
+                    $code
+                }
+            }
+        )*
+    }
+}
+
+impl_to_js_type!(
+    i32 => |cx, me| JsNumber::new(cx, me).upcast(),
+    u8 => |cx, me| JsNumber::new(cx, me).upcast(),
+    String => |cx, me| JsString::new(cx, me).upcast(),
+    EstablishSessionStatus => |cx, me| JsNumber::new(cx, me as u8).upcast(),
+    Vec<u8> => |cx, me| JsArrayBuffer::external(cx, me).upcast()
+);
 
 macro_rules! vtable_methods {
     (
         $(
           $name: ident(
-              $($arg: ident: $atype: ident),*
+              $($arg: ident: $atype: ty),*
           )
         ),*
     ) => {
@@ -53,7 +64,7 @@ macro_rules! vtable_methods {
                     channel.send(move |mut cx| {
                         let func = vtable.$name.to_inner(&mut cx);
                         let this = cx.null();
-                        let args = [$(vtable_arg_map!($atype, cx, $arg),)*];
+                        let args = [$($arg.to_js_type(&mut cx),)*];
                         func.call(&mut cx, this, args).map(|_| ())
                     });
                 }
@@ -61,8 +72,6 @@ macro_rules! vtable_methods {
         }
     }
 }
-
-type VecU8 = Vec<u8>;
 
 vtable_methods!(
     /* svsc */
@@ -78,5 +87,5 @@ vtable_methods!(
     wpskka_client_authentication_successful(),
     wpskka_client_out_of_authentication_schemes(), // aka authentication_failed
     /* rvd - client */
-    rvd_frame_data(display_id: u8, data: VecU8)
+    rvd_frame_data(display_id: u8, data: Vec<u8>)
 );
