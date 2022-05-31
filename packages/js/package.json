@@ -8,7 +8,8 @@
         "prettier:fix": "prettier --write --check .",
         "fix": "yarn run prettier:fix && yarn run lint:fix && yarn run prettier:fix",
         "lint:check": "yarn run prettier && yarn run lint",
-        "build": "lerna run build --stream"
+        "build": "lerna run build --stream",
+        "build:ci": "yarn run build -- --ignore @screenview/node-interop"
     },
     "workspaces": [
         "client",

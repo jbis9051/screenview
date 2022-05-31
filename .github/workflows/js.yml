@@ -27,7 +27,7 @@ jobs:
       - run: npm install -g yarn
       - run: cd node-interop && touch index.node && yarn --ignore-scripts && yarn ts-build && cd ..
       - run: yarn install --ignore-scripts
-      - run: yarn build
+      - run: yarn build:ci
 
   quality:
     runs-on: ubuntu-latest
