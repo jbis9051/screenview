@@ -11,6 +11,7 @@ use common::messages::{
     svsc::{Cookie, LeaseId},
 };
 use instance::*;
+use native::{api::NativeApiTemplate, NativeApi};
 use neon::{prelude::*, types::buffer::TypedArray};
 use node_interface::NodeInterface;
 use num_traits::FromPrimitive;
@@ -271,6 +272,50 @@ fn close_thumbnails(mut cx: FunctionContext<'_>) -> JsResult<'_, JsUndefined> {
     Ok(cx.undefined())
 }
 
+fn available_displays(mut cx: FunctionContext<'_>) -> JsResult<'_, JsArray> {
+    let mut native = NativeApi::new().expect("Failed to create native api");
+    let monitors = native.monitors().expect("Failed to get monitors");
+    let windows = native.windows().expect("Failed to get monitors");
+
+
+    let mut displays = Vec::with_capacity(monitors.len() + windows.len());
+
+    for monitor in monitors {
+        let js_display = JsObject::new(&mut cx);
+        let id = JsNumber::new(&mut cx, monitor.id);
+        js_display
+            .set(&mut cx, "native_id", id)
+            .expect("Failed to set native_id");
+        let type_str = JsString::new(&mut cx, "monitor");
+        js_display
+            .set(&mut cx, "type", type_str)
+            .expect("Failed to set type");
+        displays.push(js_display);
+    }
+
+    for window in windows {
+        let js_display = JsObject::new(&mut cx);
+        let id = JsNumber::new(&mut cx, window.id);
+        js_display
+            .set(&mut cx, "native_id", id)
+            .expect("Failed to set native_id");
+        let type_str = JsString::new(&mut cx, "window");
+        js_display
+            .set(&mut cx, "type", type_str)
+            .expect("Failed to set type");
+        displays.push(js_display);
+    }
+    let js_displays = cx.empty_array();
+
+    for (i, display) in displays.into_iter().enumerate() {
+        js_displays
+            .set(&mut cx, i as u32, display)
+            .expect("Failed to push display");
+    }
+
+    Ok(js_displays)
+}
+
 #[neon::main]
 fn main(mut cx: ModuleContext<'_>) -> NeonResult<()> {
     macro_rules! export {
@@ -297,7 +342,8 @@ fn main(mut cx: ModuleContext<'_>) -> NeonResult<()> {
         set_clipboard_readable,
         share_displays,
         thumbnails,
-        close_thumbnails
+        close_thumbnails,
+        available_displays
     }
 
     Ok(())

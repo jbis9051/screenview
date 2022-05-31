@@ -6,11 +6,17 @@ macro_rules! vtable_arg_map {
     (i32, $cx: ident, $arg: ident) => {
         JsNumber::new(&mut $cx, $arg).upcast()
     };
+    (u8, $cx: ident, $arg: ident) => {
+        JsNumber::new(&mut $cx, $arg).upcast()
+    };
     (String, $cx: ident, $arg: ident) => {
         JsString::new(&mut $cx, $arg).upcast()
     };
     (EstablishSessionStatus, $cx: ident, $arg: ident) => {
         JsNumber::new(&mut $cx, $arg as u8).upcast()
+    };
+    (VecU8, $cx: ident, $arg: ident) => {
+        JsArrayBuffer::external(&mut $cx, $arg).upcast()
     };
 }
 
@@ -56,6 +62,8 @@ macro_rules! vtable_methods {
     }
 }
 
+type VecU8 = Vec<u8>;
+
 vtable_methods!(
     /* svsc */
     svsc_version_bad(),
@@ -68,5 +76,7 @@ vtable_methods!(
     /* wpskka - client */
     wpskka_client_password_prompt(),
     wpskka_client_authentication_successful(),
-    wpskka_client_out_of_authentication_schemes() // aka authentication_failed
+    wpskka_client_out_of_authentication_schemes(), // aka authentication_failed
+    /* rvd - client */
+    rvd_frame_data(display_id: u8, data: VecU8)
 );

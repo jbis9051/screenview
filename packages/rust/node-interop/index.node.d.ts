@@ -41,6 +41,8 @@ export declare function new_instance<
   U extends InstanceConnectionType
 >(peer_type: T, instance_type: U, vtable: VTable): JSBox<Instance<T, U>>;
 
+export declare function start_server(handle: HostDirectInstance, addr: string): Promise<undefined>
+
 export declare function connect(
   handle: AnyInstance,
   type: ConnectionType,
@@ -102,6 +104,8 @@ export declare function thumbnails(
 
 export declare function close_thumbnails(handle: ThumbnailHandle): void;
 
+export declare function available_displays(): Array<Display>
+
 export declare type ThumbnailHandle = JSBox<ThumbnailHandleType>;
 
 // this is an opaque type, pointing to an object in rust memory
@@ -144,4 +148,8 @@ export interface VTable {
   wpskka_client_authentication_successful(): void;
 
   wpskka_client_out_of_authentication_schemes(): void;
+
+  /* rvd - client */
+  rvd_frame_data(display_id: number, data: ArrayBuffer)
+
 }

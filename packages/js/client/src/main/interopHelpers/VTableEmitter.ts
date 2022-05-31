@@ -12,6 +12,7 @@ export enum VTableEvent {
     WpsskaClientPasswordPrompt = 'wpsska_client_password_prompt',
     WpsskaClientAuthenticationSuccessful = 'wpsska_client_authentication_successful',
     WpsskaClientOutOfAuthenticationSchemes = 'wpsska_client_out_of_authentication_schemes',
+    RvdFrameData = 'rvd_frame_data',
 }
 
 declare interface VTableEmitter extends EventEmitter {
@@ -69,6 +70,12 @@ class VTableEmitter extends EventEmitter implements rust.VTable {
 
     wpskka_client_out_of_authentication_schemes() {
         this.emit(VTableEvent.WpsskaClientOutOfAuthenticationSchemes);
+    }
+
+    /* rvd */
+
+    rvd_frame_data(displayId: number, data: ArrayBuffer) {
+        this.emit(VTableEvent.RvdFrameData, displayId, data);
     }
 }
 
