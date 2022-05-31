@@ -3,8 +3,35 @@ import {
     InstanceConnectionType,
     InstancePeerType,
     rust,
+    VTableEmitter,
+    VTableEvent,
 } from '@screenview/node-interop';
-import VTableMocker, { VTableEvent } from './VTableMocker';
+
+function waitForEvent(
+    emitter: VTableEmitter,
+    event: VTableEvent,
+    timeout = -1
+): Promise<any[]> {
+    return new Promise((resolve) => {
+        let expireTimeout: NodeJS.Timeout | null = null;
+        const handleEvent = (e: Event, ...arg: any[]) => {
+            if (expireTimeout) {
+                clearTimeout(expireTimeout);
+            }
+            if (e !== event) {
+                throw new Error(`Expected event ${event}, got ${e}`);
+            }
+            resolve(arg);
+        };
+        emitter.once('event', handleEvent);
+        if (timeout > 0) {
+            expireTimeout = setTimeout(() => {
+                emitter.removeListener('event', handleEvent);
+                throw new Error(`Timeout waiting for event ${event}`);
+            }, timeout);
+        }
+    });
+}
 
 test('thumbnails', (done) => {
     let thumbnailHandle: rust.ThumbnailHandle | null = null;
@@ -20,8 +47,8 @@ test('thumbnails', (done) => {
 });
 
 test('direct connection', async () => {
-    const vtableHost = new VTableMocker();
-    const vtableClient = new VTableMocker();
+    const vtableHost = new VTableEmitter();
+    const vtableClient = new VTableEmitter();
 
     const host = rust.new_instance(
         InstancePeerType.Host,
@@ -29,7 +56,7 @@ test('direct connection', async () => {
         vtableHost
     );
 
-    await rust.start_server(host, '0.0.0.0:9051');
+    await rust.start_server(host, '127.0.0.1:9051');
 
     await rust.update_static_password(host, 'password');
 
@@ -41,7 +68,8 @@ test('direct connection', async () => {
 
     await rust.connect(client, ConnectionType.Reliable, '127.0.0.1:9051');
 
-    await vtableClient.wait_for_event(
+    await waitForEvent(
+        vtableClient,
         VTableEvent.WpsskaClientPasswordPrompt,
         500
     );
@@ -49,11 +77,13 @@ test('direct connection', async () => {
     await rust.process_password(client, 'password');
 
     await Promise.all([
-        vtableClient.wait_for_event(
+        waitForEvent(
+            vtableClient,
             VTableEvent.WpsskaClientAuthenticationSuccessful,
             500
         ),
-        vtableHost.wait_for_event(
+        waitForEvent(
+            vtableHost,
             VTableEvent.WpsskaClientAuthenticationSuccessful,
             500
         ),
@@ -69,7 +99,8 @@ test('direct connection', async () => {
 
     await rust.share_displays(host, [firstMonitor!]);
 
-    const [id, data] = (await vtableClient.wait_for_event(
+    const [id, data] = (await waitForEvent(
+        vtableClient,
         VTableEvent.RvdFrameData,
         500
     )) as [number, ArrayBuffer];

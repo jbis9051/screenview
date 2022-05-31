@@ -31,6 +31,13 @@ export declare interface VTableEmitter extends EventEmitter {
 }
 
 export class VTableEmitter extends EventEmitter implements VTable {
+    emit(eventName: string | symbol, ...args): boolean {
+        if (eventName !== 'event') {
+            this.emit('event', eventName, ...args);
+        }
+        return super.emit(eventName, ...args);
+    }
+
     /* svsc */
     svsc_version_bad() {
         this.emit(VTableEvent.SvscVersionBad);
