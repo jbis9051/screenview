@@ -539,6 +539,12 @@ fn instance_main(
             if let ScreenViewHandler::HostDirect(_, Some(ref server)) = instance.sv_handler {
                 match server.next_incoming() {
                     Some(Ok(stream)) => {
+                        // This stream should be blocking, however on macOS for some reason if the
+                        // listener is non-blocking at the time of we accept a stream, the stream
+                        // with also be non-blocking, so we explicitly set it to blocking
+                        stream
+                            .set_nonblocking(false)
+                            .expect("Failed to set stream to blocking"); // TODO handle this better
                         instance.handle_direct_connect(waker_core, stream);
                     }
                     Some(Err(error)) => {
