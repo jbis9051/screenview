@@ -11,6 +11,7 @@ import { BrowserWindow } from 'electron';
 import createClientWindow from '../../factories/createClientWindow';
 import { MainToRendererIPCEvents } from '../../../common/IPCEvents';
 import GlobalState from '../../GlobalState';
+import waitForReadySignal from '../waitForReadySignal';
 
 async function startSignalSession(
     instance: rust.ClientSignalInstance,
@@ -30,26 +31,13 @@ async function startSignalSession(
         state.config.signalServerUnreliable
     );
 
-    [VTableEvent.SvscVersionBad, VTableEvent.SvscSessionEnd].forEach((e) => {
-        emitter.on(e, () => {
-            window.webContents.send(MainToRendererIPCEvents.VTableEvent, e);
-        });
-    });
-
-    emitter.on(VTableEvent.SvscErrorSessionRequestRejected, (status) => {
-        window.webContents.send(
-            MainToRendererIPCEvents.VTableEvent,
-            VTableEvent.SvscErrorSessionRequestRejected,
-            status
-        );
-    });
-
     await rust.establish_session(instance, addr);
 }
 
 export default async function establishSession(state: GlobalState, id: string) {
     const emitter = new VTableEmitter();
     const window = await createClientWindow();
+    const windowReadyPromise = waitForReadySignal(window);
 
     const formatted = id.replaceAll(/\s/g, '');
 
@@ -78,31 +66,32 @@ export default async function establishSession(state: GlobalState, id: string) {
         })
     );
 
-    emitter.on(VTableEvent.WpsskaClientPasswordPrompt, () => {
+    try {
+        if (isSessionId) {
+            await startSignalSession(
+                instance as rust.ClientSignalInstance,
+                emitter,
+                window,
+                formatted,
+                state
+            );
+        } else {
+            await rust.connect(
+                instance as rust.ClientDirectInstance,
+                ConnectionType.Reliable,
+                formatted
+            );
+            await rust.connect(
+                instance as rust.ClientDirectInstance,
+                ConnectionType.Unreliable,
+                formatted
+            );
+        }
+    } catch (e: any) {
+        await windowReadyPromise;
         window.webContents.send(
-            MainToRendererIPCEvents.VTableEvent,
-            VTableEvent.WpsskaClientPasswordPrompt
-        );
-    });
-
-    if (isSessionId) {
-        await startSignalSession(
-            instance as rust.ClientSignalInstance,
-            emitter,
-            window,
-            formatted,
-            state
-        );
-    } else {
-        await rust.connect(
-            instance as rust.ClientDirectInstance,
-            ConnectionType.Reliable,
-            formatted
-        );
-        await rust.connect(
-            instance as rust.ClientDirectInstance,
-            ConnectionType.Unreliable,
-            formatted
+            MainToRendererIPCEvents.Client_ConnectingFailed,
+            e.toString()
         );
     }
 }

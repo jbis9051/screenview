@@ -10,6 +10,8 @@ import interop from './nodeInterop';
 import Host from './Pages/Host';
 import setupPreferences from './helper/setupPreferences';
 import startDesktopSelection from './helper/Host/startDesktopSelection';
+import setUpClientListeners from './helper/Client/setUpClientListeners';
+import { RendererToMainIPCEvents } from '../common/IPCEvents';
 
 // we render different pages based on the hash aka # after the URL. This isn't dynamic meaning you can't change pages. This makes sense for our app.
 (async () => {
@@ -24,6 +26,7 @@ import startDesktopSelection from './helper/Host/startDesktopSelection';
             case PageType.Main:
                 return <Main />;
             case PageType.Client:
+                setUpClientListeners();
                 return <Client />;
             case PageType.SignalHost:
             case PageType.DirectHost:
@@ -34,6 +37,8 @@ import startDesktopSelection from './helper/Host/startDesktopSelection';
     };
 
     ReactDOM.render(<Page pageType={page} />, document.getElementById('root'));
+
+    ipcRenderer.send(RendererToMainIPCEvents.RendererReady);
 
     switch (page) {
         case PageType.SignalHost:

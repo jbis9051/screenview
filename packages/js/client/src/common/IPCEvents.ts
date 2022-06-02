@@ -1,8 +1,8 @@
 export enum MainToRendererIPCEvents {
-    VTableEvent = 'vtable-event',
     Main_SessionId = 'session-id',
     Host_DesktopList = 'desktop-list',
     Main_ConfigResponse = 'config',
+    Client_ConnectingFailed = 'client-status-failed',
 }
 
 export enum RendererToMainIPCEvents {
@@ -16,4 +16,5 @@ export enum RendererToMainIPCEvents {
     Client_PasswordInput = 'client-password-input',
     Client_MouseInput = 'client-mouse-input',
     Client_KeyboardInput = 'client-keyboard-input',
+    RendererReady = 'renderer-ready',
 }

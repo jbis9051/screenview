@@ -137,7 +137,7 @@ pub trait NativeApiTemplate {
         Ok(())
     }
 }
-
+/*
 #[cfg(dummy_native)]
 pub(crate) mod dummy {
     use super::*;
@@ -221,3 +221,4 @@ pub(crate) mod dummy {
         }
     }
 }
+*/
