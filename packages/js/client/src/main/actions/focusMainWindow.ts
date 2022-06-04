@@ -8,7 +8,7 @@ export default async function focusMainWindow(state: GlobalState) {
         state.mainWindow.show();
         return;
     }
-    const [_, window] = await createMainWindow();
+    const window = await createMainWindow();
 
     window.on(
         'close',

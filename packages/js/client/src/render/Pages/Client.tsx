@@ -3,10 +3,15 @@ import '../components/global.scss';
 import { observer } from 'mobx-react';
 import styles from './Client.module.scss';
 import UIStore, { ConnectionStatus } from '../store/Client/UIStore';
+import Controls from '../components/Client/Controls';
 
 const Client: React.FunctionComponent = observer(() => (
     <div className={styles.wrapper}>
-        <div className={styles.frame} />
+        <div className={styles.frame}>
+            <div className={styles.frameContent}>
+                <Controls />
+            </div>
+        </div>
         {UIStore.connectionStatus === ConnectionStatus.Connected ? (
             <>
                 {' '}

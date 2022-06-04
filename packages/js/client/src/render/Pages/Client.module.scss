@@ -8,9 +8,17 @@
     background: black;
 
     .frame {
-        height: 30px;
-        background: rgba(32, 32, 32, 0.94);
+        width: 100%;
+        height: 60px;
+        background: #343434;
         -webkit-app-region: drag;
+
+        .frameContent {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: flex-end;
+        }
     }
 
     .content {

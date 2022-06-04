@@ -1,5 +1,5 @@
 import { makeAutoObservable } from 'mobx';
-import { NativeThumbnail, Display } from '@screenview/node-interop';
+import { DisplayInformation } from '@screenview/node-interop';
 
 export enum ConnectionStatus {
     Connecting,
@@ -9,10 +9,23 @@ export enum ConnectionStatus {
     Error,
 }
 
+export enum ViewMode {
+    Grid,
+    Single,
+}
+
 class UIStore {
     connectionStatus = ConnectionStatus.Connecting;
 
     error: string | null = null;
+
+    controlling = true;
+
+    controllable = false;
+
+    viewMode = ViewMode.Grid;
+
+    displayInformation: DisplayInformation[] = [];
 
     constructor() {
         makeAutoObservable(this);

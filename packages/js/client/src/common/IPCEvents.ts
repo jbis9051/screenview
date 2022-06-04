@@ -3,6 +3,7 @@ export enum MainToRendererIPCEvents {
     Host_DesktopList = 'desktop-list',
     Main_ConfigResponse = 'config',
     Client_ConnectingFailed = 'client-status-failed',
+    Client_RvdDisplayUpdate = 'rvd-display-update',
 }
 
 export enum RendererToMainIPCEvents {

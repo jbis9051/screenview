@@ -2,11 +2,11 @@ import type {
     InstancePeerType,
     ConnectionType,
     ButtonMask,
-    DisplayType,
     Display,
     EstablishSessionStatus,
     InstanceConnectionType,
     NativeThumbnail,
+    DisplayInformation,
 } from './index';
 
 export declare type ClientDirectInstance = JSBox<
@@ -153,5 +153,10 @@ export interface VTable {
     wpskka_client_out_of_authentication_schemes(): void;
 
     /* rvd - client */
+    rvd_display_update(
+        clipboard_readable: boolean,
+        displays: DisplayInformation[]
+    ): void;
+
     rvd_frame_data(display_id: number, data: ArrayBuffer);
 }

@@ -39,6 +39,13 @@ export default async function establishSession(state: GlobalState, id: string) {
     const window = await createClientWindow();
     const windowReadyPromise = waitForReadySignal(window);
 
+    emitter.on(VTableEvent.RvdDisplayUpdate, (...args) => {
+        window.webContents.send(
+            MainToRendererIPCEvents.Client_RvdDisplayUpdate,
+            ...args
+        );
+    });
+
     const formatted = id.replaceAll(/\s/g, '');
 
     const isSessionId = id.match(/^\d+$/);

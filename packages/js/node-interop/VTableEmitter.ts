@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { EstablishSessionStatus } from './index';
+import { DisplayInformation, EstablishSessionStatus } from './index';
 import { VTable } from './index.node';
 
 export enum VTableEvent {
@@ -13,6 +13,7 @@ export enum VTableEvent {
     WpsskaClientPasswordPrompt = 'wpsska_client_password_prompt',
     WpsskaClientAuthenticationSuccessful = 'wpsska_client_authentication_successful',
     WpsskaClientOutOfAuthenticationSchemes = 'wpsska_client_out_of_authentication_schemes',
+    RvdDisplayUpdate = 'rvd_display_update',
     RvdFrameData = 'rvd_frame_data',
 }
 
@@ -25,6 +26,14 @@ export declare interface VTableEmitter extends EventEmitter {
     on(
         event: VTableEvent.SvscErrorSessionRequestRejected,
         listener: (status: EstablishSessionStatus) => void
+    ): this;
+
+    on(
+        event: VTableEvent.RvdDisplayUpdate,
+        listener: (
+            clipboardReadable: boolean,
+            displays: DisplayInformation[]
+        ) => void
     ): this;
 
     on(event: VTableEvent, listener: () => void): this;
@@ -84,6 +93,13 @@ export class VTableEmitter extends EventEmitter implements VTable {
 
     rvd_frame_data(displayId: number, data: ArrayBuffer) {
         this.emit(VTableEvent.RvdFrameData, displayId, data);
+    }
+
+    rvd_display_update(
+        clipboardReadable: boolean,
+        displays: DisplayInformation[]
+    ): void {
+        this.emit(VTableEvent.RvdDisplayUpdate, clipboardReadable, displays);
     }
 }
 
