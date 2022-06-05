@@ -317,28 +317,34 @@ fn available_displays(mut cx: FunctionContext<'_>) -> JsResult<'_, JsArray> {
 }
 
 fn macos_accessibility_permission(mut cx: FunctionContext<'_>) -> JsResult<'_, JsBoolean> {
-    #[cfg(not(target_os = "macos"))]
-    {
-        panic!("this function is only available on macos");
+    cfg_if::cfg_if! {
+        if #[cfg(target_os = "macos")] {
+            let prompt = cx.argument::<JsBoolean>(0)?.value(&mut cx);
+             Ok(cx.boolean(NativeApi::accessibility_permission(prompt)))
+        } else {
+            panic!("this function is only available on macos");
+        }
     }
-    let prompt = cx.argument::<JsBoolean>(0)?.value(&mut cx);
-    Ok(cx.boolean(NativeApi::accessibility_permission(prompt)))
 }
 
 fn macos_screen_capture_permission(mut cx: FunctionContext<'_>) -> JsResult<'_, JsBoolean> {
-    #[cfg(not(target_os = "macos"))]
-    {
-        panic!("this function is only available on macos");
+    cfg_if::cfg_if! {
+        if #[cfg(target_os = "macos")] {
+            Ok(cx.boolean(NativeApi::screen_capture_permission()))
+        } else {
+            panic!("this function is only available on macos");
+        }
     }
-    Ok(cx.boolean(NativeApi::screen_capture_permission()))
 }
 
 fn macos_screen_capture_permission_prompt(mut cx: FunctionContext<'_>) -> JsResult<'_, JsBoolean> {
-    #[cfg(not(target_os = "macos"))]
-    {
-        panic!("this method is only available on macos");
+    cfg_if::cfg_if! {
+        if #[cfg(target_os = "macos")] {
+            Ok(cx.boolean(NativeApi::screen_capture_permission_prompt()))
+        } else {
+            panic!("this function is only available on macos");
+        }
     }
-    Ok(cx.boolean(NativeApi::screen_capture_permission_prompt()))
 }
 
 #[neon::main]

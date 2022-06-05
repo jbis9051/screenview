@@ -586,6 +586,7 @@ name = "node-interop"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "cfg-if",
  "common",
  "crossbeam-channel",
  "native",
