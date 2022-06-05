@@ -9,6 +9,8 @@ export default class Config {
 
     staticPassword: string | null = null;
 
+    promptedForPermissionMacOS = false;
+
     // frontend
 
     authUrl = 'https://example.com';

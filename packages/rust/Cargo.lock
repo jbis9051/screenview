@@ -522,6 +522,7 @@ name = "native"
 version = "0.0.0"
 dependencies = [
  "accessibility-sys",
+ "block",
  "cfg-if",
  "cocoa",
  "cocoa-foundation",

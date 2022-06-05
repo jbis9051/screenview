@@ -109,6 +109,15 @@ export declare function close_thumbnails(handle: ThumbnailHandle): void;
 
 export declare function available_displays(): Array<Display>;
 
+/* macos only */
+export declare function macos_accessibility_permission(
+    prompt: boolean
+): boolean;
+
+export declare function macos_screen_capture_permission(): boolean;
+
+export declare function screen_capture_permission_prompt(): void;
+
 export declare type ThumbnailHandle = JSBox<ThumbnailHandleType>;
 
 // this is an opaque type, pointing to an object in rust memory
