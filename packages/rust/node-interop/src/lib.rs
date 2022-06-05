@@ -316,6 +316,31 @@ fn available_displays(mut cx: FunctionContext<'_>) -> JsResult<'_, JsArray> {
     Ok(js_displays)
 }
 
+fn macos_accessibility_permission(mut cx: FunctionContext<'_>) -> JsResult<'_, JsBoolean> {
+    #[cfg(not(target_os = "macos"))]
+    {
+        panic!("this function is only available on macos");
+    }
+    let prompt = cx.argument::<JsBoolean>(0)?.value(&mut cx);
+    Ok(cx.boolean(NativeApi::accessibility_permission(prompt)))
+}
+
+fn macos_screen_capture_permission(mut cx: FunctionContext<'_>) -> JsResult<'_, JsBoolean> {
+    #[cfg(not(target_os = "macos"))]
+    {
+        panic!("this function is only available on macos");
+    }
+    Ok(cx.boolean(NativeApi::screen_capture_permission()))
+}
+
+fn macos_screen_capture_permission_prompt(mut cx: FunctionContext<'_>) -> JsResult<'_, JsBoolean> {
+    #[cfg(not(target_os = "macos"))]
+    {
+        panic!("this method is only available on macos");
+    }
+    Ok(cx.boolean(NativeApi::screen_capture_permission_prompt()))
+}
+
 #[neon::main]
 fn main(mut cx: ModuleContext<'_>) -> NeonResult<()> {
     macro_rules! export {
@@ -343,7 +368,10 @@ fn main(mut cx: ModuleContext<'_>) -> NeonResult<()> {
         share_displays,
         thumbnails,
         close_thumbnails,
-        available_displays
+        available_displays,
+        macos_accessibility_permission,
+        macos_screen_capture_permission,
+        macos_screen_capture_permission_prompt
     }
 
     Ok(())

@@ -116,7 +116,7 @@ export declare function macos_accessibility_permission(
 
 export declare function macos_screen_capture_permission(): boolean;
 
-export declare function screen_capture_permission_prompt(): void;
+export declare function macos_screen_capture_permission_prompt(): boolean;
 
 export declare type ThumbnailHandle = JSBox<ThumbnailHandleType>;
 

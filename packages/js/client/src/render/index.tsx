@@ -10,6 +10,7 @@ import interop from './nodeInterop';
 import Host from './Pages/Host';
 import setupPreferences from './helper/setupPreferences';
 import startDesktopSelection from './helper/Host/startDesktopSelection';
+import MacOSPermission from './Pages/MacOSPermission';
 import setUpClientListeners from './helper/Client/setUpClientListeners';
 import { RendererToMainIPCEvents } from '../common/IPCEvents';
 
@@ -31,6 +32,8 @@ import { RendererToMainIPCEvents } from '../common/IPCEvents';
             case PageType.SignalHost:
             case PageType.DirectHost:
                 return <Host />;
+            case PageType.MacOSPermission:
+                return <MacOSPermission />;
             default:
                 throw new Error('Cannot Find Page');
         }

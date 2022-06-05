@@ -34,7 +34,12 @@ app.on('ready', async () => {
         if (!accessibilityPermission || !screenCapturePermission) {
             state.config.promptedForPermissionMacOS = true;
             await saveConfig(state.config);
-            await createMacOSPermissionPromptWindow();
+            const permissionWindow = await createMacOSPermissionPromptWindow();
+            permissionWindow.on('closed', () => {
+                startMainWindow(state);
+            });
+        } else {
+            await startMainWindow(state);
         }
     } else {
         await startMainWindow(state);

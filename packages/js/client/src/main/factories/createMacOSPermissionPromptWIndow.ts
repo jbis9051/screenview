@@ -1,12 +1,12 @@
 import { BrowserWindow, shell } from 'electron';
 import PageType from '../../render/Pages/PageType';
+import startMainWindow from '../mainHelpers/startMainWindow';
 
 async function createMacOSPermissionPromptWindow(): Promise<BrowserWindow> {
     const permissionWindow = new BrowserWindow({
-        height: 550,
-        width: 950,
-        minHeight: 550,
-        minWidth: 900,
+        height: 700,
+        width: 600,
+        resizable: false,
         titleBarStyle: 'hidden',
         webPreferences: {
             nodeIntegration: true,

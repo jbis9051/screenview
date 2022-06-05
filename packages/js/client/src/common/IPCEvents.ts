@@ -17,5 +17,8 @@ export enum RendererToMainIPCEvents {
     Client_PasswordInput = 'client-password-input',
     Client_MouseInput = 'client-mouse-input',
     Client_KeyboardInput = 'client-keyboard-input',
+    MacOSPPermission_Accessibility = 'mac-os-permission-accessibility',
+    MacOSPPermission_ScreenCapture = 'mac-os-permission-screen-capture',
+    MacOSPPermission_ScreenCapturePrompt = 'mac-os-permission-screen-capture-prompt',
     RendererReady = 'renderer-ready',
 }
