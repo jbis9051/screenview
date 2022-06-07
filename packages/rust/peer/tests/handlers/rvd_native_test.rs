@@ -282,7 +282,7 @@ impl NativeApiTemplate for TesterNative {
         Ok(())
     }
 
-    fn pointer_position(&mut self) -> Result<MousePosition, Self::Error> {
+    fn pointer_position(&mut self, _windows: &[WindowId]) -> Result<MousePosition, Self::Error> {
         Ok(MousePosition {
             x: 0,
             y: 0,

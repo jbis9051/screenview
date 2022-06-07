@@ -75,7 +75,7 @@ pub trait NativeApiTemplate {
     fn key_toggle(&mut self, key: Key, down: bool) -> Result<(), Self::Error>;
 
     /// Returns current MousePosition and all Window's the mouse intersect. Intuitively, this should only be one but because Windows can be layered it can be multiple.
-    fn pointer_position(&mut self) -> Result<MousePosition, Self::Error>;
+    fn pointer_position(&mut self, windows: &[WindowId]) -> Result<MousePosition, Self::Error>;
 
     fn set_pointer_position_absolute(
         &mut self,

@@ -40,6 +40,7 @@ use xcb::{
 use crate::api::{self, *};
 
 struct X11MonitorInfo {
+    id: MonitorId,
     name: String,
     x: u32,
     y: u32,
@@ -136,7 +137,7 @@ impl NativeApiTemplate for X11Api {
         Ok(())
     }
 
-    fn pointer_position(&mut self) -> Result<MousePosition, Error> {
+    fn pointer_position(&mut self, windows: &[WindowId]) -> Result<MousePosition, Error> {
         let reply = self
             .conn
             .wait_for_reply(self.conn.send_request(&QueryPointer { window: self.root }))?;
@@ -145,29 +146,64 @@ impl NativeApiTemplate for X11Api {
         let monitor_id = self
             .monitors
             .iter()
-            .position(|info| {
-                x >= info.x
-                    && y >= info.y
-                    && (x - info.x) < info.width
-                    && (y - info.y) < info.height
-            })
+            .position(|info| Self::in_aabb(x, y, info.x, info.y, info.width, info.height))
             .unwrap_or(0);
 
+        let window_requests = windows
+            .iter()
+            .copied()
+            .map(|window| {
+                (
+                    window,
+                    self.conn.send_request(&GetGeometry {
+                        drawable: Drawable::Window(unsafe { Window::new(window) }),
+                    }),
+                )
+            })
+            .collect::<Vec<_>>();
+
         Ok(MousePosition {
-            x: reply.root_x() as _,
-            y: reply.root_y() as _,
+            x,
+            y,
             monitor_id: monitor_id as _,
-            window_relatives: vec![], // TODO: fill
+            window_relatives: window_requests
+                .into_iter()
+                .flat_map(|(window_id, cookie)| {
+                    self.conn
+                        .wait_for_reply(cookie)
+                        .map(|reply| {
+                            (
+                                reply.x() as u32,
+                                reply.y() as u32,
+                                reply.width() as u32,
+                                reply.height() as u32,
+                            )
+                        })
+                        .map(|(wx, wy, w, h)| {
+                            Self::in_aabb(x, y, wx, wy, w, h).then(|| PointerPositionRelative {
+                                x: x - wx,
+                                y: y - wy,
+                                window_id,
+                            })
+                        })
+                        .transpose()
+                })
+                .collect::<Result<_, _>>()?,
         })
     }
 
-    // TODO: figure out how to use monitor_id
     fn set_pointer_position_absolute(
         &mut self,
         x: u32,
         y: u32,
-        _monitor_id: MonitorId,
+        monitor_id: MonitorId,
     ) -> Result<(), Self::Error> {
+        let &X11MonitorInfo {
+            x: monitor_x,
+            y: monitor_y,
+            ..
+        } = self.get_monitor(monitor_id)?;
+
         self.conn
             .check_request(self.conn.send_request_checked(&WarpPointer {
                 src_window: Window::none(),
@@ -176,23 +212,22 @@ impl NativeApiTemplate for X11Api {
                 src_y: 0,
                 src_width: 0,
                 src_height: 0,
-                dst_x: x as _,
-                dst_y: y as _,
+                dst_x: (monitor_x + x) as _,
+                dst_y: (monitor_y + y) as _,
             }))
             .map_err(Into::into)
     }
 
-    // TODO: convert window_id into XCB Window
     fn set_pointer_position_relative(
         &mut self,
         x: u32,
         y: u32,
-        _window_id: WindowId,
+        window_id: WindowId,
     ) -> Result<(), Self::Error> {
         self.conn
             .check_request(self.conn.send_request_checked(&WarpPointer {
                 src_window: Window::none(),
-                dst_window: self.root,
+                dst_window: unsafe { Window::new(window_id) },
                 src_x: 0,
                 src_y: 0,
                 src_width: 0,
@@ -535,6 +570,7 @@ impl X11Api {
             )
         }) {
             monitor_list.push(X11MonitorInfo {
+                id: monitor_info.name().resource_id(),
                 name: reply?.name().to_string(),
                 x: monitor_info.x() as u32,
                 y: monitor_info.y() as u32,
@@ -545,6 +581,24 @@ impl X11Api {
 
         self.monitors = monitor_list;
         Ok(())
+    }
+
+    fn get_monitor(&mut self, id: MonitorId) -> Result<&X11MonitorInfo, Error> {
+        // We have to use indices here because for once the programmer is smarter than the borrow
+        // checker
+
+        if let Some(index) = self.get_cached_monitor_index(id) {
+            return Ok(&self.monitors[index]);
+        }
+
+        self.update_monitors()?;
+        self.get_cached_monitor_index(id)
+            .map(|index| &self.monitors[index])
+            .ok_or(Error::UnknownMonitor)
+    }
+
+    fn get_cached_monitor_index(&self, id: MonitorId) -> Option<usize> {
+        self.monitors.iter().position(|monitor| monitor.id == id)
     }
 
     fn list_windows(&self, window: Window, windows: &mut Vec<Window>) -> Result<(), Error> {
@@ -575,6 +629,11 @@ impl X11Api {
             src = src.add(1);
             dst = dst.add(3);
         }
+    }
+
+    #[inline]
+    fn in_aabb(x1: u32, y1: u32, x2: u32, y2: u32, w: u32, h: u32) -> bool {
+        x1 >= x2 && y1 >= y2 && (x1 - x2) < w && (y1 - y2) < h
     }
 }
 
