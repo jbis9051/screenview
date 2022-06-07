@@ -88,7 +88,10 @@ use core_graphics::{
 use core_graphics_types::{base::CGFloat, geometry::CGPoint};
 use image::RgbImage;
 use libc::{c_void, pid_t};
-use objc::{runtime::BOOL, *};
+use objc::{
+    runtime::{BOOL, NO, YES},
+    *,
+};
 
 use crate::{
     api::*,
@@ -258,7 +261,7 @@ impl MacApi {
                 content.len() as NSUInteger,
             )
         };
-        if unsafe { NSPasteboard::setData_forType(paste_board, data, type_name) } {
+        if unsafe { NSPasteboard::setData_forType(paste_board, data, type_name) == YES } {
             return Ok(());
         }
         Err(ClipboardSetError("Generic".to_string()))
@@ -460,7 +463,7 @@ impl MacApi {
         let nspoint = unsafe { NSEvent::mouseLocation(nil) };
         let monitor = Self::monitors_impl()?
             .into_iter()
-            .find(|m| unsafe { NSMouseInRect(nspoint, m.rect, false) })
+            .find(|m| unsafe { NSMouseInRect(nspoint, m.rect, NO) } == YES)
             .ok_or(Error::MonitorNotFound)?;
 
         Ok(MacMousePosition {
@@ -544,6 +547,7 @@ impl MacApi {
         };
         if unsafe {
             NSRunningApplication::activateWithOptions_(app, NSApplicationActivateIgnoringOtherApps)
+                == YES
         } {
             Ok(())
         } else {
@@ -584,7 +588,7 @@ impl NativeApiTemplate for MacApi {
             .into_iter()
             .filter(|w| unsafe {
                 let nsrect: NSRect = std::mem::transmute(w.rect);
-                NSMouseInRect(normalized_position, nsrect, false)
+                NSMouseInRect(normalized_position, nsrect, NO) == YES
             })
             .collect();
 
