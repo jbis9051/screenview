@@ -158,7 +158,7 @@ pub(crate) mod dummy {
             unimplemented!()
         }
 
-        fn pointer_position(&mut self) -> Result<MousePosition, Self::Error> {
+        fn pointer_position(&mut self, _windows: &[WindowId]) -> Result<MousePosition, Self::Error> {
             unimplemented!()
         }
 
