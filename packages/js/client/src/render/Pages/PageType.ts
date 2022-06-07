@@ -3,5 +3,6 @@ enum PageType {
     Client = 'client',
     SignalHost = 'signal-host',
     DirectHost = 'direct-host',
+    MacOSPermission = 'macos-permission',
 }
 export default PageType;

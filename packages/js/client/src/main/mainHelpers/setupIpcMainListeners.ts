@@ -218,4 +218,18 @@ export default function setupIpcMainListeners(state: GlobalState) {
             await saveConfig(config);
         }
     );
+
+    ipcMain.handle(
+        RendererToMainIPCEvents.MacOSPPermission_Accessibility,
+        (event, prompt: boolean) => rust.macos_accessibility_permission(prompt)
+    );
+
+    ipcMain.handle(RendererToMainIPCEvents.MacOSPPermission_ScreenCapture, () =>
+        rust.macos_screen_capture_permission()
+    );
+
+    ipcMain.handle(
+        RendererToMainIPCEvents.MacOSPPermission_ScreenCapturePrompt,
+        () => rust.macos_screen_capture_permission_prompt()
+    );
 }

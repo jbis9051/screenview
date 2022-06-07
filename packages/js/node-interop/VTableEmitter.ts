@@ -40,7 +40,7 @@ export declare interface VTableEmitter extends EventEmitter {
 }
 
 export class VTableEmitter extends EventEmitter implements VTable {
-    emit(eventName: string | symbol, ...args): boolean {
+    emit(eventName: string | symbol, ...args: any[]): boolean {
         if (eventName !== 'event') {
             this.emit('event', eventName, ...args);
         }

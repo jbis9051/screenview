@@ -1,8 +1,10 @@
 use accessibility_sys::{
     kAXErrorSuccess,
     kAXRaiseAction,
+    kAXTrustedCheckOptionPrompt,
     kAXWindowsAttribute,
     AXError,
+    AXIsProcessTrustedWithOptions,
     AXUIElementCopyAttributeValue,
     AXUIElementCreateApplication,
     AXUIElementPerformAction,
@@ -17,6 +19,7 @@ use std::{
     slice::from_raw_parts,
 };
 
+use block::ConcreteBlock;
 use cocoa::{
     appkit::{
         NSApp,
@@ -43,7 +46,8 @@ use cocoa::{
     },
 };
 use core_foundation::{
-    base::{CFTypeRef, FromVoid, TCFType},
+    base::{CFTypeRef, FromMutVoid, FromVoid, TCFType, TCFTypeRef},
+    boolean::CFBoolean,
     number::{kCFNumberIntType, CFNumberGetValue, CFNumberRef},
     string::{CFString, CFStringRef},
 };
@@ -60,6 +64,7 @@ use core_graphics::{
         CFDictionaryGetValueIfPresent,
         CFDictionaryRef,
         CGDisplay,
+        CGMainDisplayID,
         CGRect,
         CGRectNull,
     },
@@ -128,6 +133,8 @@ unsafe impl Send for MacApi {} // TODO make it thread-safe
 extern "C" {
     fn NSMouseInRect(aPoint: NSPoint, aRect: NSRect, flipped: BOOL) -> BOOL;
     fn _AXUIElementGetWindow(element: AXUIElementRef, window_id: *mut CGWindowID) -> AXError;
+    fn CGPreflightScreenCaptureAccess() -> BOOL;
+    fn CGRequestScreenCaptureAccess() -> BOOL;
 }
 
 impl From<MacWindow> for Window {
@@ -360,7 +367,7 @@ impl MacApi {
             };
 
 
-            let mut owner_pid: *const c_void = std::ptr::null();
+            let mut owner_pid: *const c_void = ptr::null();
             if unsafe {
                 CFDictionaryGetValueIfPresent(
                     window,
@@ -559,6 +566,41 @@ impl MacApi {
         Self::activate_window(window)?;
         Self::focus_window(window)?;
         Ok(())
+    }
+
+    fn capture_monitor_frame_impl(monitor_id: MonitorId) -> Result<Frame, Error> {
+        let core_display = CGDisplay::new(monitor_id);
+        let frame = core_display
+            .image()
+            .ok_or_else(|| CaptureDisplayError(monitor_id.to_string()))?;
+        Self::cgimage_to_frame(&frame).map_err(|_| CaptureDisplayError(monitor_id.to_string()))
+    }
+
+    fn capture_window_frame_impl(window_id: WindowId) -> Result<Frame, Error> {
+        let image = CGDisplay::screenshot(
+            unsafe { CGRectNull },
+            kCGWindowListOptionIncludingWindow,
+            window_id,
+            kCGWindowImageBoundsIgnoreFraming,
+        )
+        .ok_or_else(|| CaptureDisplayError(window_id.to_string()))?;
+        Self::cgimage_to_frame(&image).map_err(|_| CaptureDisplayError(window_id.to_string()))
+    }
+
+    pub fn accessibility_permission(prompt: bool) -> bool {
+        let key =
+            unsafe { CFString::wrap_under_create_rule(kAXTrustedCheckOptionPrompt) }.as_CFType();
+        let value = CFBoolean::from(prompt).as_CFType();
+        let dict = CFDictionary::from_CFType_pairs(&[(key, value)]);
+        unsafe { AXIsProcessTrustedWithOptions(dict.as_concrete_TypeRef()) }
+    }
+
+    pub fn screen_capture_permission() -> bool {
+        unsafe { CGPreflightScreenCaptureAccess() == YES }
+    }
+
+    pub fn screen_capture_permission_prompt() -> bool {
+        unsafe { CGRequestScreenCaptureAccess() == YES }
     }
 }
 
@@ -795,22 +837,11 @@ impl NativeApiTemplate for MacApi {
     }
 
     fn capture_monitor_frame(&mut self, monitor_id: MonitorId) -> Result<Frame, Error> {
-        let core_display = CGDisplay::new(monitor_id);
-        let frame = core_display
-            .image()
-            .ok_or_else(|| CaptureDisplayError(monitor_id.to_string()))?;
-        Self::cgimage_to_frame(&frame).map_err(|_| CaptureDisplayError(monitor_id.to_string()))
+        Self::capture_monitor_frame_impl(monitor_id)
     }
 
     fn capture_window_frame(&mut self, window_id: WindowId) -> Result<Frame, Error> {
-        let image = CGDisplay::screenshot(
-            unsafe { CGRectNull },
-            kCGWindowListOptionIncludingWindow,
-            window_id,
-            kCGWindowImageBoundsIgnoreFraming,
-        )
-        .ok_or_else(|| CaptureDisplayError(window_id.to_string()))?;
-        Self::cgimage_to_frame(&image).map_err(|_| CaptureDisplayError(window_id.to_string()))
+        Self::capture_window_frame_impl(window_id)
     }
 }
 
