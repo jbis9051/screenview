@@ -4,3 +4,16 @@ version = "0.0.0"
 edition = "2021"
 
 [dependencies]
+
+[dependencies.tokio]
+version = "1.19.2"
+default-features = false
+features = [
+    "rt-multi-thread",
+    "net"
+]
+
+[profile.release]
+strip = "symbols"
+lto = "fat"
+opt-level = 3
