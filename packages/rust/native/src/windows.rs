@@ -97,19 +97,52 @@ impl NativeApiTemplate for WindowsApi {
     }
 
     fn monitors(&mut self) -> Result<Vec<Monitor>, Self::Error> {
-        let mut monitor_info = Vec::new();
-        unsafe {
-            if !EnumDisplayMonitors(
-                HDC::default(),
+        let mut monitor_info: Vec<HMONITOR> = Vec::new();
+
+        if !unsafe {
+            EnumDisplayMonitors(
+                std::ptr::null(),
                 std::ptr::null(),
                 Some(monitor_callback),
-                LPARAM(&mut monitor_info as *mut Vec<Monitor> as isize),
+                LPARAM(&mut monitor_info as *mut Vec<_> as isize),
             )
+        }
+        .as_bool()
+        {
+            return Err(Error::WindowsApiError);
+        }
+
+
+        monitor_vec.filter_map(|monitor_handle| {
+            // we use the a(nsi) version so we don't have to deal with converting unicode bytes to char
+            let mut monitor_info = MONITORINFOEXA::default();
+            monitor_info.monitorInfo.cbSize = std::mem::size_of::<MONITORINFOEXA>() as u32;
+
+            if !unsafe {
+                GetMonitorInfoA(
+                    monitor_handle,
+                    &mut monitor_info as *mut MONITORINFOEXA as *mut MONITORINFO,
+                )
+            }
             .as_bool()
             {
-                return Err(Error::WindowsApiError);
+                return None;
             }
-        }
+
+            let monitor_size = monitor_info.monitorInfo.rcMonitor;
+
+            Some(Monitor {
+                // we can just cast the bytes to char because we know its using ansi encoding
+                name: monitor_info
+                    .szDevice
+                    .iter()
+                    .map(|s| s.0 as char)
+                    .collect::<String>(),
+                height: (monitor_size.bottom - monitor_size.top) as u32,
+                width: (monitor_size.right - monitor_size.left) as u32,
+                id: 0,
+            })
+        });
 
         Ok(monitor_info)
     }
@@ -146,41 +179,13 @@ impl NativeApiTemplate for WindowsApi {
 
 unsafe extern "system" fn monitor_callback(
     monitor_handle: HMONITOR,
-    _: HDC,
-    _: *mut RECT,
+    hdc: HDC,
+    rect: *mut RECT,
     data_ptr: LPARAM,
 ) -> BOOL {
-    let monitor_vec = &mut *(data_ptr.0 as *mut Vec<Monitor>);
-
-    // we use the a(nsi) version so we don't have to deal with converting unicode bytes to char
-    let mut monitor_info = MONITORINFOEXA::default();
-    monitor_info.monitorInfo.cbSize = std::mem::size_of::<MONITORINFOEXA>() as u32;
-
-    if !GetMonitorInfoA(
-        monitor_handle,
-        &mut monitor_info as *mut MONITORINFOEXA as *mut MONITORINFO,
-    )
-    .as_bool()
-    {
-        // If we get an error we still continue enumerating, we just skip the current monitor
-        return BOOL(1);
-    }
-
-    let monitor_size = monitor_info.monitorInfo.rcMonitor;
-
-    monitor_vec.push(Monitor {
-        // we can just cast the bytes to char because we know its using ansi encoding
-        name: monitor_info
-            .szDevice
-            .iter()
-            .map(|s| s.0 as char)
-            .collect::<String>(),
-        height: (monitor_size.bottom - monitor_size.top) as u32,
-        width: (monitor_size.right - monitor_size.left) as u32,
-        id: 0,
-    });
-
-    BOOL(1)
+    let monitor_vec = &mut *(data_ptr.0 as *mut Vec<_>);
+    monitor_vec.push(monitor_handle);
+    true.into()
 }
 
 unsafe extern "system" fn window_callback(window_handle: HWND, data_ptr: LPARAM) -> BOOL {
