@@ -4,16 +4,35 @@ version = "0.0.0"
 edition = "2021"
 
 [dependencies]
+anyhow = "1.0.57"
+flate2 = "1.0.24"
+log = "0.4.17"
+log4rs = "1.1.1"
+once_cell = "1.12.0"
+termion = "1.5.6"
+
+[dependencies.ahash]
+version = "0.7.6"
+default-features = false
+
+[dependencies.ctrlc]
+version = "3.2.2"
+features = ["termination"]
+
+[dependencies.hashbrown]
+version = "0.12.1"
+default-features = false
+features = ["inline-more"]
+
+[dependencies.time]
+version = "0.3.9"
+features = ["local-offset", "formatting"]
 
 [dependencies.tokio]
 version = "1.19.2"
 default-features = false
 features = [
+    "net",
     "rt-multi-thread",
-    "net"
+    "sync"
 ]
-
-[profile.release]
-strip = "symbols"
-lto = "fat"
-opt-level = 3
