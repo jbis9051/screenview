@@ -8,11 +8,12 @@ if [ -f target/x86_64-pc-windows-gnu/debug/native_test.exe.sha1 ]; then
 fi
 new=$(shasum target/x86_64-pc-windows-gnu/debug/native_test.exe)
 if [ "$prev" = "$new" ]; then
-    echo "no change in native_test.exe"
+  echo "no change in native_test.exe"
 
 else
   echo "change detected"
-  echo "$new" > target/x86_64-pc-windows-gnu/debug/native_test.exe.sha1
-  scp -P 9000 target/x86_64-pc-windows-gnu/debug/native_test.exe josh@127.0.0.1:C:/Users/josh/Desktop/
+  scp -P 9000 target/x86_64-pc-windows-gnu/debug/native_test.exe josh@127.0.0.1:'C:\Users\josh\Desktop\'
+  echo "$new" >target/x86_64-pc-windows-gnu/debug/native_test.exe.sha1
 fi
+echo "running native_test.exe"
 ssh josh@127.0.0.1 -p 9000 "C:\Users\josh\Desktop\native_test.exe"

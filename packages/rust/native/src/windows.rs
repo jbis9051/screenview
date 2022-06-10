@@ -2,13 +2,19 @@
 
 use crate::api::*;
 use ::windows::{
-    core::PSTR,
+    core::{PCWSTR, PSTR},
     Win32::{
         Foundation::{BOOL, HANDLE, HWND, LPARAM, POINT, RECT},
         Graphics::Gdi::{
+            EnumDisplayDevicesW,
             EnumDisplayMonitors,
+            EnumDisplaySettingsExW,
             GetDC,
             GetMonitorInfoA,
+            DEVMODEW,
+            DISPLAY_DEVICEW,
+            DISPLAY_DEVICE_ACTIVE,
+            ENUM_CURRENT_SETTINGS,
             HDC,
             HMONITOR,
             MONITORINFO,
@@ -16,15 +22,30 @@ use ::windows::{
         },
         UI::WindowsAndMessaging::{
             EnumWindows,
+            GetClassNameW,
             GetCursorPos,
+            GetWindow,
             GetWindowInfo,
+            GetWindowLongW,
+            GetWindowRect,
             GetWindowTextA,
             GetWindowTextLengthA,
+            GetWindowTextLengthW,
             GetWindowTextW,
+            GetWindowThreadProcessId,
+            IsIconic,
+            IsWindowVisible,
+            GWL_EXSTYLE,
+            GW_OWNER,
             WINDOWINFO,
+            WS_EX_APPWINDOW,
         },
     },
 };
+use std::string::FromUtf16Error;
+
+const TRUE: BOOL = BOOL(1);
+const FALSE: BOOL = BOOL(0);
 
 pub struct WindowsApi;
 
@@ -32,6 +53,12 @@ impl WindowsApi {
     pub fn new() -> Result<Self, Error> {
         Ok(WindowsApi)
     }
+}
+
+fn compare_windows_str(a: &[u16], b: &str) -> bool {
+    a.iter()
+        .copied()
+        .eq(b.encode_utf16().chain(core::iter::once(0)))
 }
 
 impl NativeApiTemplate for WindowsApi {
@@ -96,59 +123,74 @@ impl NativeApiTemplate for WindowsApi {
         unimplemented!()
     }
 
+    /// Note: The device id returned by this method is not guaranteed to be consistant
     fn monitors(&mut self) -> Result<Vec<Monitor>, Self::Error> {
-        let mut monitor_info: Vec<HMONITOR> = Vec::new();
+        // https://github.com/mozilla/gecko-dev/blob/e1d59e5c596916b73257a2a7384fd4a2b88047e6/third_party/libwebrtc/modules/desktop_capture/win/screen_capture_utils.cc#L25
+        let mut devices = Vec::new();
 
-        if !unsafe {
-            EnumDisplayMonitors(
-                std::ptr::null(),
-                std::ptr::null(),
-                Some(monitor_callback),
-                LPARAM(&mut monitor_info as *mut Vec<_> as isize),
-            )
-        }
-        .as_bool()
         {
-            return Err(Error::WindowsApiError);
+            let mut device_index = 0;
+            let mut enum_result: BOOL = TRUE;
+            loop {
+                let mut device = DISPLAY_DEVICEW::default();
+                device.cb = std::mem::size_of::<DISPLAY_DEVICEW>() as u32;
+                enum_result = unsafe {
+                    EnumDisplayDevicesW(PCWSTR(std::ptr::null_mut()), device_index, &mut device, 0)
+                };
+
+                // |enum_result| is 0 if we have enumerated all devices.
+                if enum_result == FALSE {
+                    break;
+                }
+
+                // We only care about active displays.
+                if !((device.StateFlags & DISPLAY_DEVICE_ACTIVE) == 1) {
+                    device_index += 1;
+                    continue;
+                }
+
+                let mut device_mode = DEVMODEW::default();
+                device_mode.dmSize = std::mem::size_of::<DEVMODEW>() as u16;
+                device_mode.dmDriverExtra = 0;
+                let result = unsafe {
+                    EnumDisplaySettingsExW(
+                        PCWSTR(device.DeviceName.as_mut_ptr()),
+                        ENUM_CURRENT_SETTINGS,
+                        &mut device_mode,
+                        0,
+                    )
+                };
+                if result == FALSE {
+                    return Err(Error::WindowsApiError);
+                }
+
+                devices.push((device, device_mode, device_index));
+                device_index += 1;
+            }
         }
 
-
-        monitor_vec.filter_map(|monitor_handle| {
-            // we use the a(nsi) version so we don't have to deal with converting unicode bytes to char
-            let mut monitor_info = MONITORINFOEXA::default();
-            monitor_info.monitorInfo.cbSize = std::mem::size_of::<MONITORINFOEXA>() as u32;
-
-            if !unsafe {
-                GetMonitorInfoA(
-                    monitor_handle,
-                    &mut monitor_info as *mut MONITORINFOEXA as *mut MONITORINFO,
-                )
+        let mut monitors = Vec::new();
+        for (device, device_mode, device_index) in devices {
+            let name = match String::from_utf16(&device.DeviceName) {
+                Ok(s) => s,
+                Err(_) => continue,
             }
-            .as_bool()
-            {
-                return None;
-            }
+            .trim_end_matches('\0')
+            .to_string();
 
-            let monitor_size = monitor_info.monitorInfo.rcMonitor;
+            monitors.push(Monitor {
+                id: device_index,
+                name,
+                width: device_mode.dmPelsWidth,
+                height: device_mode.dmPelsHeight,
+            });
+        }
 
-            Some(Monitor {
-                // we can just cast the bytes to char because we know its using ansi encoding
-                name: monitor_info
-                    .szDevice
-                    .iter()
-                    .map(|s| s.0 as char)
-                    .collect::<String>(),
-                height: (monitor_size.bottom - monitor_size.top) as u32,
-                width: (monitor_size.right - monitor_size.left) as u32,
-                id: 0,
-            })
-        });
-
-        Ok(monitor_info)
+        return Ok(monitors);
     }
 
     fn windows(&mut self) -> Result<Vec<Window>, Self::Error> {
-        let mut window_info = Vec::<Window>::new();
+        let mut window_info = Vec::<HWND>::new();
 
         unsafe {
             if !EnumWindows(
@@ -163,7 +205,94 @@ impl NativeApiTemplate for WindowsApi {
 
         Ok(window_info
             .into_iter()
-            .filter(|w| w.width != 0 && w.height != 0 && w.name != "")
+            .filter_map(|handle| {
+                // Skip invisible and minimized windows
+                if unsafe { IsWindowVisible(handle) } == FALSE
+                    || unsafe { IsIconic(handle) } == TRUE
+                {
+                    return None;
+                }
+
+                // Skip windows which are not presented in the taskbar,
+                // namely owned window if they don't have the app window style set
+                let owner = unsafe { GetWindow(handle, GW_OWNER) };
+                let exstyle = unsafe { GetWindowLongW(handle, GWL_EXSTYLE) };
+                if owner.0 != 0 && !((exstyle & (WS_EX_APPWINDOW.0 as i32)) == 1) {
+                    return None;
+                }
+
+                // TODO consider skipping unresponsive windows
+
+                // GetWindowText* are potentially blocking operations if |hwnd| is
+                // owned by the current process. The APIs will send messages to the window's
+                // message loop, and if the message loop is waiting on this operation we will
+                // enter a deadlock.
+                // https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getwin
+                //
+                // To help consumers avoid this, there is a DesktopCaptureOption to ignore
+                // windows owned by the current process. Consumers should either ensure that
+                // the thread running their message loop never waits on this operation, or use
+                // the option to exclude these windows from the source list.
+                let mut process_id = 0;
+                unsafe { GetWindowThreadProcessId(handle, &mut process_id) };
+
+                if process_id == std::process::id() {
+                    return None;
+                }
+
+                const kTitleLength: usize = 500;
+                let mut window_title = [0u16; kTitleLength];
+                if unsafe { GetWindowTextLengthW(handle) } == 0
+                    || unsafe { GetWindowTextW(handle, &mut window_title) } == 0
+                {
+                    return None;
+                }
+
+                // Capture the window class name, to allow specific window classes to be
+                // skipped.
+                //
+                // https://docs.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-wndclassa
+                // says lpszClassName field in WNDCLASS is limited by 256 symbols, so we don't
+                // need to have a buffer bigger than that.
+                const kMaxClassNameLength: usize = 256;
+                let mut class_name = [0u16; kMaxClassNameLength];
+                let class_name_length = unsafe { GetClassNameW(handle, &mut class_name) };
+                if class_name_length < 1 {
+                    return None;
+                }
+
+                // Skip Program Manager window.
+                if compare_windows_str(&class_name, "Program") {
+                    return None;
+                }
+
+                // Skip Start button window on Windows Vista, Windows 7.
+                // On Windows 8, Windows 8.1, Windows 10 Start button is not a top level
+                // window, so it will not be examined here.
+                if compare_windows_str(&class_name, "Button") {
+                    return None;
+                }
+
+                let mut rect = RECT::default();
+                if unsafe { GetWindowRect(handle, &mut rect) } == FALSE {
+                    return None;
+                }
+
+                // TODO more checks "IsWindowVisibleOnCurrentDesktop"
+                let name = match String::from_utf16(&window_title) {
+                    Ok(s) => s,
+                    Err(_) => return None,
+                }
+                .trim_end_matches('\0')
+                .to_string();
+
+                return Some(Window {
+                    id: handle.0 as u32,
+                    name,
+                    width: (rect.right - rect.left) as u32,
+                    height: (rect.bottom - rect.top) as u32,
+                });
+            })
             .collect())
     }
 
@@ -176,45 +305,11 @@ impl NativeApiTemplate for WindowsApi {
     }
 }
 
-
-unsafe extern "system" fn monitor_callback(
-    monitor_handle: HMONITOR,
-    hdc: HDC,
-    rect: *mut RECT,
-    data_ptr: LPARAM,
-) -> BOOL {
-    let monitor_vec = &mut *(data_ptr.0 as *mut Vec<_>);
-    monitor_vec.push(monitor_handle);
-    true.into()
-}
-
 unsafe extern "system" fn window_callback(window_handle: HWND, data_ptr: LPARAM) -> BOOL {
-    let window_vec = &mut *(data_ptr.0 as *mut Vec<Window>);
+    let window_vec = &mut *(data_ptr.0 as *mut Vec<_>);
+    window_vec.push(window_handle);
 
-    let mut window_info = WINDOWINFO::default();
-    window_info.cbSize = std::mem::size_of::<WINDOWINFO>() as u32;
-
-    if !GetWindowInfo(window_handle, &mut window_info as *mut _).as_bool() {
-        return BOOL(1);
-    }
-
-    let dialog_len = GetWindowTextLengthA(window_handle) + 1;
-    let mut str_bytes = vec![0_u8; dialog_len as usize];
-    GetWindowTextA(window_handle, &mut str_bytes);
-
-    let window_size = window_info.rcWindow;
-
-    window_vec.push(Window {
-        id: 0,
-        name: str_bytes[.. str_bytes.len().saturating_sub(1)]
-            .iter()
-            .map(|b| *b as char)
-            .collect(),
-        width: (window_size.bottom - window_size.top) as u32,
-        height: (window_size.right - window_size.left) as u32,
-    });
-
-    BOOL(1)
+    TRUE
 }
 
 #[derive(thiserror::Error, Debug)]
