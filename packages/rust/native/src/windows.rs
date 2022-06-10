@@ -47,11 +47,79 @@ use std::string::FromUtf16Error;
 const TRUE: BOOL = BOOL(1);
 const FALSE: BOOL = BOOL(0);
 
+struct WindowsMonitor {
+    device: DISPLAY_DEVICEW,
+    device_mode: DEVMODEW,
+    device_index: u32,
+    name: String,
+}
+
 pub struct WindowsApi;
 
 impl WindowsApi {
     pub fn new() -> Result<Self, Error> {
         Ok(WindowsApi)
+    }
+
+    fn monitors_impl(&self) -> Result<Vec<WindowsMonitor>, Error> {
+        // https://github.com/mozilla/gecko-dev/blob/e1d59e5c596916b73257a2a7384fd4a2b88047e6/third_party/libwebrtc/modules/desktop_capture/win/screen_capture_utils.cc#L25
+        let mut devices = Vec::new();
+
+        let mut device_index = 0;
+        let mut enum_result: BOOL = TRUE;
+        loop {
+            let mut device = DISPLAY_DEVICEW::default();
+            device.cb = std::mem::size_of::<DISPLAY_DEVICEW>() as u32;
+            enum_result = unsafe {
+                EnumDisplayDevicesW(PCWSTR(std::ptr::null_mut()), device_index, &mut device, 0)
+            };
+
+            // |enum_result| is 0 if we have enumerated all devices.
+            if enum_result == FALSE {
+                break;
+            }
+
+            // We only care about active displays.
+            if !((device.StateFlags & DISPLAY_DEVICE_ACTIVE) == 1) {
+                device_index += 1;
+                continue;
+            }
+
+            let mut device_mode = DEVMODEW::default();
+            device_mode.dmSize = std::mem::size_of::<DEVMODEW>() as u16;
+            device_mode.dmDriverExtra = 0;
+            let result = unsafe {
+                EnumDisplaySettingsExW(
+                    PCWSTR(device.DeviceName.as_ptr()),
+                    ENUM_CURRENT_SETTINGS,
+                    &mut device_mode,
+                    0,
+                )
+            };
+            if result == FALSE {
+                return Err(Error::WindowsApiError("EnumDisplaySettingsExW".to_string()));
+            }
+            let name = match String::from_utf16(&device.DeviceName) {
+                Ok(s) => s,
+                Err(_) => {
+                    device_index += 1;
+                    continue;
+                }
+            }
+            .trim_end_matches('\0')
+            .to_string();
+
+            devices.push(WindowsMonitor {
+                device,
+                device_mode,
+                device_index,
+                name,
+            });
+
+            device_index += 1;
+        }
+
+        Ok(devices)
     }
 }
 
@@ -68,17 +136,58 @@ impl NativeApiTemplate for WindowsApi {
         unimplemented!()
     }
 
-    fn pointer_position(&mut self) -> Result<MousePosition, Self::Error> {
+    fn pointer_position(&mut self, windows: &[WindowId]) -> Result<MousePosition, Self::Error> {
         let mut point = POINT { x: 0, y: 0 };
-        unsafe { GetCursorPos(&mut point) }
-            .as_bool()
-            .then(|| MousePosition {
-                x: point.x as u32,
-                y: point.y as u32,
-                monitor_id: 0,
-                window_relatives: vec![],
+        if unsafe { GetCursorPos(&mut point) } == FALSE {
+            return Err(Error::WindowsApiError("GetCursorPos".to_string()));
+        }
+
+        let monitor = self.monitors_impl()?.into_iter().find(|monitor| {
+            let position = unsafe { monitor.device_mode.Anonymous1.Anonymous2.dmPosition };
+            if point.x < position.x || point.x > position.x + monitor.device_mode.dmPelsWidth as i32
+            {
+                return false;
+            }
+            if point.y < position.y
+                || point.y > position.y + monitor.device_mode.dmPelsHeight as i32
+            {
+                return false;
+            }
+            true
+        });
+
+        let monitor = monitor.ok_or(Error::WindowsApiError(
+            "logical error pointer not on monitor".to_string(),
+        ))?;
+
+        let window_relatives = windows
+            .into_iter()
+            .filter_map(|w| {
+                let mut rect = RECT::default();
+                if unsafe { GetWindowRect(HWND(*w as isize), &mut rect) } == FALSE {
+                    return None;
+                }
+                if point.x < rect.left || point.x > rect.right {
+                    return None;
+                }
+                if point.y < rect.top || point.y > rect.bottom {
+                    return None;
+                }
+                Some(PointerPositionRelative {
+                    x: (point.x - rect.left) as u32,
+                    y: (point.y - rect.top) as u32,
+                    window_id: *w,
+                })
             })
-            .ok_or(Error::WindowsApiError)
+            .collect();
+
+
+        Ok(MousePosition {
+            x: point.x as u32,
+            y: point.y as u32,
+            monitor_id: monitor.device_index,
+            window_relatives,
+        })
     }
 
     fn set_pointer_position_absolute(
@@ -125,68 +234,16 @@ impl NativeApiTemplate for WindowsApi {
 
     /// Note: The device id returned by this method is not guaranteed to be consistant
     fn monitors(&mut self) -> Result<Vec<Monitor>, Self::Error> {
-        // https://github.com/mozilla/gecko-dev/blob/e1d59e5c596916b73257a2a7384fd4a2b88047e6/third_party/libwebrtc/modules/desktop_capture/win/screen_capture_utils.cc#L25
-        let mut devices = Vec::new();
-
-        {
-            let mut device_index = 0;
-            let mut enum_result: BOOL = TRUE;
-            loop {
-                let mut device = DISPLAY_DEVICEW::default();
-                device.cb = std::mem::size_of::<DISPLAY_DEVICEW>() as u32;
-                enum_result = unsafe {
-                    EnumDisplayDevicesW(PCWSTR(std::ptr::null_mut()), device_index, &mut device, 0)
-                };
-
-                // |enum_result| is 0 if we have enumerated all devices.
-                if enum_result == FALSE {
-                    break;
-                }
-
-                // We only care about active displays.
-                if !((device.StateFlags & DISPLAY_DEVICE_ACTIVE) == 1) {
-                    device_index += 1;
-                    continue;
-                }
-
-                let mut device_mode = DEVMODEW::default();
-                device_mode.dmSize = std::mem::size_of::<DEVMODEW>() as u16;
-                device_mode.dmDriverExtra = 0;
-                let result = unsafe {
-                    EnumDisplaySettingsExW(
-                        PCWSTR(device.DeviceName.as_mut_ptr()),
-                        ENUM_CURRENT_SETTINGS,
-                        &mut device_mode,
-                        0,
-                    )
-                };
-                if result == FALSE {
-                    return Err(Error::WindowsApiError);
-                }
-
-                devices.push((device, device_mode, device_index));
-                device_index += 1;
-            }
-        }
-
-        let mut monitors = Vec::new();
-        for (device, device_mode, device_index) in devices {
-            let name = match String::from_utf16(&device.DeviceName) {
-                Ok(s) => s,
-                Err(_) => continue,
-            }
-            .trim_end_matches('\0')
-            .to_string();
-
-            monitors.push(Monitor {
-                id: device_index,
-                name,
-                width: device_mode.dmPelsWidth,
-                height: device_mode.dmPelsHeight,
-            });
-        }
-
-        return Ok(monitors);
+        Ok(self
+            .monitors_impl()?
+            .into_iter()
+            .map(|m| Monitor {
+                id: m.device_index,
+                name: m.name,
+                width: m.device_mode.dmPelsWidth,
+                height: m.device_mode.dmPelsHeight,
+            })
+            .collect())
     }
 
     fn windows(&mut self) -> Result<Vec<Window>, Self::Error> {
@@ -199,7 +256,7 @@ impl NativeApiTemplate for WindowsApi {
             )
             .as_bool()
             {
-                return Err(Error::WindowsApiError);
+                return Err(Error::WindowsApiError("EnumWindows".to_string()));
             }
         }
 
@@ -314,6 +371,6 @@ unsafe extern "system" fn window_callback(window_handle: HWND, data_ptr: LPARAM)
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("windows api error occured")]
-    WindowsApiError,
+    #[error("windows api error occured when calling {0}")]
+    WindowsApiError(String),
 }
