@@ -16,4 +16,4 @@ else
   echo "$new" >target/x86_64-pc-windows-gnu/debug/native_test.exe.sha1
 fi
 echo "running native_test.exe"
-ssh josh@127.0.0.1 -p 9000 "C:\Users\josh\Desktop\native_test.exe"
+#ssh josh@127.0.0.1 -p 9000 "C:\Users\josh\Desktop\native_test.exe"

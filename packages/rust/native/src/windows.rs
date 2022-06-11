@@ -20,29 +20,42 @@ use ::windows::{
             MONITORINFO,
             MONITORINFOEXA,
         },
-        UI::WindowsAndMessaging::{
-            EnumWindows,
-            GetClassNameW,
-            GetCursorPos,
-            GetWindow,
-            GetWindowInfo,
-            GetWindowLongW,
-            GetWindowRect,
-            GetWindowTextA,
-            GetWindowTextLengthA,
-            GetWindowTextLengthW,
-            GetWindowTextW,
-            GetWindowThreadProcessId,
-            IsIconic,
-            IsWindowVisible,
-            GWL_EXSTYLE,
-            GW_OWNER,
-            WINDOWINFO,
-            WS_EX_APPWINDOW,
+        UI::{
+            Input::KeyboardAndMouse::{
+                SendInput,
+                INPUT,
+                INPUT_MOUSE,
+                MOUSEEVENTF_ABSOLUTE,
+                MOUSEEVENTF_MOVE,
+                MOUSEEVENTF_VIRTUALDESK,
+            },
+            WindowsAndMessaging::{
+                EnumWindows,
+                GetClassNameW,
+                GetCursorPos,
+                GetSystemMetrics,
+                GetWindow,
+                GetWindowInfo,
+                GetWindowLongW,
+                GetWindowRect,
+                GetWindowTextA,
+                GetWindowTextLengthA,
+                GetWindowTextLengthW,
+                GetWindowTextW,
+                GetWindowThreadProcessId,
+                IsIconic,
+                IsWindowVisible,
+                GWL_EXSTYLE,
+                GW_OWNER,
+                SM_CXVIRTUALSCREEN,
+                SM_CYVIRTUALSCREEN,
+                WINDOWINFO,
+                WS_EX_APPWINDOW,
+            },
         },
     },
 };
-use std::string::FromUtf16Error;
+use std::{collections::HashMap, string::FromUtf16Error};
 
 const TRUE: BOOL = BOOL(1);
 const FALSE: BOOL = BOOL(0);
@@ -54,14 +67,24 @@ struct WindowsMonitor {
     name: String,
 }
 
-pub struct WindowsApi;
+struct WindowsWindow {
+    handle: HWND,
+    name: String,
+    rect: RECT,
+}
+
+pub struct WindowsApi {
+    monitors_key_cache: Vec<[u16; 128]>,
+}
 
 impl WindowsApi {
     pub fn new() -> Result<Self, Error> {
-        Ok(WindowsApi)
+        Ok(WindowsApi {
+            monitors_key_cache: Vec::new(),
+        })
     }
 
-    fn monitors_impl(&self) -> Result<Vec<WindowsMonitor>, Error> {
+    fn monitors_impl(&mut self) -> Result<Vec<WindowsMonitor>, Error> {
         // https://github.com/mozilla/gecko-dev/blob/e1d59e5c596916b73257a2a7384fd4a2b88047e6/third_party/libwebrtc/modules/desktop_capture/win/screen_capture_utils.cc#L25
         let mut devices = Vec::new();
 
@@ -119,134 +142,12 @@ impl WindowsApi {
             device_index += 1;
         }
 
+        self.monitors_key_cache = devices.iter().map(|m| m.device.DeviceKey).collect();
+
         Ok(devices)
     }
-}
 
-fn compare_windows_str(a: &[u16], b: &str) -> bool {
-    a.iter()
-        .copied()
-        .eq(b.encode_utf16().chain(core::iter::once(0)))
-}
-
-impl NativeApiTemplate for WindowsApi {
-    type Error = Error;
-
-    fn key_toggle(&mut self, _key: Key, _down: bool) -> Result<(), Self::Error> {
-        unimplemented!()
-    }
-
-    fn pointer_position(&mut self, windows: &[WindowId]) -> Result<MousePosition, Self::Error> {
-        let mut point = POINT { x: 0, y: 0 };
-        if unsafe { GetCursorPos(&mut point) } == FALSE {
-            return Err(Error::WindowsApiError("GetCursorPos".to_string()));
-        }
-
-        let monitor = self.monitors_impl()?.into_iter().find(|monitor| {
-            let position = unsafe { monitor.device_mode.Anonymous1.Anonymous2.dmPosition };
-            if point.x < position.x || point.x > position.x + monitor.device_mode.dmPelsWidth as i32
-            {
-                return false;
-            }
-            if point.y < position.y
-                || point.y > position.y + monitor.device_mode.dmPelsHeight as i32
-            {
-                return false;
-            }
-            true
-        });
-
-        let monitor = monitor.ok_or(Error::WindowsApiError(
-            "logical error pointer not on monitor".to_string(),
-        ))?;
-
-        let window_relatives = windows
-            .into_iter()
-            .filter_map(|w| {
-                let mut rect = RECT::default();
-                if unsafe { GetWindowRect(HWND(*w as isize), &mut rect) } == FALSE {
-                    return None;
-                }
-                if point.x < rect.left || point.x > rect.right {
-                    return None;
-                }
-                if point.y < rect.top || point.y > rect.bottom {
-                    return None;
-                }
-                Some(PointerPositionRelative {
-                    x: (point.x - rect.left) as u32,
-                    y: (point.y - rect.top) as u32,
-                    window_id: *w,
-                })
-            })
-            .collect();
-
-
-        Ok(MousePosition {
-            x: point.x as u32,
-            y: point.y as u32,
-            monitor_id: monitor.device_index,
-            window_relatives,
-        })
-    }
-
-    fn set_pointer_position_absolute(
-        &mut self,
-        _x: u32,
-        _y: u32,
-        _monitor_id: MonitorId,
-    ) -> Result<(), Self::Error> {
-        unimplemented!()
-    }
-
-    fn set_pointer_position_relative(
-        &mut self,
-        _x: u32,
-        _y: u32,
-        _window_id: WindowId,
-    ) -> Result<(), Self::Error> {
-        unimplemented!()
-    }
-
-    fn toggle_mouse(
-        &mut self,
-        _button: MouseButton,
-        _down: bool,
-        _window_id: Option<WindowId>,
-    ) -> Result<(), Self::Error> {
-        unimplemented!()
-    }
-
-    fn clipboard_content(
-        &mut self,
-        _type_name: &ClipboardType,
-    ) -> Result<Option<Vec<u8>>, Self::Error> {
-        unimplemented!()
-    }
-
-    fn set_clipboard_content(
-        &mut self,
-        _type_name: &ClipboardType,
-        _content: &[u8],
-    ) -> Result<(), Self::Error> {
-        unimplemented!()
-    }
-
-    /// Note: The device id returned by this method is not guaranteed to be consistant
-    fn monitors(&mut self) -> Result<Vec<Monitor>, Self::Error> {
-        Ok(self
-            .monitors_impl()?
-            .into_iter()
-            .map(|m| Monitor {
-                id: m.device_index,
-                name: m.name,
-                width: m.device_mode.dmPelsWidth,
-                height: m.device_mode.dmPelsHeight,
-            })
-            .collect())
-    }
-
-    fn windows(&mut self) -> Result<Vec<Window>, Self::Error> {
+    fn windows_impl(&mut self) -> Result<Vec<WindowsWindow>, Error> {
         let mut window_info = Vec::<HWND>::new();
 
         unsafe {
@@ -343,12 +244,196 @@ impl NativeApiTemplate for WindowsApi {
                 .trim_end_matches('\0')
                 .to_string();
 
-                return Some(Window {
-                    id: handle.0 as u32,
-                    name,
-                    width: (rect.right - rect.left) as u32,
-                    height: (rect.bottom - rect.top) as u32,
-                });
+                Some(WindowsWindow { handle, name, rect })
+            })
+            .collect())
+    }
+
+    #[inline]
+    fn mouse_coord_to_abs(coord: i32, width_or_height: i32) -> i32 {
+        (65536 * (coord) / width_or_height) + (if coord < 0 { -1 } else { 1 })
+    }
+
+    fn set_pointer_absolute_impl(&self, x: i32, y: i32) -> Result<(), Error> {
+        let virtual_width = unsafe { GetSystemMetrics(SM_CXVIRTUALSCREEN) };
+        let virtual_height = unsafe { GetSystemMetrics(SM_CYVIRTUALSCREEN) };
+        let absolute_x = Self::mouse_coord_to_abs(x, virtual_width);
+        let absolute_y = Self::mouse_coord_to_abs(y, virtual_height);
+
+        let mut input = INPUT::default();
+        input.r#type = INPUT_MOUSE;
+        input.Anonymous.mi.dx = absolute_x;
+        input.Anonymous.mi.dy = absolute_y;
+        input.Anonymous.mi.dwFlags =
+            MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_MOVE | MOUSEEVENTF_VIRTUALDESK;
+
+        unsafe {
+            SendInput(&[input], std::mem::size_of::<INPUT>() as i32);
+        };
+
+        Ok(())
+    }
+}
+
+fn compare_windows_str(a: &[u16], b: &str) -> bool {
+    a.iter()
+        .copied()
+        .eq(b.encode_utf16().chain(core::iter::once(0)))
+}
+
+impl NativeApiTemplate for WindowsApi {
+    type Error = Error;
+
+    fn key_toggle(&mut self, _key: Key, _down: bool) -> Result<(), Self::Error> {
+        unimplemented!()
+    }
+
+    fn pointer_position(&mut self, windows: &[WindowId]) -> Result<MousePosition, Self::Error> {
+        let mut point = POINT { x: 0, y: 0 };
+        if unsafe { GetCursorPos(&mut point) } == FALSE {
+            return Err(Error::WindowsApiError("GetCursorPos".to_string()));
+        }
+
+        let monitor = self.monitors_impl()?.into_iter().find(|monitor| {
+            let position = unsafe { monitor.device_mode.Anonymous1.Anonymous2.dmPosition };
+            if point.x < position.x || point.x > position.x + monitor.device_mode.dmPelsWidth as i32
+            {
+                return false;
+            }
+            if point.y < position.y
+                || point.y > position.y + monitor.device_mode.dmPelsHeight as i32
+            {
+                return false;
+            }
+            true
+        });
+
+        let monitor = monitor.ok_or(Error::WindowsApiError(
+            "logical error pointer not on monitor".to_string(),
+        ))?; // TODO should be different error type
+
+        let window_relatives = windows
+            .into_iter()
+            .filter_map(|w| {
+                let mut rect = RECT::default();
+                if unsafe { GetWindowRect(HWND(*w as isize), &mut rect) } == FALSE {
+                    return None;
+                }
+                if point.x < rect.left || point.x > rect.right {
+                    return None;
+                }
+                if point.y < rect.top || point.y > rect.bottom {
+                    return None;
+                }
+                Some(PointerPositionRelative {
+                    x: (point.x - rect.left) as u32,
+                    y: (point.y - rect.top) as u32,
+                    window_id: *w,
+                })
+            })
+            .collect();
+
+
+        Ok(MousePosition {
+            x: point.x as u32,
+            y: point.y as u32,
+            monitor_id: monitor.device_index,
+            window_relatives,
+        })
+    }
+
+    fn set_pointer_position_absolute(
+        &mut self,
+        x: u32,
+        y: u32,
+        monitor_id: MonitorId,
+    ) -> Result<(), Self::Error> {
+        let monitors = self.monitors_impl()?;
+        let monitor = monitors
+            .get(monitor_id as usize)
+            .ok_or(Error::MonitorNotFound)?;
+
+        let monitor_key = self
+            .monitors_key_cache
+            .get(monitor_id as usize)
+            .ok_or(Error::MonitorNotFound)?;
+
+        // Verifies the device index still maps to the same display device, to make
+        // sure we are referencing the same device when devices are added or removed.
+        // DeviceKey is documented as reserved, but it actually contains the registry
+        // key for the device and is unique for each monitor, while DeviceID is not.
+        if monitor_key != &monitor.device.DeviceKey {
+            return Err(Error::MonitorNotFound);
+        }
+        let position = unsafe { monitor.device_mode.Anonymous1.Anonymous2.dmPosition };
+
+        self.set_pointer_absolute_impl(x as i32 + position.x, y as i32 + position.y)
+    }
+
+    fn set_pointer_position_relative(
+        &mut self,
+        x: u32,
+        y: u32,
+        window_id: WindowId,
+    ) -> Result<(), Self::Error> {
+        let windows = self
+            .windows_impl()?
+            .into_iter()
+            .find(|w| w.handle.0 == window_id as isize)
+            .ok_or(Error::WindowNotFound)?;
+        let absolute_x = windows.rect.left + x as i32;
+        let absolute_y = windows.rect.top + y as i32;
+        self.set_pointer_absolute_impl(absolute_x, absolute_y)
+    }
+
+    fn toggle_mouse(
+        &mut self,
+        _button: MouseButton,
+        _down: bool,
+        _window_id: Option<WindowId>,
+    ) -> Result<(), Self::Error> {
+        unimplemented!()
+    }
+
+    fn clipboard_content(
+        &mut self,
+        _type_name: &ClipboardType,
+    ) -> Result<Option<Vec<u8>>, Self::Error> {
+        unimplemented!()
+    }
+
+    fn set_clipboard_content(
+        &mut self,
+        _type_name: &ClipboardType,
+        _content: &[u8],
+    ) -> Result<(), Self::Error> {
+        unimplemented!()
+    }
+
+    /// Note: The device id returned by this method is not guaranteed to be consistant
+    fn monitors(&mut self) -> Result<Vec<Monitor>, Self::Error> {
+        Ok(self
+            .monitors_impl()?
+            .into_iter()
+            .map(|m| Monitor {
+                id: m.device_index,
+                name: m.name,
+                width: m.device_mode.dmPelsWidth,
+                height: m.device_mode.dmPelsHeight,
+            })
+            .collect())
+    }
+
+    fn windows(&mut self) -> Result<Vec<Window>, Self::Error> {
+        let mut window_info = self.windows_impl()?;
+
+        Ok(window_info
+            .into_iter()
+            .map(|ww| Window {
+                id: ww.handle.0 as u32,
+                name: ww.name,
+                width: (ww.rect.right - ww.rect.left) as u32,
+                height: (ww.rect.bottom - ww.rect.top) as u32,
             })
             .collect())
     }
@@ -373,4 +458,8 @@ unsafe extern "system" fn window_callback(window_handle: HWND, data_ptr: LPARAM)
 pub enum Error {
     #[error("windows api error occured when calling {0}")]
     WindowsApiError(String),
+    #[error("monitor not found")]
+    MonitorNotFound,
+    #[error("window not found")]
+    WindowNotFound,
 }
