@@ -20,6 +20,11 @@ use ::windows::{
             MONITORINFO,
             MONITORINFOEXA,
         },
+        System::{
+            DataExchange::{CloseClipboard, GetClipboardData, OpenClipboard},
+            Memory::{GlobalLock, GlobalUnlock},
+            SystemServices::{CF_UNICODETEXT, CLIPBOARD_FORMATS},
+        },
         UI::{
             Input::KeyboardAndMouse::{
                 SendInput,
@@ -56,6 +61,11 @@ use ::windows::{
     },
 };
 use std::{collections::HashMap, string::FromUtf16Error};
+use windows::Win32::System::{
+    DataExchange::{EmptyClipboard, SetClipboardData},
+    Memory::{GlobalAlloc, GMEM_MOVEABLE},
+    SystemServices::CF_TEXT,
+};
 
 const TRUE: BOOL = BOOL(1);
 const FALSE: BOOL = BOOL(0);
@@ -82,6 +92,13 @@ impl WindowsApi {
         Ok(WindowsApi {
             monitors_key_cache: Vec::new(),
         })
+    }
+
+    fn clipboard_map(format: &ClipboardType) -> CLIPBOARD_FORMATS {
+        match format {
+            ClipboardType::Text => CF_TEXT,
+            _ => panic!("unsupported clipboard type"),
+        }
     }
 
     fn monitors_impl(&mut self) -> Result<Vec<WindowsMonitor>, Error> {
@@ -273,6 +290,20 @@ impl WindowsApi {
 
         Ok(())
     }
+
+    fn open_clipboard() -> Result<(), Error> {
+        let mut clipboard = FALSE;
+        for _ in 0 .. 5 {
+            clipboard = unsafe { OpenClipboard(HWND::default()) };
+            if clipboard == TRUE {
+                break;
+            }
+        }
+        if clipboard == FALSE {
+            return Err(Error::UnableToOpenClipboard);
+        }
+        Ok(())
+    }
 }
 
 fn compare_windows_str(a: &[u16], b: &str) -> bool {
@@ -397,17 +428,91 @@ impl NativeApiTemplate for WindowsApi {
 
     fn clipboard_content(
         &mut self,
-        _type_name: &ClipboardType,
+        type_name: &ClipboardType,
     ) -> Result<Option<Vec<u8>>, Self::Error> {
-        unimplemented!()
+        if let ClipboardType::Custom(_) = type_name {
+            return Ok(None);
+        }
+
+        let windows_type = Self::clipboard_map(type_name);
+
+        Self::open_clipboard()?;
+
+        let mut handle = unsafe { GetClipboardData(windows_type.0) }
+            .map_err(|_| Error::WindowsApiError("GetClipboardData".to_string()))?;
+        if handle.is_invalid() {
+            return Ok(None);
+        }
+        let mut str = unsafe { GlobalLock(handle.0) } as *mut u8;
+
+        if str.is_null() {
+            return Ok(Some(Vec::new()));
+        }
+
+        // TODO: add a better way of reading data from clipboard
+        let mut output = Vec::new();
+
+        // we know text will be null terminated
+        let mut char = unsafe { *str };
+        while char != 0 {
+            output.push(char);
+            str = unsafe { str.add(1) };
+            char = unsafe { *str };
+        }
+
+        unsafe {
+            GlobalUnlock(handle.0);
+            CloseClipboard();
+        }
+
+
+        Ok(Some(output))
     }
 
     fn set_clipboard_content(
         &mut self,
-        _type_name: &ClipboardType,
-        _content: &[u8],
+        type_name: &ClipboardType,
+        content: &[u8],
     ) -> Result<(), Self::Error> {
-        unimplemented!()
+        if let ClipboardType::Custom(_) = type_name {
+            // windows doesn't support custom clipboard types by string
+            return Ok(());
+        }
+
+        let windows_type = Self::clipboard_map(type_name);
+
+        Self::open_clipboard()?;
+        fn close_clipboard() {
+            unsafe {
+                CloseClipboard();
+            }
+        }
+        unsafe {
+            EmptyClipboard();
+        }
+        let alloc = unsafe { GlobalAlloc(GMEM_MOVEABLE, content.len()) } as *const u8;
+        if alloc.is_null() {
+            close_clipboard();
+            return Err(Error::WindowsApiError("GlobalAlloc".to_string()));
+        }
+        let mut ptr = unsafe { GlobalLock(alloc as isize) } as *mut u8;
+        unsafe {
+            ptr.copy_from_nonoverlapping(content.as_ptr(), content.len());
+        }
+        unsafe {
+            GlobalUnlock(alloc as isize);
+        }
+        let handle = unsafe { SetClipboardData(windows_type.0, HANDLE(alloc as isize)) };
+        close_clipboard();
+        match handle {
+            Ok(h) =>
+                if h.is_invalid() {
+                    Err(Error::WindowsApiError("SetClipboardData".to_string()))
+                } else {
+                    Ok(())
+                },
+            Err(_) => Err(Error::WindowsApiError("SetClipboardData".to_string())),
+        }
     }
 
     /// Note: The device id returned by this method is not guaranteed to be consistant
@@ -462,4 +567,6 @@ pub enum Error {
     MonitorNotFound,
     #[error("window not found")]
     WindowNotFound,
+    #[error("unable to open clipboard")]
+    UnableToOpenClipboard,
 }
