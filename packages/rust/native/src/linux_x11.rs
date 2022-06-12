@@ -9,7 +9,7 @@ use std::{
     time::Duration,
 };
 use x11::{
-    xlib::{XDefaultRootWindow, XKeysymToKeycode, XOpenDisplay, XSync},
+    xlib::{XDefaultRootWindow, XKeysymToKeycode, XOpenDisplay, XRaiseWindow, XSync},
     xtest::{XTestFakeButtonEvent, XTestFakeKeyEvent},
 };
 use x11_clipboard::{error::Error as X11ClipboardError, Clipboard};
@@ -242,11 +242,15 @@ impl NativeApiTemplate for X11Api {
         &mut self,
         button: MouseButton,
         down: bool,
-        _window_id: Option<WindowId>,
+        window_id: Option<WindowId>,
     ) -> Result<(), Error> {
         let dpy = self.conn.get_raw_dpy();
 
         unsafe {
+            if let Some(window) = window_id {
+                XRaiseWindow(dpy, window as u64);
+            }
+
             XTestFakeButtonEvent(dpy, button.id(), if down { 1 } else { 0 }, 0);
             XSync(dpy, 0);
         }
