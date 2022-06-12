@@ -61,10 +61,28 @@ use ::windows::{
     },
 };
 use std::{collections::HashMap, string::FromUtf16Error};
-use windows::Win32::System::{
-    DataExchange::{EmptyClipboard, SetClipboardData},
-    Memory::{GlobalAlloc, GMEM_MOVEABLE},
-    SystemServices::CF_TEXT,
+use windows::Win32::{
+    System::{
+        DataExchange::{EmptyClipboard, SetClipboardData},
+        Memory::{GlobalAlloc, GMEM_MOVEABLE},
+        SystemServices::CF_TEXT,
+    },
+    UI::{
+        Input::KeyboardAndMouse::{
+            SetActiveWindow,
+            MOUSEEVENTF_HWHEEL,
+            MOUSEEVENTF_LEFTDOWN,
+            MOUSEEVENTF_LEFTUP,
+            MOUSEEVENTF_MIDDLEDOWN,
+            MOUSEEVENTF_MIDDLEUP,
+            MOUSEEVENTF_RIGHTDOWN,
+            MOUSEEVENTF_RIGHTUP,
+            MOUSEEVENTF_WHEEL,
+            MOUSEEVENTF_XDOWN,
+            MOUSEEVENTF_XUP,
+        },
+        WindowsAndMessaging::{SetForegroundWindow, WHEEL_DELTA, XBUTTON1, XBUTTON2},
+    },
 };
 
 const TRUE: BOOL = BOOL(1);
@@ -419,11 +437,65 @@ impl NativeApiTemplate for WindowsApi {
 
     fn toggle_mouse(
         &mut self,
-        _button: MouseButton,
-        _down: bool,
-        _window_id: Option<WindowId>,
+        button: MouseButton,
+        down: bool,
+        window_id: Option<WindowId>,
     ) -> Result<(), Self::Error> {
-        unimplemented!()
+        if let Some(window_id) = window_id {
+            // Windows does not allow us to bring any window to the foreground. There are many
+            // restrictions and in most cases, we aren't allowed to. If this fails we click anyway
+            // and hope for the best.
+            // A possible TODO would be to, if this fails, check if the window is visible where the mouse is and if not return
+            // More info https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setforegroundwindow?redirectedfrom=MSDN
+            unsafe { SetForegroundWindow(HWND(window_id as isize)) };
+        }
+        let mut input = INPUT::default();
+        input.r#type = INPUT_MOUSE;
+        input.Anonymous.mi.dx = 0;
+        input.Anonymous.mi.dy = 0;
+        input.Anonymous.mi.dwFlags = match button {
+            MouseButton::Left =>
+                if down {
+                    MOUSEEVENTF_LEFTDOWN
+                } else {
+                    MOUSEEVENTF_LEFTUP
+                },
+            MouseButton::Center =>
+                if down {
+                    MOUSEEVENTF_MIDDLEDOWN
+                } else {
+                    MOUSEEVENTF_MIDDLEUP
+                },
+            MouseButton::Right =>
+                if down {
+                    MOUSEEVENTF_RIGHTDOWN
+                } else {
+                    MOUSEEVENTF_RIGHTUP
+                },
+            MouseButton::ScrollUp | MouseButton::ScrollDown => MOUSEEVENTF_WHEEL,
+            MouseButton::ScrollLeft | MouseButton::ScrollRight => MOUSEEVENTF_HWHEEL,
+            MouseButton::Button4 | MouseButton::Button5 =>
+                if down {
+                    MOUSEEVENTF_XDOWN
+                } else {
+                    MOUSEEVENTF_XUP
+                },
+        };
+
+        input.Anonymous.mi.mouseData = match button {
+            MouseButton::ScrollUp | MouseButton::ScrollRight => WHEEL_DELTA as i32,
+            MouseButton::ScrollDown | MouseButton::ScrollLeft => -(WHEEL_DELTA as i32),
+            MouseButton::Button4 => XBUTTON1.0 as i32,
+            MouseButton::Button5 => XBUTTON2.0 as i32,
+            _ => 0,
+        };
+
+
+        unsafe {
+            SendInput(&[input], std::mem::size_of::<INPUT>() as i32);
+        };
+
+        Ok(())
     }
 
     fn clipboard_content(
@@ -569,4 +641,6 @@ pub enum Error {
     WindowNotFound,
     #[error("unable to open clipboard")]
     UnableToOpenClipboard,
+    #[error("unsupported mouse button")]
+    UnsupportedMouseButton,
 }
