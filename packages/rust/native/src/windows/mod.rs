@@ -1,7 +1,7 @@
 // thanks to https://github.com/maddymakesgames for the ground work on the windows api
 mod screen_captuer_win_gdi;
-mod window_captuer_win_gdi;
 mod util;
+mod window_captuer_win_gdi;
 
 use crate::{
     api::*,
@@ -93,8 +93,6 @@ use windows::{
     },
 };
 
-const TRUE: BOOL = BOOL(1);
-const FALSE: BOOL = BOOL(0);
 
 struct WindowsMonitor {
     device: DISPLAY_DEVICEW,
