@@ -1,7 +1,18 @@
 // thanks to https://github.com/maddymakesgames for the ground work on the windows api
+mod screen_captuer_win_gdi;
+mod window_captuer_win_gdi;
+mod util;
 
-use crate::api::*;
-use ::windows::{
+use crate::{
+    api::*,
+    windows::{
+        screen_captuer_win_gdi::ScreenCapturerWinGdi,
+        window_captuer_win_gdi::WindowCapturerWinGdi,
+    },
+};
+use image::RgbImage;
+use std::{collections::HashMap, string::FromUtf16Error};
+use windows::{
     core::{PCWSTR, PSTR},
     Win32::{
         Foundation::{BOOL, HANDLE, HWND, LPARAM, POINT, RECT},
@@ -21,18 +32,35 @@ use ::windows::{
             MONITORINFOEXA,
         },
         System::{
-            DataExchange::{CloseClipboard, GetClipboardData, OpenClipboard},
-            Memory::{GlobalLock, GlobalUnlock},
-            SystemServices::{CF_UNICODETEXT, CLIPBOARD_FORMATS},
+            DataExchange::{
+                CloseClipboard,
+                EmptyClipboard,
+                GetClipboardData,
+                OpenClipboard,
+                SetClipboardData,
+            },
+            Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE},
+            SystemServices::{CF_TEXT, CF_UNICODETEXT, CLIPBOARD_FORMATS},
         },
         UI::{
             Input::KeyboardAndMouse::{
                 SendInput,
+                SetActiveWindow,
                 INPUT,
                 INPUT_MOUSE,
                 MOUSEEVENTF_ABSOLUTE,
+                MOUSEEVENTF_HWHEEL,
+                MOUSEEVENTF_LEFTDOWN,
+                MOUSEEVENTF_LEFTUP,
+                MOUSEEVENTF_MIDDLEDOWN,
+                MOUSEEVENTF_MIDDLEUP,
                 MOUSEEVENTF_MOVE,
+                MOUSEEVENTF_RIGHTDOWN,
+                MOUSEEVENTF_RIGHTUP,
                 MOUSEEVENTF_VIRTUALDESK,
+                MOUSEEVENTF_WHEEL,
+                MOUSEEVENTF_XDOWN,
+                MOUSEEVENTF_XUP,
             },
             WindowsAndMessaging::{
                 EnumWindows,
@@ -50,38 +78,18 @@ use ::windows::{
                 GetWindowThreadProcessId,
                 IsIconic,
                 IsWindowVisible,
+                SetForegroundWindow,
                 GWL_EXSTYLE,
                 GW_OWNER,
                 SM_CXVIRTUALSCREEN,
                 SM_CYVIRTUALSCREEN,
+                WHEEL_DELTA,
                 WINDOWINFO,
                 WS_EX_APPWINDOW,
+                XBUTTON1,
+                XBUTTON2,
             },
         },
-    },
-};
-use std::{collections::HashMap, string::FromUtf16Error};
-use windows::Win32::{
-    System::{
-        DataExchange::{EmptyClipboard, SetClipboardData},
-        Memory::{GlobalAlloc, GMEM_MOVEABLE},
-        SystemServices::CF_TEXT,
-    },
-    UI::{
-        Input::KeyboardAndMouse::{
-            SetActiveWindow,
-            MOUSEEVENTF_HWHEEL,
-            MOUSEEVENTF_LEFTDOWN,
-            MOUSEEVENTF_LEFTUP,
-            MOUSEEVENTF_MIDDLEDOWN,
-            MOUSEEVENTF_MIDDLEUP,
-            MOUSEEVENTF_RIGHTDOWN,
-            MOUSEEVENTF_RIGHTUP,
-            MOUSEEVENTF_WHEEL,
-            MOUSEEVENTF_XDOWN,
-            MOUSEEVENTF_XUP,
-        },
-        WindowsAndMessaging::{SetForegroundWindow, WHEEL_DELTA, XBUTTON1, XBUTTON2},
     },
 };
 
@@ -103,12 +111,16 @@ struct WindowsWindow {
 
 pub struct WindowsApi {
     monitors_key_cache: Vec<[u16; 128]>,
+    monitor_capturers: Vec<(MonitorId, ScreenCapturerWinGdi)>,
+    window_capturers: Vec<(WindowId, WindowCapturerWinGdi)>,
 }
 
 impl WindowsApi {
     pub fn new() -> Result<Self, Error> {
         Ok(WindowsApi {
             monitors_key_cache: Vec::new(),
+            monitor_capturers: Vec::new(),
+            window_capturers: Vec::new(),
         })
     }
 
@@ -615,12 +627,57 @@ impl NativeApiTemplate for WindowsApi {
             .collect())
     }
 
-    fn capture_monitor_frame(&mut self, _monitor_id: MonitorId) -> Result<Frame, Self::Error> {
-        unimplemented!()
+    fn capture_monitor_frame(&mut self, monitor_id: MonitorId) -> Result<Frame, Self::Error> {
+        let capturer = self
+            .monitor_capturers
+            .iter()
+            .find(|(id, _)| id == &monitor_id);
+
+        let capturer = match capturer {
+            None => {
+                self.monitor_capturers.push((
+                    monitor_id,
+                    ScreenCapturerWinGdi::new(
+                        monitor_id,
+                        self.monitors_key_cache.get(monitor_id as usize).copied(),
+                    )
+                    .map_err(|()| Error::WindowsApiError("GDI".to_string()))?,
+                ));
+                &self.monitor_capturers.last_mut().unwrap().1
+            }
+            Some(c) => &c.1,
+        };
+
+        let (data, width, height) = capturer
+            .capture()
+            .map_err(|()| Error::WindowsApiError("GDI Capture".to_string()))?;
+
+        Ok(RgbImage::from_vec(width, height, data).expect("Failed to create image"))
     }
 
-    fn capture_window_frame(&mut self, _window_id: WindowId) -> Result<Frame, Self::Error> {
-        unimplemented!()
+    fn capture_window_frame(&mut self, window_id: WindowId) -> Result<Frame, Self::Error> {
+        let capturer = self
+            .window_capturers
+            .iter()
+            .find(|(id, _)| id == &window_id);
+
+        let capturer = match capturer {
+            None => {
+                self.window_capturers.push((
+                    window_id,
+                    WindowCapturerWinGdi::new(window_id)
+                        .map_err(|()| Error::WindowsApiError("GDI".to_string()))?,
+                ));
+                &self.window_capturers.last_mut().unwrap().1
+            }
+            Some(c) => &c.1,
+        };
+
+        let (data, width, height) = capturer
+            .capture()
+            .map_err(|()| Error::WindowsApiError("GDI Capture".to_string()))?;
+
+        Ok(RgbImage::from_vec(width, height, data).expect("Failed to create image"))
     }
 }
 
