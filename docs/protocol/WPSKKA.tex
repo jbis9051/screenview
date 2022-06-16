@@ -6,9 +6,31 @@ the message type.\\
 
 \subsection{Handshake}
 
-WPSKKA begins with a handshake to choose an authentication scheme. The goal of authentication is to authenticate the Peers' ephemeral keys. The Host begins with sending all the authentication schemes available as well as their public key which will be authenticated using one of the schemes. WPSKKA defines multiple authentication schemes for different use cases.
+WPSKKA begins with a handshake to choose an authentication scheme.
+The goal of WPSKKA is to authenticate the Peers' ephemeral keys.
+
+The handshake begins with a key exchange.
+
+\subsubsection{KeyExchange}
+
+The Host and Client exchange their ephemeral public keys.
+
+\begin{center}
+    Host $\leftrightarrow$ Client\\
+    \begin{tabular}{|c|c|c|}
+        \hline
+        \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
+        \hline
+        1              & type          & 1              \\
+        \hline
+        32             & public-key    &                \\
+        \hline
+    \end{tabular}
+\end{center}
 
 \subsubsection{AuthScheme}
+
+Once the Host receives the Client's public key, it sends the Client a list of authentication schemes it supports.
 
 \begin{center}
     Host \textrightarrow\ Client\\
@@ -18,9 +40,7 @@ WPSKKA begins with a handshake to choose an authentication scheme. The goal of a
         \hline
         2                & length           &                \\
         \hline
-        1                & type             & 1              \\
-        \hline
-        32               & public-key       &                \\
+        1                & type             & 2              \\
         \hline
         1                & num-auth-schemes &                \\
         \hline
@@ -29,23 +49,23 @@ WPSKKA begins with a handshake to choose an authentication scheme. The goal of a
     \end{tabular}
 \end{center}
 
-num-auth-schemes is the number of auth schemes. auth-schemes contians 1 byte per auth-scheme to indidcate which authentication scheme is available. Authentication schmes are defined below.\\
-
-public-key is the Host's ephemeral public key
+num-auth-schemes is the number of auth schemes.
+auth-schemes contains 1 byte per auth-scheme to indicate which authentication scheme is available.
+Authentication schemes are defined below.\\
 
 \begin{center}
     Authentication Schemes\\
     \begin{tabular}{|c|c|}
         \hline
-        \textbf{Number} & \textbf{Name}     \\
+        \textbf{Number} & \textbf{Name} \\
         \hline
-        0               & Invalid or Denied \\
+        0               & None          \\
         \hline
-        1               & SRP Dynamic       \\
+        1               & SRP Dynamic   \\
         \hline
-        2               & SRP Static        \\
+        2               & SRP Static    \\
         \hline
-        3               & Public key        \\
+        3               & Public key    \\
         \hline
     \end{tabular}
 \end{center}
@@ -60,11 +80,7 @@ The TryAuth messages indicates a Client would to attempt authentication with a p
         \hline
         \textbf{Bytes} & \textbf{Name}      & \textbf{Value} \\
         \hline
-        2              & length             & 34             \\
-        \hline
-        1              & type               & 2              \\
-        \hline
-        32             & public-key         &                \\
+        1              & type               & 3              \\
         \hline
         1              & auth-scheme-number &                \\
         \hline
@@ -72,8 +88,6 @@ The TryAuth messages indicates a Client would to attempt authentication with a p
 \end{center}
 
 auth-scheme-number is the authentication scheme number the client would like to attempt
-
-public-key is the Client's ephemeral public key
 
 \subsubsection{AuthMessage}
 
@@ -87,7 +101,7 @@ Messages used in the authentication scheme are encapsulated in this message.
         \hline
         2              & length        &                \\
         \hline
-        1              & type          & 3              \\
+        1              & type          & 4              \\
         \hline
         length-1       & auth-message  &                \\
         \hline
@@ -96,7 +110,8 @@ Messages used in the authentication scheme are encapsulated in this message.
 
 \subsubsection{AuthResult}
 
-Messages used in the authentication scheme are encapsulated in this message.
+The AuthResult message indicates the result of the authentication attempt.
+A successful authentication result MUST only be sent once.
 
 \begin{center}
     Host $\rightarrow$ Client\\
@@ -113,7 +128,8 @@ Messages used in the authentication scheme are encapsulated in this message.
     \end{tabular}
 \end{center}
 
-ok indicates whether the authentication method was successful (1) or not (0). If not, the Client MAY attempt another authentication scheme or try the same one again by sending a TryAuth message. Either party MAP choose to end the connection.
+ok indicates whether the authentication method was successful (1) or failed (0).
+If the authentication method failed, the Client MAY attempt another authentication scheme or try the same one again by sending a TryAuth message.
 
 \subsection{Transport Data Key Derivation}
 
@@ -191,13 +207,22 @@ Where \emph{P} is the payload to be transported.\\
 $\mathit{NU}_{m}$ is an 64 bit counter that MUST NOT wrap. After a transport message is sent, if $\mathit{NU}_{m}$ equals
 ($2^{64}-1$) the UDP and TCP connection MUST be dropped. Subsequent messages MUST NOT be sent. \\
 
-\subsection{SRP Dynamic (1)}
+\subsection{SRP Dynamic/SRP Static}
 
-SRP Dynamic relies on SRP as defined in \href{https://datatracker.ietf.org/doc/html/rfc5054}{RFC5054} to establish a
-shared key used to authenticate DH keys via a mac. The Host will serve as the SRP server, the Client will serve as the SRP
-client.\\
+SRP relies on SRP as defined in \href{https://datatracker.ietf.org/doc/html/rfc5054}{RFC5054} to establish a
+shared key used to authenticate the ephemeral public keys via a MAC.
+
+The Host will serve as the SRP server, the Client will serve as the SRP client.
+SRP is a PAKE and therefore relies on a password.
+The password will be created and stored by the Host.
+This password can be randomly generated (Dynamic) or chosen by the Host (Static).
+The Host may serve both Dynamic and Static SRP authentication methods.
+The Client will select which type to use in the TryAuth message.
+\\
 
 \subsubsection{HostHello}
+
+The Host sends a HostHello message to the Client.
 
 \begin{center}
     Host \textrightarrow\ Client\\
@@ -225,7 +250,7 @@ client.\\
     & \text{srp-B} \coloneqq B\\
 \end{align*}
 
-\subsubsection{ClientHello}
+\subsubsection{ClientResponse}
 
 \begin{center}
     Client \textrightarrow\ Host\\
@@ -250,7 +275,8 @@ client.\\
 
 public-key is the Client's public key
 
-The Host validates the mac. If the mac is incorrect a failed AuthResult is sent.
+The Host validates the MAC.
+If the MAC is incorrect a failed MUST be AuthResult is sent.
 
 \subsubsection{HostVerify}
 
@@ -274,10 +300,6 @@ The Host validates the mac. If the mac is incorrect a failed AuthResult is sent.
 public-key is the Host's public key
 
 After the HostVerify is sent, the Host MUST send a successful AuthResult.
-
-\subsection{SRP Static (2)}
-
-SRP Static uses the exact same scheme as SRP Dynamic. The only difference is that the SRP password is user defined instead of generated per session. This can be useful in situations where a user wants to be able to connect to a remote computer without physical presence at the other Host's machine.
 
 \subsection{Public Key (3)}
 
