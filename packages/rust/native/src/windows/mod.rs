@@ -5,8 +5,10 @@ mod window_captuer_win_gdi;
 
 use crate::{
     api::*,
+    keymaps::keysym_to_win::KEYSYM_WIN,
     windows::{
         screen_captuer_win_gdi::ScreenCapturerWinGdi,
+        util::{FALSE, TRUE},
         window_captuer_win_gdi::WindowCapturerWinGdi,
     },
 };
@@ -47,7 +49,13 @@ use windows::{
                 SendInput,
                 SetActiveWindow,
                 INPUT,
+                INPUT_0,
+                INPUT_KEYBOARD,
                 INPUT_MOUSE,
+                KEYBDINPUT,
+                KEYBD_EVENT_FLAGS,
+                KEYEVENTF_KEYUP,
+                KEYEVENTF_SCANCODE,
                 MOUSEEVENTF_ABSOLUTE,
                 MOUSEEVENTF_HWHEEL,
                 MOUSEEVENTF_LEFTDOWN,
@@ -61,6 +69,7 @@ use windows::{
                 MOUSEEVENTF_WHEEL,
                 MOUSEEVENTF_XDOWN,
                 MOUSEEVENTF_XUP,
+                VK_SPACE,
             },
             WindowsAndMessaging::{
                 EnumWindows,
@@ -343,8 +352,30 @@ fn compare_windows_str(a: &[u16], b: &str) -> bool {
 impl NativeApiTemplate for WindowsApi {
     type Error = Error;
 
-    fn key_toggle(&mut self, _key: Key, _down: bool) -> Result<(), Self::Error> {
-        unimplemented!()
+    fn key_toggle(&mut self, key: Key, down: bool) -> Result<(), Self::Error> {
+        let virtual_key = match KEYSYM_WIN.get(&key) {
+            Some(k) => k,
+            None => return Ok(()),
+        };
+
+        let input = INPUT {
+            r#type: INPUT_KEYBOARD,
+            Anonymous: INPUT_0 {
+                ki: KEYBDINPUT {
+                    wVk: *virtual_key,
+                    wScan: 0,
+                    dwFlags: if down {
+                        KEYBD_EVENT_FLAGS(0)
+                    } else {
+                        KEYEVENTF_KEYUP
+                    },
+                    time: 0,
+                    dwExtraInfo: 0,
+                },
+            },
+        };
+        unsafe { SendInput(&[input], std::mem::size_of::<INPUT>() as i32) };
+        Ok(())
     }
 
     fn pointer_position(&mut self, windows: &[WindowId]) -> Result<MousePosition, Self::Error> {

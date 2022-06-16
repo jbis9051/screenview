@@ -1,6 +1,11 @@
 set -e
 
-cargo build --release --target=x86_64-pc-windows-gnu || exit 1
+opt=""
+if [ "$1" = "--release" ]; then
+  opt="--release"
+fi
+
+cargo build $opt --target=x86_64-pc-windows-gnu || exit 1
 
 prev=""
 if [ -f target/x86_64-pc-windows-gnu/$1/native_test.exe.sha1 ]; then

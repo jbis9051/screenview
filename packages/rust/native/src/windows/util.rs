@@ -1,11 +1,10 @@
-use crate::windows::FALSE;
 use windows::Win32::{
     Foundation::BOOL,
     System::SystemInformation::{GetVersionExA, OSVERSIONINFOA},
 };
 
-const TRUE: BOOL = BOOL(1);
-const FALSE: BOOL = BOOL(0);
+pub const TRUE: BOOL = BOOL(1);
+pub const FALSE: BOOL = BOOL(0);
 
 #[allow(non_camel_case_types)]
 enum WindowsMajorVersions {
