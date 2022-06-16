@@ -5,9 +5,8 @@ pub mod keysym;
 cfg_if! {
     if #[cfg(dummy_native)] {
     } else if #[cfg(target_os = "macos")]{
-        pub mod keysym_to_win;
-        //pub mod keycode_mac;
-        //pub mod keysym_to_mac;
+        pub mod keycode_mac;
+        pub mod keysym_to_mac;
     } else if #[cfg(target_os = "windows")]{
         pub mod keysym_to_win;
     }
