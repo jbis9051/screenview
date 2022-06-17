@@ -4,6 +4,7 @@ use srp_host::SrpAuthHost;
 pub mod srp_client;
 pub mod srp_host;
 
+#[derive(Debug)]
 pub enum AuthScheme {
     SrpAuthClient(SrpAuthClient),
     SrpAuthHost(SrpAuthHost),

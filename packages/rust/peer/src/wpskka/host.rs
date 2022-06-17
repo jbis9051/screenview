@@ -23,6 +23,8 @@ use common::messages::{
         AuthScheme as AuthSchemeMessage,
         AuthSchemeType,
         KeyExchange,
+        TransportDataMessageReliable,
+        TransportDataMessageUnreliable,
         TryAuth,
         WpskkaMessage,
     },
@@ -51,14 +53,14 @@ impl Debug for KeyState {
 pub enum State {
     KeyExchange,
     PreAuthSelect {
-        key_state: Rc<KeyState>,
+        key_state: KeyState,
     },
     IsAuthenticating {
-        key_state: Rc<KeyState>,
+        key_state: KeyState,
         auth_scheme: Box<AuthScheme>,
     },
     Authenticated {
-        key_state: Rc<KeyState>,
+        key_state: KeyState,
     },
 }
 
@@ -107,7 +109,7 @@ impl WpskkaHostHandler {
         Ok(msg)
     }
 
-    pub fn handle_try_auth(
+    pub fn handle_try_auth_old(
         &mut self,
         msg: TryAuth,
         write: &mut Vec<WpskkaMessage<'_>>,
@@ -120,7 +122,7 @@ impl WpskkaHostHandler {
                 }));
                 if self.none_scheme {
                     self.state = State::Authenticated {
-                        key_state: key_state.clone(),
+                        key_state: (**key_state),
                     };
                 }
                 Err(WpskkaHostError::BadAuthSchemeType(msg.auth_scheme))
@@ -158,13 +160,191 @@ impl WpskkaHostHandler {
         }
     }
 
-    pub fn _handle(
+    fn handle_key_exchange(
+        &mut self,
+        write: &mut Vec<WpskkaMessage<'_>>,
+        events: &mut Vec<InformEvent>,
+        msg: KeyExchange,
+    ) -> Result<Option<Vec<u8>>, WpskkaHostError> {
+        if !matches!(self.state, State::KeyExchange) {
+            return Err(WpskkaHostError::WrongMessageForState(
+                debug(&msg),
+                debug(&self.state),
+            ));
+        }
+
+        let client_public_key = msg.public_key;
+        let keys = keypair().map_err(|_| WpskkaHostError::RingError)?;
+
+        write.push(WpskkaMessage::KeyExchange(KeyExchange {
+            public_key: keys
+                .public_key
+                .as_ref()
+                .try_into()
+                .expect("unable to convert public key to 32 byte array"),
+        }));
+
+        self.state = State::PreAuthSelect {
+            key_state: KeyState {
+                client_public_key,
+                my_key_pair: keys,
+            },
+        };
+
+        Ok(None)
+    }
+
+    fn handle_try_auth_stateless(
+        write: &mut Vec<WpskkaMessage<'_>>,
+        dynamic_password: Option<&[u8]>,
+        static_password: Option<&[u8]>,
+        key_state: KeyState,
+        auth_scheme: AuthSchemeType,
+        none_scheme: bool,
+    ) -> TryAuthResult {
+        match auth_scheme {
+            AuthSchemeType::None => {
+                write.push(WpskkaMessage::AuthResult(AuthResult { ok: none_scheme }));
+
+                if none_scheme {
+                    TryAuthResult::Ok {
+                        new_state: State::Authenticated { key_state },
+                    }
+                } else {
+                    TryAuthResult::Ok {
+                        new_state: State::PreAuthSelect { key_state },
+                    }
+                }
+            }
+            // These are basically the same schemes just with different password sources, so we can handle it together
+            AuthSchemeType::SrpDynamic | AuthSchemeType::SrpStatic => {
+                // This basically functions as a try-catch block. We can't use the `?` operator in
+                // the outer scope since we don't return a Result
+                let auth_scheme_result = (|| {
+                    let password = if auth_scheme == AuthSchemeType::SrpDynamic {
+                        dynamic_password.ok_or(WpskkaHostError::BadAuthSchemeType(auth_scheme))?
+                    } else {
+                        static_password.ok_or(WpskkaHostError::BadAuthSchemeType(auth_scheme))?
+                    };
+
+                    // let mut srp = SrpAuthHost::new(
+                    //     self.keys.as_ref().unwrap().public_key.clone(),
+                    //     msg.public_key.to_vec(),
+                    // );
+
+                    // let outgoing = srp.init(password);
+                    // write.push(WpskkaMessage::AuthMessage(AuthMessage {
+                    //     data: outgoing
+                    //         .to_bytes()
+                    //         .map_err(|_| WpskkaHostError::BadAuthSchemeMessage)?,
+                    // }));
+
+                    Ok(AuthScheme::SrpAuthHost(todo!()))
+                })();
+
+                match auth_scheme_result {
+                    Ok(scheme) => TryAuthResult::Ok {
+                        new_state: State::Authenticated { key_state },
+                    },
+                    Err(error) => TryAuthResult::Err {
+                        new_state: State::PreAuthSelect { key_state },
+                        error,
+                    },
+                }
+
+                // self.current_auth = Some(Box::new(AuthScheme::SrpAuthHost(srp)));
+                // self.state = State::IsAuthenticating;
+            }
+            AuthSchemeType::PublicKey => TryAuthResult::Err {
+                new_state: State::PreAuthSelect { key_state },
+                error: WpskkaHostError::BadAuthSchemeType(auth_scheme),
+            },
+        }
+    }
+
+    fn handle_try_auth(
+        &mut self,
+        write: &mut Vec<WpskkaMessage<'_>>,
+        events: &mut Vec<InformEvent>,
+        msg: TryAuth,
+    ) -> Result<Option<Vec<u8>>, WpskkaHostError> {
+        let key_state = match self.state {
+            State::PreAuthSelect { key_state } => key_state,
+            State::IsAuthenticating { key_state, .. } => key_state,
+            _ =>
+                return Err(WpskkaHostError::WrongMessageForState(
+                    debug(&msg),
+                    debug(&self.state),
+                )),
+        };
+
+        match Self::handle_try_auth_stateless(
+            write,
+            self.dynamic_password.as_deref(),
+            self.static_password.as_deref(),
+            key_state,
+            msg.auth_scheme,
+            self.none_scheme,
+        ) {
+            TryAuthResult::Ok { new_state } => {
+                self.state = new_state;
+                Ok(None)
+            }
+            TryAuthResult::Err { new_state, error } => {
+                self.state = new_state;
+                Err(error)
+            }
+        }
+    }
+
+    fn handle_auth_message(
+        &mut self,
+        write: &mut Vec<WpskkaMessage<'_>>,
+        events: &mut Vec<InformEvent>,
+        msg: AuthMessage,
+    ) -> Result<Option<Vec<u8>>, WpskkaHostError> {
+        todo!()
+    }
+
+    fn handle_reliable_message(
+        &mut self,
+        write: &mut Vec<WpskkaMessage<'_>>,
+        events: &mut Vec<InformEvent>,
+        msg: TransportDataMessageReliable<'_>,
+    ) -> Result<Option<Vec<u8>>, WpskkaHostError> {
+        todo!()
+    }
+
+    fn handle_unreliable_message(
+        &mut self,
+        write: &mut Vec<WpskkaMessage<'_>>,
+        events: &mut Vec<InformEvent>,
+        msg: TransportDataMessageUnreliable<'_>,
+    ) -> Result<Option<Vec<u8>>, WpskkaHostError> {
+        todo!()
+    }
+
+    pub fn handle_internal(
         &mut self,
         msg: WpskkaMessage<'_>,
         write: &mut Vec<WpskkaMessage<'_>>,
         events: &mut Vec<InformEvent>,
     ) -> Result<Option<Vec<u8>>, WpskkaHostError> {
-        match self.state {
+        match msg {
+            WpskkaMessage::KeyExchange(msg) => self.handle_key_exchange(write, events, msg),
+            WpskkaMessage::TryAuth(msg) => self.handle_try_auth(write, events, msg),
+            WpskkaMessage::AuthMessage(msg) => self.handle_auth_message(write, events, msg),
+            WpskkaMessage::TransportDataMessageReliable(msg) =>
+                self.handle_reliable_message(write, events, msg),
+            WpskkaMessage::TransportDataMessageUnreliable(msg) =>
+                self.handle_unreliable_message(write, events, msg),
+            msg => Err(WpskkaHostError::WrongMessageForState(
+                debug(&msg),
+                debug(&self.state),
+            )),
+        }
+
+        /*match self.state {
             State::KeyExchange => match msg {
                 WpskkaMessage::KeyExchange(KeyExchange { public_key }) => {
                     let keys = keypair().map_err(|_| WpskkaHostError::RingError)?;
@@ -280,7 +460,7 @@ impl WpskkaHostHandler {
                     debug(&self.state),
                 )),
             },
-        }
+        }*/
     }
 
     pub fn set_dynamic_password(&mut self, dynamic_password: Option<Vec<u8>>) {
@@ -324,7 +504,7 @@ impl WpskkaHandlerTrait for WpskkaHostHandler {
         write: &mut Vec<WpskkaMessage<'_>>,
         events: &mut Vec<InformEvent>,
     ) -> Result<Option<Vec<u8>>, WpskkaError> {
-        Ok(self._handle(msg, write, events)?)
+        Ok(self.handle_internal(msg, write, events)?)
     }
 
     fn unreliable_cipher(&self) -> &Arc<CipherUnreliablePeer> {
@@ -334,6 +514,16 @@ impl WpskkaHandlerTrait for WpskkaHostHandler {
     fn reliable_cipher_mut(&mut self) -> &mut CipherReliablePeer {
         self.reliable.as_mut().unwrap()
     }
+}
+
+enum TryAuthResult {
+    Ok {
+        new_state: State,
+    },
+    Err {
+        new_state: State,
+        error: WpskkaHostError,
+    },
 }
 
 #[derive(Debug, thiserror::Error)]

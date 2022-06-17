@@ -22,6 +22,7 @@ pub enum State {
 
 
 // Arbitrary SrpAuthHost. Can be used for any SRP based auth scheme.
+#[derive(Debug)]
 pub struct SrpAuthHost {
     state: State,
     authenticated: bool,
