@@ -6,10 +6,9 @@ the message type.\\
 
 \subsection{Handshake}
 
-WPSKKA begins with a handshake to choose an authentication scheme.
-The goal of WPSKKA is to authenticate the Peers' ephemeral keys.
-
 The handshake begins with a key exchange.
+Then then the Client is offered a list of available authentication schemes.
+The goal of WPSKKA is to authenticate the Peers' ephemeral keys through one of those schemes.
 
 \subsubsection{KeyExchange}
 
@@ -37,8 +36,6 @@ Once the Host receives the Client's public key, it sends the Client a list of au
     \begin{tabular}{|c|c|c|}
         \hline
         \textbf{Bytes}   & \textbf{Name}    & \textbf{Value} \\
-        \hline
-        2                & length           &                \\
         \hline
         1                & type             & 2              \\
         \hline
@@ -87,7 +84,8 @@ The TryAuth messages indicates a Client would to attempt authentication with a p
     \end{tabular}
 \end{center}
 
-auth-scheme-number is the authentication scheme number the client would like to attempt
+auth-scheme-number is the authentication scheme the Client would like to attempt.
+If the Host does not support the auth-scheme-number sent by the Client, the Host MUST send a failed AuthResult message.
 
 \subsubsection{AuthMessage}
 
@@ -121,7 +119,7 @@ A successful authentication result MUST only be sent once.
         \hline
         2              & length        & 2              \\
         \hline
-        1              & type          & 4              \\
+        1              & type          & 5              \\
         \hline
         1              & ok            & 0 or 1         \\
         \hline
@@ -157,7 +155,7 @@ Transport Data Messages MUST NOT be sent until authentication is complete.
         \hline
         2               & data-length   &                \\
         \hline
-        1               & type          & 5              \\
+        1               & type          & 6              \\
         \hline
         remaining bytes & data          &                \\
         \hline
@@ -186,7 +184,7 @@ $\mathit{NT}_{m}$ is an 64 bit counter that MUST NOT wrap. After a transport mes
         \hline
         2               & data-length   &                \\
         \hline
-        1               & type          & 6              \\
+        1               & type          & 7              \\
         \hline
         8               & counter       &                \\
         \hline
@@ -213,7 +211,6 @@ SRP relies on SRP as defined in \href{https://datatracker.ietf.org/doc/html/rfc5
 shared key used to authenticate the ephemeral public keys via a MAC.
 
 The Host will serve as the SRP server, the Client will serve as the SRP client.
-SRP is a PAKE and therefore relies on a password.
 The password will be created and stored by the Host.
 This password can be randomly generated (Dynamic) or chosen by the Host (Static).
 The Host may serve both Dynamic and Static SRP authentication methods.
