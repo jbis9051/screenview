@@ -71,11 +71,7 @@ pub struct X11Api {
     root: Window,
 
     // Screen capture fields
-    width: u16,
-    height: u16,
-    shmid: c_int,
-    shmaddr: *mut u32,
-    shmseg: Seg,
+    capture_info: Option<CaptureInfo>,
 
     // Monitor map
     monitors: Vec<X11MonitorInfo>,
@@ -95,26 +91,10 @@ impl X11Api {
         let root = unsafe { Window::new(XDefaultRootWindow(dpy) as u32) };
         let conn = unsafe { Connection::from_xlib_display(dpy) };
 
-        let cookie = conn.send_request(&GetGeometry {
-            drawable: Drawable::Window(root),
-        });
-        let reply = conn.wait_for_reply(cookie)?;
-
-        let width = reply.width();
-        let height = reply.height();
-        let depth = reply.depth() as size_t;
-
-        let (shmid, shmaddr, shmseg) =
-            Self::init_shm(&conn, width as size_t * height as size_t * depth)?;
-
         Ok(Self {
             conn,
             root,
-            width,
-            height,
-            shmid,
-            shmaddr,
-            shmseg,
+            capture_info: None,
             monitors: Vec::new(),
             clipboard: Clipboard::new()?,
         })
@@ -403,6 +383,36 @@ impl NativeApiTemplate for X11Api {
 }
 
 impl X11Api {
+    fn lazy_init_capture(&mut self) -> Result<CaptureInfo, Error> {
+        if self.capture_info.is_none() {
+            self.capture_info = Self::init_capture_info(&self.conn, self.root).map(Some)?;
+        }
+
+        Ok(self.capture_info.unwrap())
+    }
+
+    fn init_capture_info(conn: &Connection, root: Window) -> Result<CaptureInfo, Error> {
+        let cookie = conn.send_request(&GetGeometry {
+            drawable: Drawable::Window(root),
+        });
+        let reply = conn.wait_for_reply(cookie)?;
+
+        let width = reply.width();
+        let height = reply.height();
+        let depth = reply.depth() as size_t;
+
+        let (shmid, shmaddr, shmseg) =
+            Self::init_shm(&conn, width as size_t * height as size_t * depth)?;
+
+        Ok(CaptureInfo {
+            width,
+            height,
+            shmid,
+            shmaddr,
+            shmseg,
+        })
+    }
+
     fn init_shm(conn: &Connection, size: size_t) -> Result<(c_int, *mut u32, Seg), Error> {
         let shmid = unsafe {
             shmget(
@@ -457,20 +467,22 @@ impl X11Api {
     }
 
     fn capture(
-        &self,
+        &mut self,
         window: Window,
         x: u32,
         y: u32,
         width: u32,
         height: u32,
     ) -> Result<Frame, Error> {
-        self.update_shm(window, x, y, width, height)?;
+        let info = self.lazy_init_capture()?;
+
+        self.update_shm(info.shmseg, window, x, y, width, height)?;
 
         let len = width as usize * height as usize;
         let mut buf: Vec<u8> = Vec::with_capacity(len * 3);
 
         unsafe {
-            Self::copy_rgb(self.shmaddr, buf.as_mut_ptr(), len);
+            Self::copy_rgb(info.shmaddr, buf.as_mut_ptr(), len);
             buf.set_len(len * 3);
         }
 
@@ -478,7 +490,7 @@ impl X11Api {
     }
 
     fn update_frame(
-        &self,
+        &mut self,
         window: Window,
         x: u32,
         y: u32,
@@ -486,7 +498,9 @@ impl X11Api {
         height: u32,
         frame: &mut Frame,
     ) -> Result<(), Error> {
-        let len = self.width as usize * self.height as usize;
+        let info = self.lazy_init_capture()?;
+
+        let len = info.width as usize * info.height as usize;
         let data = &mut **frame;
 
         if data.len() != len * 3 {
@@ -494,10 +508,10 @@ impl X11Api {
             return Ok(());
         }
 
-        self.update_shm(window, x, y, width, height)?;
+        self.update_shm(info.shmseg, window, x, y, width, height)?;
 
         unsafe {
-            Self::copy_rgb(self.shmaddr, data.as_mut_ptr(), len);
+            Self::copy_rgb(info.shmaddr, data.as_mut_ptr(), len);
         }
 
         Ok(())
@@ -505,6 +519,7 @@ impl X11Api {
 
     fn update_shm(
         &self,
+        shmseg: Seg,
         window: Window,
         x: u32,
         y: u32,
@@ -519,7 +534,7 @@ impl X11Api {
             height: height as _,
             plane_mask: u32::MAX, // All planes
             format: 2,            // ZPixmap
-            shmseg: self.shmseg,
+            shmseg,
             offset: 0,
         });
         let _reply = self.conn.wait_for_reply(cookie)?;
@@ -643,8 +658,19 @@ impl X11Api {
 
 impl Drop for X11Api {
     fn drop(&mut self) {
-        Self::release_shm(&self.conn, self.shmid, self.shmaddr, self.shmseg);
+        if let Some(info) = self.capture_info.as_ref() {
+            Self::release_shm(&self.conn, info.shmid, info.shmaddr, info.shmseg);
+        }
     }
+}
+
+#[derive(Clone, Copy)]
+struct CaptureInfo {
+    width: u16,
+    height: u16,
+    shmid: c_int,
+    shmaddr: *mut u32,
+    shmseg: Seg,
 }
 
 #[derive(thiserror::Error, Debug)]
