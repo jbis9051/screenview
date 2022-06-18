@@ -106,7 +106,7 @@ impl HigherHandlerClient {
 
     pub fn process_password(
         &mut self,
-        password: Vec<u8>,
+        password: &[u8],
     ) -> Result<Option<WpskkaMessage<'static>>, HigherError> {
         self.wpskka
             .process_password(password)

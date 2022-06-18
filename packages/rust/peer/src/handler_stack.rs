@@ -104,7 +104,7 @@ where
     R: Reliable,
     U: Unreliable,
 {
-    pub fn process_password(&mut self, password: Vec<u8>) -> Result<(), HandlerError> {
+    pub fn process_password(&mut self, password: &[u8]) -> Result<(), HandlerError> {
         if let Some(message) = self.higher.process_password(password)? {
             let higher_output = self.higher.send(message)?;
             let lower_output = self.lower.send(higher_output)?;

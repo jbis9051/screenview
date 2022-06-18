@@ -10,39 +10,68 @@ use crate::{
             srp_client::{SrpAuthClient, SrpClientError},
             AuthScheme,
         },
+        derive_keys,
+        KeyState,
         WpskkaError,
         WpskkaHandlerTrait,
     },
     InformEvent,
+    WpskkaHostInform,
 };
 use common::messages::{
     auth::srp::SrpMessage,
-    wpskka::{AuthMessage, AuthSchemeType, TryAuth, WpskkaMessage},
+    wpskka::{
+        AuthMessage,
+        AuthResult,
+        AuthScheme as AuthSchemeMessage,
+        AuthSchemeType,
+        KeyExchange,
+        TransportDataMessageReliable,
+        TransportDataMessageUnreliable,
+        TryAuth,
+        WpskkaMessage,
+    },
     Message,
     MessageComponent,
 };
-use std::{cmp::Ordering, io::Cursor, sync::Arc};
+use ring::agreement::EphemeralPrivateKey;
+use std::{
+    cmp::Ordering,
+    fmt::{Debug, Formatter},
+    io::Cursor,
+    sync::Arc,
+};
 
-#[derive(Copy, Clone, Debug)]
 pub enum State {
-    WaitingForAuthSchemes,
-    IsAuthenticating,
-    Authenticated,
+    KeyExchange,
+    ChooseAnAuthScheme {
+        key_pair: KeyPair,
+        foreign_public_key: [u8; 32],
+    },
+    IsAuthenticating {
+        // the auth holds onto the public key but it shouldn't need the private key so we hold on to it
+        auth_scheme: AuthScheme<32>,
+        private_key: EphemeralPrivateKey,
+    },
+    Authenticated {
+        reliable: CipherReliablePeer,
+        unreliable: Arc<CipherUnreliablePeer>,
+    },
+}
+
+impl Debug for State {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            State::KeyExchange => write!(f, "KeyExchange"),
+            State::ChooseAnAuthScheme { .. } => write!(f, "WaitingForAuthSchemes {{ .. }}"),
+            State::IsAuthenticating { .. } => write!(f, "IsAuthenticating {{ .. }}"),
+            State::Authenticated { .. } => write!(f, "Authenticated {{ .. }}"),
+        }
+    }
 }
 
 pub struct WpskkaClientHandler {
     state: State,
-
-    available_auth_schemes: Vec<AuthSchemeType>,
-    current_auth_num: usize,
-    current_auth: Option<Box<AuthScheme>>,
-    password: Option<Vec<u8>>,
-
-    reliable: Option<CipherReliablePeer>,
-    unreliable: Option<Arc<CipherUnreliablePeer>>,
-
-    keys: Option<Box<KeyPair>>,
-    host_public_key: Option<[u8; 32]>,
 }
 
 impl Default for WpskkaClientHandler {
@@ -54,29 +83,287 @@ impl Default for WpskkaClientHandler {
 impl WpskkaClientHandler {
     pub fn new() -> Self {
         Self {
-            state: State::WaitingForAuthSchemes,
-            available_auth_schemes: Default::default(),
-            current_auth_num: 0,
-            current_auth: None,
-            password: None,
-            reliable: None,
-            unreliable: None,
-            keys: None,
-            host_public_key: None,
+            state: State::KeyExchange,
         }
     }
 
-    pub fn authenticated(&self) -> bool {
-        matches!(self.state, State::Authenticated)
+    pub fn handle_internal(
+        &mut self,
+        msg: WpskkaMessage<'_>,
+        write: &mut Vec<WpskkaMessage<'_>>,
+        events: &mut Vec<InformEvent>,
+    ) -> Result<Option<Vec<u8>>, WpskkaClientError> {
+        match msg {
+            WpskkaMessage::KeyExchange(msg) => self.handle_key_exchange(msg, write, events),
+            WpskkaMessage::AuthScheme(msg) => self.handle_auth_scheme(msg, write, events),
+            WpskkaMessage::AuthMessage(msg) => self.handle_auth_message(msg, write, events),
+            WpskkaMessage::AuthResult(msg) => self.handle_auth_result(msg, write, events),
+            WpskkaMessage::TransportDataMessageReliable(msg) =>
+                self.handle_message_reliable(msg, write, events),
+            WpskkaMessage::TransportDataMessageUnreliable(msg) =>
+                self.handle_message_unreliable(msg, write, events),
+            _ =>
+                return Err(WpskkaClientError::WrongMessageForState(
+                    debug(&msg),
+                    debug(&self.state),
+                )),
+        }
+    }
+
+    fn handle_key_exchange(
+        &mut self,
+        msg: KeyExchange,
+        write: &mut Vec<WpskkaMessage<'_>>,
+        events: &mut Vec<InformEvent>,
+    ) -> Result<Option<Vec<u8>>, WpskkaClientError> {
+        if !matches!(self.state, State::KeyExchange) {
+            return Err(WpskkaClientError::WrongMessageForState(
+                debug(&msg),
+                debug(&self.state),
+            ));
+        }
+        let host_public_key = msg.public_key;
+        let keys = keypair().map_err(|_| WpskkaClientError::RingError)?;
+
+        write.push(WpskkaMessage::KeyExchange(KeyExchange {
+            public_key: keys
+                .public_key
+                .as_ref()
+                .try_into()
+                .expect("public key could not be converted to array of 32 bytes"),
+        }));
+
+        self.state = State::ChooseAnAuthScheme {
+            key_pair: keys,
+            foreign_public_key: host_public_key,
+        };
+
+        Ok(None)
+    }
+
+    fn handle_auth_scheme(
+        &mut self,
+        msg: AuthSchemeMessage,
+        write: &mut Vec<WpskkaMessage<'_>>,
+        events: &mut Vec<InformEvent>,
+    ) -> Result<Option<Vec<u8>>, WpskkaClientError> {
+        events.push(InformEvent::WpskkaClientInform(
+            WpskkaClientInform::AuthScheme(msg.auth_schemes),
+        ));
+        Ok(None)
+    }
+
+    fn derive_key_wrapper(key_state: KeyState) -> Result<State, (State, WpskkaClientError)> {
+        match derive_keys(key_state.key_pair, key_state.foreign_public_key) {
+            Ok((reliable, unreliable)) => Ok(State::Authenticated {
+                reliable,
+                unreliable: Arc::new(unreliable),
+            }),
+            Err(e) => Err((State::KeyExchange, WpskkaClientError::RingError)),
+        }
+    }
+
+    fn handle_auth_message(
+        &mut self,
+        msg: AuthMessage,
+        write: &mut Vec<WpskkaMessage<'_>>,
+        events: &mut Vec<InformEvent>,
+    ) -> Result<Option<Vec<u8>>, WpskkaClientError> {
+        match self.state {
+            State::IsAuthenticating {
+                auth_scheme,
+                private_key: my_private_key,
+            } => match auth_scheme {
+                AuthScheme::SrpAuthClient(mut srp_client) => {
+                    let msg = SrpMessage::read(&mut Cursor::new(&msg.data))
+                        .map_err(|_| WpskkaClientError::BadAuthSchemeMessage)?;
+                    match srp_client.handle(msg) {
+                        Ok(inform) => {
+                            if let Some(inform) = inform {
+                                events.push(InformEvent::WpskkaClientInform(inform));
+                            }
+                            if srp_client.is_authenticated() {
+                                events.push(InformEvent::WpskkaClientInform(
+                                    WpskkaClientInform::AuthSuccessful,
+                                ));
+                                let (my_pub, their_pub) = srp_client.finish();
+                                let keypair = KeyPair {
+                                    public_key: my_pub,
+                                    ephemeral_private_key: my_private_key,
+                                };
+                                match Self::derive_key_wrapper(KeyState {
+                                    key_pair: keypair,
+                                    foreign_public_key: their_pub,
+                                }) {
+                                    Ok(state) => {
+                                        self.state = state;
+                                        Ok(None)
+                                    }
+                                    Err((state, err)) => {
+                                        self.state = state;
+                                        Err(err)
+                                    }
+                                }
+                            } else {
+                                Ok(None)
+                            }
+                        }
+                        Err(err) => match err {
+                            SrpClientError::WrongMessageForState(..) =>
+                                Err(WpskkaClientError::BadAuthSchemeMessage),
+                            _ => {
+                                events.push(InformEvent::WpskkaClientInform(
+                                    WpskkaClientInform::AuthFailed,
+                                ));
+                                let (public_key, foreign_public_key) = srp_client.finish();
+
+                                let key_pair = KeyPair {
+                                    public_key,
+                                    ephemeral_private_key: my_private_key,
+                                };
+
+                                self.state = State::ChooseAnAuthScheme {
+                                    key_pair,
+                                    foreign_public_key,
+                                };
+
+                                Ok(None)
+                            }
+                        },
+                    }
+                }
+                _ => {
+                    panic!(
+                        "Somehow an unsupported auth scheme ended up in the auth scheme. Someone \
+                         should get fired."
+                    );
+                }
+            },
+            State::Authenticated { .. } => Ok(None),
+            _ => Err(WpskkaClientError::WrongMessageForState(
+                debug(&msg),
+                debug(&self.state),
+            )),
+        }
+    }
+
+    fn handle_auth_result(
+        &mut self,
+        msg: AuthResult,
+        write: &mut Vec<WpskkaMessage<'_>>,
+        events: &mut Vec<InformEvent>,
+    ) -> Result<Option<Vec<u8>>, WpskkaClientError> {
+        if !msg.ok {
+            let result = match self.state {
+                // We are already in the proper state. TODO is this really an error?
+                State::ChooseAnAuthScheme { .. } => Ok(None),
+                State::IsAuthenticating {
+                    auth_scheme,
+                    private_key: my_private_key,
+                } => {
+                    let (public_key, foreign_public_key) = match auth_scheme {
+                        AuthScheme::None {
+                            public_key,
+                            foreign_public_key,
+                        } => (public_key, foreign_public_key),
+                        AuthScheme::SrpAuthClient(srp_client) => {
+                            let (public_key, foreign_public_key) = srp_client.finish();
+                            (public_key, foreign_public_key)
+                        }
+                        _ => {
+                            panic!(
+                                "Somehow an unsupported auth scheme ended up in the auth scheme. \
+                                 Someone should get fired."
+                            );
+                        }
+                    };
+                    let key_pair = KeyPair {
+                        public_key,
+                        ephemeral_private_key: my_private_key,
+                    };
+                    self.state = State::ChooseAnAuthScheme {
+                        key_pair,
+                        foreign_public_key,
+                    };
+                    Ok(None)
+                }
+                _ => Err(WpskkaClientError::WrongMessageForState(
+                    debug(&msg),
+                    debug(&self.state),
+                )),
+            };
+            events.push(InformEvent::WpskkaClientInform(
+                WpskkaClientInform::AuthFailed,
+            ));
+            return result;
+        }
+
+        // auth was successful
+
+        match &self.state {
+            State::IsAuthenticating { auth_scheme, .. } => match auth_scheme {
+                // Srp auth is bidirectional so we don't care if the Host auth's us
+                AuthScheme::SrpAuthClient(_) => {}
+                _ => {
+                    todo!("handle auth result for non-srp auth scheme");
+                }
+            },
+            State::Authenticated { .. } => {}
+            _ =>
+                return Err(WpskkaClientError::WrongMessageForState(
+                    debug(&msg),
+                    debug(&self.state),
+                )),
+        }
+
+        Ok(None)
+    }
+
+    fn handle_message_reliable(
+        &mut self,
+        msg: TransportDataMessageReliable<'_>,
+        write: &mut Vec<WpskkaMessage<'_>>,
+        events: &mut Vec<InformEvent>,
+    ) -> Result<Option<Vec<u8>>, WpskkaClientError> {
+        match &mut self.state {
+            State::Authenticated { reliable, .. } => Ok(Some(
+                reliable
+                    .decrypt(msg.data.0.as_ref())
+                    .map_err(WpskkaClientError::CipherError)?,
+            )),
+            _ => Err(WpskkaClientError::WrongMessageForState(
+                debug(&msg),
+                debug(&self.state),
+            )),
+        }
+    }
+
+    fn handle_message_unreliable(
+        &mut self,
+        msg: TransportDataMessageUnreliable<'_>,
+        write: &mut Vec<WpskkaMessage<'_>>,
+        events: &mut Vec<InformEvent>,
+    ) -> Result<Option<Vec<u8>>, WpskkaClientError> {
+        match &self.state {
+            State::Authenticated { unreliable, .. } => Ok(Some(
+                unreliable
+                    .decrypt(msg.data.0.as_ref(), msg.counter)
+                    .map_err(WpskkaClientError::CipherError)?,
+            )),
+            _ => Err(WpskkaClientError::WrongMessageForState(
+                debug(&msg),
+                debug(&self.state),
+            )),
+        }
     }
 
     pub fn process_password(
         &mut self,
-        password: Vec<u8>,
-    ) -> Result<Option<WpskkaMessage<'static>>, WpskkaClientError> {
-        let result = match self.current_auth.as_mut() {
-            Some(auth) => match &mut **auth {
-                AuthScheme::SrpAuthClient(client) => client
+        password: &[u8],
+    ) -> Result<WpskkaMessage<'static>, WpskkaClientError> {
+        match &mut self.state {
+            State::IsAuthenticating { auth_scheme, .. } => match auth_scheme {
+                AuthScheme::SrpAuthClient(srp_client) => srp_client
                     .process_password(&password)
                     .map_err(|_| WpskkaClientError::BadAuthSchemeMessage)
                     .and_then(|outgoing| {
@@ -84,204 +371,51 @@ impl WpskkaClientHandler {
                             .to_bytes()
                             .map_err(|_| WpskkaClientError::BadAuthSchemeMessage)
                     })
-                    .map(|data| Some(WpskkaMessage::AuthMessage(AuthMessage { data }))),
-                _ => Ok(None),
+                    .map(|data| WpskkaMessage::AuthMessage(AuthMessage { data })),
+                _ => Err(WpskkaClientError::WrongAuthScheme(
+                    "AuthSchemeMessage::SrpAuthClient",
+                    "AuthSchemeMessage::SrpAuthHost",
+                )),
             },
-            None => Ok(None),
-        };
-
-        self.password = Some(password.to_vec());
-
-        result
-    }
-
-    pub fn next_auth(
-        &mut self,
-        write: &mut Vec<WpskkaMessage<'_>>,
-        events: &mut Vec<InformEvent>,
-    ) -> Result<(), WpskkaClientError> {
-        while self.current_auth_num < self.available_auth_schemes.len() {
-            let current_auth = self.available_auth_schemes[self.current_auth_num];
-            self.current_auth_num += 1;
-
-            // SrpStatic and SrpDynamic are the same (Srp) so lets handle them together
-            if current_auth == AuthSchemeType::SrpStatic
-                || current_auth == AuthSchemeType::SrpDynamic
-            {
-                self.current_auth = Some(Box::new(AuthScheme::SrpAuthClient(SrpAuthClient::new(
-                    self.keys.as_ref().unwrap().public_key.clone(),
-                    self.host_public_key.unwrap().to_vec(),
-                ))));
-                write.push(WpskkaMessage::TryAuth(TryAuth {
-                    public_key: self
-                        .keys
-                        .as_ref()
-                        .unwrap()
-                        .public_key
-                        .as_ref()
-                        .try_into()
-                        .unwrap(), // send our public key
-                    auth_scheme: current_auth,
-                }));
-                self.state = State::IsAuthenticating;
-                return Ok(());
-            }
-
-            // TODO support other auth methods
+            _ => Err(WpskkaClientError::WrongState(
+                debug(&self.state),
+                "State::Authenticated".to_string(),
+            )),
         }
-        events.push(InformEvent::WpskkaClientInform(
-            WpskkaClientInform::OutOfAuthenticationSchemes,
-        ));
-        Ok(())
     }
 
-    pub fn _handle(
-        &mut self,
-        msg: WpskkaMessage<'_>,
-        write: &mut Vec<WpskkaMessage<'_>>,
-        events: &mut Vec<InformEvent>,
-    ) -> Result<Option<Vec<u8>>, WpskkaClientError> {
+    pub fn try_auth(&mut self, scheme: AuthSchemeType) -> WpskkaMessage<'static> {
         match self.state {
-            State::WaitingForAuthSchemes => match msg {
-                WpskkaMessage::AuthScheme(msg) => {
-                    self.available_auth_schemes = msg.auth_schemes;
-                    self.available_auth_schemes.dedup();
-                    // Put SrpStatic and SrpDynamic in front
-                    self.available_auth_schemes.sort_by(|a, b| {
-                        let a_is_srp =
-                            a == &AuthSchemeType::SrpStatic || a == &AuthSchemeType::SrpDynamic;
-                        let b_is_srp =
-                            b == &AuthSchemeType::SrpStatic || b == &AuthSchemeType::SrpDynamic;
-                        if a_is_srp && !b_is_srp {
-                            return Ordering::Greater;
-                        }
-                        if !a_is_srp && b_is_srp {
-                            return Ordering::Less;
-                        }
-                        Ordering::Equal
-                    });
-                    self.host_public_key = Some(msg.public_key);
-                    self.keys = Some(Box::new(
-                        keypair().map_err(|_| WpskkaClientError::RingError)?,
-                    ));
-                    self.next_auth(write, events)?;
-                    Ok(None)
-                }
-                _ => Err(WpskkaClientError::WrongMessageForState(
-                    debug(&msg),
-                    self.state,
-                )),
-            },
-            State::IsAuthenticating => match msg {
-                WpskkaMessage::AuthMessage(msg) => {
-                    return match &mut **self.current_auth.as_mut().unwrap() {
-                        AuthScheme::SrpAuthClient(srp_client) => {
-                            let msg = SrpMessage::read(&mut Cursor::new(&msg.data))
-                                .map_err(|_| WpskkaClientError::BadAuthSchemeMessage)?;
-                            match srp_client.handle(msg) {
-                                Ok(outgoing) => {
-                                    if let Some(outgoing) = outgoing {
-                                        events.push(InformEvent::WpskkaClientInform(outgoing));
-                                    }
-                                    if srp_client.is_authenticated() {
-                                        self.current_auth = None; // TODO Security: Look into zeroing out the data here
-                                        self.state = State::Authenticated;
-                                        events.push(InformEvent::WpskkaClientInform(
-                                            WpskkaClientInform::AuthSuccessful,
-                                        ));
-                                        self.derive_keys()?;
-                                    }
-                                    Ok(None)
-                                }
-                                Err(err) => {
-                                    match err {
-                                        SrpClientError::WrongMessageForState(..) => {
-                                            return Err(WpskkaClientError::BadAuthSchemeMessage);
-                                        }
-                                        _ => {
-                                            self.current_auth = None; // TODO Security: Look into zeroing out the data here
-                                            self.next_auth(write, events)?;
-                                            Ok(None)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        _ => {
-                            panic!(
-                                "Somehow an unsupported auth scheme ended up in the auth scheme. \
-                                 Someone should get fired."
-                            )
-                        }
-                    };
-                }
-                WpskkaMessage::AuthResult(msg) => {
-                    if !msg.ok {
-                        self.current_auth = None; // TODO Security: Look into zeroing out the data here
-                        self.next_auth(write, events)?;
+            State::ChooseAnAuthScheme {
+                key_pair,
+                foreign_public_key,
+            } => {
+                let auth_scheme = match scheme {
+                    AuthSchemeType::None => AuthScheme::None {
+                        public_key: key_pair.public_key,
+                        foreign_public_key,
+                    },
+                    AuthSchemeType::SrpDynamic | AuthSchemeType::SrpStatic => {
+                        let srp_client =
+                            SrpAuthClient::new(key_pair.public_key, foreign_public_key);
+                        AuthScheme::SrpAuthClient(srp_client)
                     }
-                    Ok(None)
-                    // We don't really care whether we are authenticated to the Host, we care if the Host is authenticated to us. We know this by asking the self.current_auth.is_authenticated
-                    // TODO maybe check if we are authenticated here. We shouldn't need it for SRP but in future, other auth methods may
-                }
-                _ => Err(WpskkaClientError::WrongMessageForState(
-                    debug(&msg),
-                    self.state,
-                )),
-            },
-            State::Authenticated => match msg {
-                WpskkaMessage::AuthResult(msg) => {
-                    if !msg.ok {
-                        // We authenticated the Host but the Host couldn't authenticate us back. Let's try the next auth method.
-                        self.current_auth = None; // TODO Security: Look into zeroing out the data here
-                        self.state = State::IsAuthenticating;
-                        self.next_auth(write, events)?;
+                    AuthSchemeType::PublicKey => {
+                        todo!("PublicKey")
                     }
-                    Ok(None)
-                }
-                WpskkaMessage::TransportDataMessageReliable(msg) => {
-                    let reliable = self.reliable.as_mut().unwrap();
-                    Ok(Some(
-                        reliable
-                            .decrypt(msg.data.0.as_ref())
-                            .map_err(WpskkaClientError::CipherError)?,
-                    ))
-                }
-                WpskkaMessage::TransportDataMessageUnreliable(msg) => {
-                    let unreliable = self.unreliable.as_mut().unwrap();
-                    Ok(Some(
-                        unreliable
-                            .decrypt(msg.data.0.as_ref(), msg.counter)
-                            .map_err(WpskkaClientError::CipherError)?,
-                    ))
-                }
-                _ => Err(WpskkaClientError::WrongMessageForState(
-                    debug(&msg),
-                    self.state,
-                )),
-            },
-        }
-    }
-
-    /// Warning: Steals keys, Overwrites ciphers
-    fn derive_keys(&mut self) -> Result<(), WpskkaClientError> {
-        // TODO zero data
-        let keys = self.keys.take().unwrap();
-        let host_pubkey = self.host_public_key.take().unwrap();
-        let host_pubkey = parse_foreign_public(&host_pubkey);
-        let (receive_reliable, send_reliable, receive_unreliable, send_unreliable) =
-            diffie_hellman(keys.ephemeral_private_key, host_pubkey)
-                .map_err(|_| WpskkaClientError::RingError)?;
-        // TODO zero hella
-        self.reliable = Some(CipherReliablePeer::new(
-            send_reliable.to_vec(),
-            receive_reliable.to_vec(),
-        ));
-        self.unreliable = Some(Arc::new(CipherUnreliablePeer::new(
-            send_unreliable.to_vec(),
-            receive_unreliable.to_vec(),
-        )));
-        Ok(())
+                };
+                self.state = State::IsAuthenticating {
+                    auth_scheme,
+                    private_key: key_pair.ephemeral_private_key,
+                };
+            }
+            _ => {
+                panic!("try_auth called in a state {:?}", &self.state);
+            }
+        };
+        WpskkaMessage::TryAuth(TryAuth {
+            auth_scheme: scheme,
+        })
     }
 }
 
@@ -292,22 +426,32 @@ impl WpskkaHandlerTrait for WpskkaClientHandler {
         write: &mut Vec<WpskkaMessage<'_>>,
         events: &mut Vec<InformEvent>,
     ) -> Result<Option<Vec<u8>>, WpskkaError> {
-        Ok(self._handle(msg, write, events)?)
+        Ok(self.handle_internal(msg, write, events)?)
     }
 
     fn unreliable_cipher(&self) -> &Arc<CipherUnreliablePeer> {
-        self.unreliable.as_ref().unwrap()
+        match &self.state {
+            State::Authenticated { unreliable, .. } => &unreliable,
+            _ => panic!("Trying to get the unreliable cipher when not authenticated"),
+        }
     }
 
     fn reliable_cipher_mut(&mut self) -> &mut CipherReliablePeer {
-        self.reliable.as_mut().unwrap()
+        match &mut self.state {
+            State::Authenticated { reliable, .. } => reliable,
+            _ => panic!("Trying to get the reliable cipher when not authenticated"),
+        }
     }
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum WpskkaClientError {
-    #[error("invalid message {0} for state {1:?}")]
-    WrongMessageForState(String, State),
+    #[error("invalid message {0} for state {0}")]
+    WrongMessageForState(String, String),
+    #[error("invalid state for function call: got {0} but expected {0}")]
+    WrongState(String, String),
+    #[error("invalid auth scheme for function call: got {0} but expected {0}")]
+    WrongAuthScheme(&'static str, &'static str),
 
     #[error("unsupported auth scheme type")]
     BadAuthSchemeType(AuthSchemeType),
@@ -321,7 +465,8 @@ pub enum WpskkaClientError {
 }
 
 pub enum WpskkaClientInform {
-    PasswordPrompt,             // UI needs to prompt for a password
-    OutOfAuthenticationSchemes, // Authentication Failed
+    AuthScheme(Vec<AuthSchemeType>), // List of available auth schemes
+    PasswordPrompt,                  // UI needs to prompt for a password
+    AuthFailed,                      // Authentication Failed
     AuthSuccessful,
 }

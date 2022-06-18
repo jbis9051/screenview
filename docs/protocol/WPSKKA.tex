@@ -7,7 +7,9 @@ the message type.\\
 \subsection{Handshake}
 
 The handshake begins with a key exchange.
-Then then the Client is offered a list of available authentication schemes.
+The Host sends its ephemeral public key in a KeyExchange message.
+The Client replies with its ephemeral public key KeyExchange message.
+Then the Host offers to the Client a list of available authentication schemes.
 The goal of WPSKKA is to authenticate the Peers' ephemeral keys through one of those schemes.
 
 \subsubsection{KeyExchange}

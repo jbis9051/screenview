@@ -24,17 +24,17 @@ pub enum State {
 
 // Arbitrary SrpAuthClient. Can be used for any SRP based auth scheme.
 #[derive(Debug)]
-pub struct SrpAuthClient {
+pub struct SrpAuthClient<const N: usize> {
     state: State,
     authenticated: bool,
-    host_public_key: Vec<u8>,
+    host_public_key: [u8; N],
     our_public_key: PublicKey,
     host_hello: Option<Box<HostHello>>,
     hmac_key: Option<Box<[u8; 32]>>,
 }
 
-impl SrpAuthClient {
-    pub fn new(our_public_key: PublicKey, host_public_key: Vec<u8>) -> Self {
+impl<const N: usize> SrpAuthClient<N> {
+    pub fn new(our_public_key: PublicKey, host_public_key: [u8; N]) -> Self {
         Self {
             state: State::PreHello,
             authenticated: false,
@@ -43,6 +43,10 @@ impl SrpAuthClient {
             host_hello: None,
             hmac_key: None,
         }
+    }
+
+    pub fn finish(self) -> (PublicKey, [u8; N]) {
+        (self.our_public_key, self.host_public_key)
     }
 
     pub fn is_authenticated(&self) -> bool {
