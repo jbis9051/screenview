@@ -126,7 +126,8 @@ impl NativeApiTemplate for X11Api {
         let monitor_id = self
             .monitors
             .iter()
-            .position(|info| Self::in_aabb(x, y, info.x, info.y, info.width, info.height))
+            .find(|info| Self::in_aabb(x, y, info.x, info.y, info.width, info.height))
+            .map(|info| info.id)
             .unwrap_or(0);
 
         let window_requests = windows
@@ -145,7 +146,7 @@ impl NativeApiTemplate for X11Api {
         Ok(MousePosition {
             x,
             y,
-            monitor_id: monitor_id as _,
+            monitor_id,
             window_relatives: window_requests
                 .into_iter()
                 .flat_map(|(window_id, cookie)| {
@@ -277,9 +278,8 @@ impl NativeApiTemplate for X11Api {
         Ok(self
             .monitors
             .iter()
-            .enumerate()
-            .map(|(id, info)| Monitor {
-                id: id as u32,
+            .map(|info| Monitor {
+                id: info.id,
                 name: info.name.clone(),
                 width: info.width,
                 height: info.height,
@@ -329,21 +329,25 @@ impl NativeApiTemplate for X11Api {
     }
 
     fn capture_monitor_frame(&mut self, monitor_id: u32) -> Result<Frame, Error> {
-        let info = match self.monitors.get(monitor_id as usize) {
-            Some(info) => info,
-            None => return Err(Error::UnknownMonitor),
-        };
-
-        self.capture(self.root, info.x, info.y, info.width, info.height)
+        let &X11MonitorInfo {
+            x,
+            y,
+            width,
+            height,
+            ..
+        } = self.get_monitor(monitor_id)?;
+        self.capture(self.root, x, y, width, height)
     }
 
     fn update_monitor_frame(&mut self, monitor_id: u32, frame: &mut Frame) -> Result<(), Error> {
-        let info = match self.monitors.get(monitor_id as usize) {
-            Some(info) => info,
-            None => return Err(Error::UnknownMonitor),
-        };
-
-        self.update_frame(self.root, info.x, info.y, info.width, info.height, frame)
+        let &X11MonitorInfo {
+            x,
+            y,
+            width,
+            height,
+            ..
+        } = self.get_monitor(monitor_id)?;
+        self.update_frame(self.root, x, y, width, height, frame)
     }
 
     fn capture_window_frame(&mut self, window_id: u32) -> Result<Frame, Error> {
