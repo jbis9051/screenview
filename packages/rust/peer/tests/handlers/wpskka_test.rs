@@ -23,10 +23,10 @@ fn srp_authenticate(
     let mut events = Vec::new();
     let mut write = Vec::new();
 
-    let auth_schemes = host.auth_schemes().expect("handler failed");
+    let auth_schemes = host.auth_schemes();
 
     assert!(client
-        ._handle(auth_schemes, &mut write, &mut events)
+        .handle_internal(auth_schemes, &mut write, &mut events)
         .expect("handler failed")
         .is_none());
     assert_eq!(write.len(), 1);
@@ -48,7 +48,7 @@ fn srp_authenticate(
     let message = write.remove(0);
 
     assert!(client
-        ._handle(message, &mut write, &mut events)
+        .handle_internal(message, &mut write, &mut events)
         .expect("handler failed")
         .is_none());
     assert_eq!(write.len(), 0);
@@ -60,11 +60,11 @@ fn srp_authenticate(
 
     events.clear();
 
-    let output = client.process_password(password.to_vec()).expect("");
-    assert!(matches!(output, Some(WpskkaMessage::AuthMessage(_))));
+    let output = client.process_password(password).expect("");
+    assert!(matches!(output, WpskkaMessage::AuthMessage(_)));
 
     // ClientHello
-    let message = output.unwrap();
+    let message = output;
     assert!(host
         .handle_internal(message, &mut write, &mut events)
         .expect("handler failed")
@@ -81,7 +81,7 @@ fn srp_authenticate(
     // HostVerify
     let message = write.remove(0);
     assert!(client
-        ._handle(message, &mut write, &mut events)
+        .handle_internal(message, &mut write, &mut events)
         .expect("handler failed")
         .is_none());
     assert_eq!(write.len(), 0);
@@ -103,7 +103,7 @@ fn test_reliable_communication(host: &mut WpskkaHostHandler, client: &mut Wpskka
     let mut write = Vec::new();
     let mut events = Vec::new();
     let result = client
-        ._handle(message, &mut write, &mut events)
+        .handle_internal(message, &mut write, &mut events)
         .expect("handler failed")
         .expect("expected data");
     assert_eq!(write.len(), 0);
@@ -139,7 +139,7 @@ fn test_unreliable_communication(host: &mut WpskkaHostHandler, client: &mut Wpsk
     let mut write = Vec::new();
     let mut events = Vec::new();
     let result = client
-        ._handle(message, &mut write, &mut events)
+        .handle_internal(message, &mut write, &mut events)
         .expect("handler failed")
         .expect("expected data");
     assert_eq!(write.len(), 0);

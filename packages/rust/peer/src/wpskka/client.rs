@@ -39,10 +39,12 @@ use std::{
     cmp::Ordering,
     fmt::{Debug, Formatter},
     io::Cursor,
+    mem,
     sync::Arc,
 };
 
 pub enum State {
+    Modifying,
     KeyExchange,
     ChooseAnAuthScheme {
         key_pair: KeyPair,
@@ -62,6 +64,7 @@ pub enum State {
 impl Debug for State {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
+            State::Modifying => write!(f, "Modifying"),
             State::KeyExchange => write!(f, "KeyExchange"),
             State::ChooseAnAuthScheme { .. } => write!(f, "WaitingForAuthSchemes {{ .. }}"),
             State::IsAuthenticating { .. } => write!(f, "IsAuthenticating {{ .. }}"),
@@ -169,7 +172,7 @@ impl WpskkaClientHandler {
         write: &mut Vec<WpskkaMessage<'_>>,
         events: &mut Vec<InformEvent>,
     ) -> Result<Option<Vec<u8>>, WpskkaClientError> {
-        match self.state {
+        match mem::replace(&mut self.state, State::Modifying) {
             State::IsAuthenticating {
                 auth_scheme,
                 private_key: my_private_key,
@@ -254,7 +257,7 @@ impl WpskkaClientHandler {
         events: &mut Vec<InformEvent>,
     ) -> Result<Option<Vec<u8>>, WpskkaClientError> {
         if !msg.ok {
-            let result = match self.state {
+            let result = match mem::replace(&mut self.state, State::Modifying) {
                 // We are already in the proper state. TODO is this really an error?
                 State::ChooseAnAuthScheme { .. } => Ok(None),
                 State::IsAuthenticating {
@@ -385,7 +388,7 @@ impl WpskkaClientHandler {
     }
 
     pub fn try_auth(&mut self, scheme: AuthSchemeType) -> WpskkaMessage<'static> {
-        match self.state {
+        match mem::replace(&mut self.state, State::Modifying) {
             State::ChooseAnAuthScheme {
                 key_pair,
                 foreign_public_key,
@@ -426,7 +429,9 @@ impl WpskkaHandlerTrait for WpskkaClientHandler {
         write: &mut Vec<WpskkaMessage<'_>>,
         events: &mut Vec<InformEvent>,
     ) -> Result<Option<Vec<u8>>, WpskkaError> {
-        Ok(self.handle_internal(msg, write, events)?)
+        let ret = self.handle_internal(msg, write, events).map_err(Into::into);
+        assert!(!matches!(self.state, State::Modifying));
+        ret
     }
 
     fn unreliable_cipher(&self) -> &Arc<CipherUnreliablePeer> {

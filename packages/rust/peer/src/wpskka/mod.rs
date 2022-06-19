@@ -46,7 +46,7 @@ use std::{borrow::Cow, sync::Arc};
 // This is guaranteed not to happen as per the spec. The Host MUST send out a successful authentication result after it sends the final SRP message to the Client.
 
 
-struct KeyState {
+pub struct KeyState {
     foreign_public_key: [u8; 32],
     key_pair: KeyPair,
 }

@@ -37,10 +37,12 @@ use ring::agreement::EphemeralPrivateKey;
 use std::{
     fmt::{Debug, Formatter},
     io::Cursor,
+    mem,
     sync::Arc,
 };
 
 pub enum State {
+    Modifying,
     PreInit,
     KeyExchange {
         key_state: KeyPair,
@@ -62,6 +64,7 @@ pub enum State {
 impl Debug for State {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
+            State::Modifying => write!(f, "Modifying"),
             State::PreInit => write!(f, "PreInit"),
             State::KeyExchange { .. } => write!(f, "KeyExchange {{ .. }}"),
             State::PreAuthSelect { .. } => write!(f, "PreAuthSelect {{ .. }}"),
@@ -216,7 +219,7 @@ impl WpskkaHostHandler {
         events: &mut Vec<InformEvent>,
         msg: TryAuth,
     ) -> Result<Option<Vec<u8>>, WpskkaHostError> {
-        let key_state = match self.state {
+        let key_state = match mem::replace(&mut self.state, State::Modifying) {
             State::PreAuthSelect { key_state } => key_state,
             // if we are authenticated we should cancel the auth and try the new one
             State::IsAuthenticating {
@@ -272,7 +275,7 @@ impl WpskkaHostHandler {
         events: &mut Vec<InformEvent>,
         msg: AuthMessage,
     ) -> Result<Option<Vec<u8>>, WpskkaHostError> {
-        match self.state {
+        match mem::replace(&mut self.state, State::Modifying) {
             State::IsAuthenticating {
                 auth_scheme,
                 private_key: my_private_key,
@@ -309,7 +312,10 @@ impl WpskkaHostHandler {
                                     }
                                 }
                             } else {
-                                // TODO maybe we need to change state here?
+                                self.state = State::IsAuthenticating {
+                                    auth_scheme: AuthScheme::SrpAuthHost(srp_host),
+                                    private_key: my_private_key,
+                                };
                                 Ok(None)
                             }
                         }
@@ -395,7 +401,7 @@ impl WpskkaHostHandler {
         }
     }
 
-    fn auth_schemes(&mut self) -> WpskkaMessage<'static> {
+    pub fn auth_schemes(&self) -> WpskkaMessage<'static> {
         let mut auth_schemes = Vec::new();
         if self.static_password.is_some() {
             auth_schemes.push(AuthSchemeType::SrpStatic);
@@ -451,7 +457,9 @@ impl WpskkaHandlerTrait for WpskkaHostHandler {
         write: &mut Vec<WpskkaMessage<'_>>,
         events: &mut Vec<InformEvent>,
     ) -> Result<Option<Vec<u8>>, WpskkaError> {
-        Ok(self.handle_internal(msg, write, events)?)
+        let ret = self.handle_internal(msg, write, events).map_err(Into::into);
+        assert!(!matches!(self.state, State::Modifying));
+        ret
     }
 
     fn unreliable_cipher(&self) -> &Arc<CipherUnreliablePeer> {
