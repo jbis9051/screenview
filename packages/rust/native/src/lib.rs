@@ -13,8 +13,8 @@ cfg_if! {
         pub use linux_x11::Error as NativeApiError;
     } else if #[cfg(windows)] {
         mod windows;
-        pub use windows::WindowsApi as NativeApi;
-        pub use windows::Error as NativeApiError;
+        pub use crate::windows::WindowsApi as NativeApi;
+        pub use crate::windows::Error as NativeApiError;
     } else if #[cfg(target_os="macos")] {
         mod mac;
         pub use mac::MacApi as NativeApi;

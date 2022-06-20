@@ -7,5 +7,7 @@ cfg_if! {
     } else if #[cfg(target_os = "macos")]{
         pub mod keycode_mac;
         pub mod keysym_to_mac;
+    } else if #[cfg(target_os = "windows")]{
+        pub mod keysym_to_win;
     }
 }
