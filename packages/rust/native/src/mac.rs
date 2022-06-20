@@ -619,7 +619,7 @@ impl NativeApiTemplate for MacApi {
         Ok(())
     }
 
-    fn pointer_position(&mut self) -> Result<MousePosition, Error> {
+    fn pointer_position(&mut self, windows: &[WindowId]) -> Result<MousePosition, Error> {
         let position = Self::pointer_position_impl()?;
         let normalized_position = NSPoint::new(
             position.point.x - position.monitor.rect.origin.x,
@@ -632,6 +632,10 @@ impl NativeApiTemplate for MacApi {
                 let nsrect: NSRect = std::mem::transmute(w.rect);
                 NSMouseInRect(normalized_position, nsrect, NO) == YES
             })
+            // if we ever decide to you know...not cheat https://developer.apple.com/documentation/coregraphics/1455215-cgwindowlistcreatedescriptionfro
+            // Put the O(n^2) filter after the other filter under the assumption that the n^2
+            // would be more expensive otherwise
+            .filter(|w| windows.iter().any(|&id| w.id == id))
             .collect();
 
         Ok(MousePosition {

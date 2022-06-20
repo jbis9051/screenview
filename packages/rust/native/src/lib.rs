@@ -8,9 +8,9 @@ cfg_if! {
         pub use api::dummy::DummyApi as NativeApi;
         pub use std::convert::Infallible as NativeApiError;
     } else if #[cfg(target_os="linux")] {
-        mod unix;
-        pub use unix::X11Api as NativeApi;
-        pub use unix::Error as NativeApiError;
+        mod linux_x11;
+        pub use linux_x11::X11Api as NativeApi;
+        pub use linux_x11::Error as NativeApiError;
     } else if #[cfg(windows)] {
         mod windows;
         pub use windows::WindowsApi as NativeApi;

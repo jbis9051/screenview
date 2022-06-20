@@ -20,8 +20,8 @@ default-features = false
 
 [target.'cfg(all(target_os="linux", not(dummy_native)))'.dependencies]
 x11 = { version = "2.19.1", features = ["xtest"] }
-x11-clipboard = "0.5.3"
-xcb = { version = "1.0.0-beta.0", features = ["shm", "xlib_xcb", "randr"] }
+x11-clipboard = "0.6.1"
+xcb = { version = "1.1.1", features = ["shm", "xlib_xcb", "randr"] }
 
 [target.'cfg(all(target_os="macos", not(dummy_native)))'.dependencies]
 cocoa = "0.24.0"

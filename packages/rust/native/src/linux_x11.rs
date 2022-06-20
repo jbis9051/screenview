@@ -9,7 +9,7 @@ use std::{
     time::Duration,
 };
 use x11::{
-    xlib::{XDefaultRootWindow, XKeysymToKeycode, XOpenDisplay, XSync},
+    xlib::{XDefaultRootWindow, XKeysymToKeycode, XOpenDisplay, XRaiseWindow, XSync},
     xtest::{XTestFakeButtonEvent, XTestFakeKeyEvent},
 };
 use x11_clipboard::{error::Error as X11ClipboardError, Clipboard};
@@ -40,6 +40,7 @@ use xcb::{
 use crate::api::{self, *};
 
 struct X11MonitorInfo {
+    id: MonitorId,
     name: String,
     x: u32,
     y: u32,
@@ -70,11 +71,7 @@ pub struct X11Api {
     root: Window,
 
     // Screen capture fields
-    width: u16,
-    height: u16,
-    shmid: c_int,
-    shmaddr: *mut u32,
-    shmseg: Seg,
+    capture_info: Option<CaptureInfo>,
 
     // Monitor map
     monitors: Vec<X11MonitorInfo>,
@@ -94,26 +91,10 @@ impl X11Api {
         let root = unsafe { Window::new(XDefaultRootWindow(dpy) as u32) };
         let conn = unsafe { Connection::from_xlib_display(dpy) };
 
-        let cookie = conn.send_request(&GetGeometry {
-            drawable: Drawable::Window(root),
-        });
-        let reply = conn.wait_for_reply(cookie)?;
-
-        let width = reply.width();
-        let height = reply.height();
-        let depth = reply.depth() as size_t;
-
-        let (shmid, shmaddr, shmseg) =
-            Self::init_shm(&conn, width as size_t * height as size_t * depth)?;
-
         Ok(Self {
             conn,
             root,
-            width,
-            height,
-            shmid,
-            shmaddr,
-            shmseg,
+            capture_info: None,
             monitors: Vec::new(),
             clipboard: Clipboard::new()?,
         })
@@ -136,7 +117,7 @@ impl NativeApiTemplate for X11Api {
         Ok(())
     }
 
-    fn pointer_position(&mut self) -> Result<MousePosition, Error> {
+    fn pointer_position(&mut self, windows: &[WindowId]) -> Result<MousePosition, Error> {
         let reply = self
             .conn
             .wait_for_reply(self.conn.send_request(&QueryPointer { window: self.root }))?;
@@ -145,29 +126,65 @@ impl NativeApiTemplate for X11Api {
         let monitor_id = self
             .monitors
             .iter()
-            .position(|info| {
-                x >= info.x
-                    && y >= info.y
-                    && (x - info.x) < info.width
-                    && (y - info.y) < info.height
-            })
+            .find(|info| Self::in_aabb(x, y, info.x, info.y, info.width, info.height))
+            .map(|info| info.id)
             .unwrap_or(0);
 
+        let window_requests = windows
+            .iter()
+            .copied()
+            .map(|window| {
+                (
+                    window,
+                    self.conn.send_request(&GetGeometry {
+                        drawable: Drawable::Window(unsafe { Window::new(window) }),
+                    }),
+                )
+            })
+            .collect::<Vec<_>>();
+
         Ok(MousePosition {
-            x: reply.root_x() as _,
-            y: reply.root_y() as _,
-            monitor_id: monitor_id as _,
-            window_relatives: vec![], // TODO: fill
+            x,
+            y,
+            monitor_id,
+            window_relatives: window_requests
+                .into_iter()
+                .flat_map(|(window_id, cookie)| {
+                    self.conn
+                        .wait_for_reply(cookie)
+                        .map(|reply| {
+                            (
+                                reply.x() as u32,
+                                reply.y() as u32,
+                                reply.width() as u32,
+                                reply.height() as u32,
+                            )
+                        })
+                        .map(|(wx, wy, w, h)| {
+                            Self::in_aabb(x, y, wx, wy, w, h).then(|| PointerPositionRelative {
+                                x: x - wx,
+                                y: y - wy,
+                                window_id,
+                            })
+                        })
+                        .transpose()
+                })
+                .collect::<Result<_, _>>()?,
         })
     }
 
-    // TODO: figure out how to use monitor_id
     fn set_pointer_position_absolute(
         &mut self,
         x: u32,
         y: u32,
-        _monitor_id: MonitorId,
+        monitor_id: MonitorId,
     ) -> Result<(), Self::Error> {
+        let &X11MonitorInfo {
+            x: monitor_x,
+            y: monitor_y,
+            ..
+        } = self.get_monitor(monitor_id)?;
+
         self.conn
             .check_request(self.conn.send_request_checked(&WarpPointer {
                 src_window: Window::none(),
@@ -176,23 +193,22 @@ impl NativeApiTemplate for X11Api {
                 src_y: 0,
                 src_width: 0,
                 src_height: 0,
-                dst_x: x as _,
-                dst_y: y as _,
+                dst_x: (monitor_x + x) as _,
+                dst_y: (monitor_y + y) as _,
             }))
             .map_err(Into::into)
     }
 
-    // TODO: convert window_id into XCB Window
     fn set_pointer_position_relative(
         &mut self,
         x: u32,
         y: u32,
-        _window_id: WindowId,
+        window_id: WindowId,
     ) -> Result<(), Self::Error> {
         self.conn
             .check_request(self.conn.send_request_checked(&WarpPointer {
                 src_window: Window::none(),
-                dst_window: self.root,
+                dst_window: unsafe { Window::new(window_id) },
                 src_x: 0,
                 src_y: 0,
                 src_width: 0,
@@ -207,11 +223,15 @@ impl NativeApiTemplate for X11Api {
         &mut self,
         button: MouseButton,
         down: bool,
-        _window_id: Option<WindowId>,
+        window_id: Option<WindowId>,
     ) -> Result<(), Error> {
         let dpy = self.conn.get_raw_dpy();
 
         unsafe {
+            if let Some(window) = window_id {
+                XRaiseWindow(dpy, window as u64);
+            }
+
             XTestFakeButtonEvent(dpy, button.id(), if down { 1 } else { 0 }, 0);
             XSync(dpy, 0);
         }
@@ -258,9 +278,8 @@ impl NativeApiTemplate for X11Api {
         Ok(self
             .monitors
             .iter()
-            .enumerate()
-            .map(|(id, info)| Monitor {
-                id: id as u32,
+            .map(|info| Monitor {
+                id: info.id,
                 name: info.name.clone(),
                 width: info.width,
                 height: info.height,
@@ -310,21 +329,25 @@ impl NativeApiTemplate for X11Api {
     }
 
     fn capture_monitor_frame(&mut self, monitor_id: u32) -> Result<Frame, Error> {
-        let info = match self.monitors.get(monitor_id as usize) {
-            Some(info) => info,
-            None => return Err(Error::UnknownMonitor),
-        };
-
-        self.capture(self.root, info.x, info.y, info.width, info.height)
+        let &X11MonitorInfo {
+            x,
+            y,
+            width,
+            height,
+            ..
+        } = self.get_monitor(monitor_id)?;
+        self.capture(self.root, x, y, width, height)
     }
 
     fn update_monitor_frame(&mut self, monitor_id: u32, frame: &mut Frame) -> Result<(), Error> {
-        let info = match self.monitors.get(monitor_id as usize) {
-            Some(info) => info,
-            None => return Err(Error::UnknownMonitor),
-        };
-
-        self.update_frame(self.root, info.x, info.y, info.width, info.height, frame)
+        let &X11MonitorInfo {
+            x,
+            y,
+            width,
+            height,
+            ..
+        } = self.get_monitor(monitor_id)?;
+        self.update_frame(self.root, x, y, width, height, frame)
     }
 
     fn capture_window_frame(&mut self, window_id: u32) -> Result<Frame, Error> {
@@ -364,6 +387,36 @@ impl NativeApiTemplate for X11Api {
 }
 
 impl X11Api {
+    fn lazy_init_capture(&mut self) -> Result<CaptureInfo, Error> {
+        if self.capture_info.is_none() {
+            self.capture_info = Self::init_capture_info(&self.conn, self.root).map(Some)?;
+        }
+
+        Ok(self.capture_info.unwrap())
+    }
+
+    fn init_capture_info(conn: &Connection, root: Window) -> Result<CaptureInfo, Error> {
+        let cookie = conn.send_request(&GetGeometry {
+            drawable: Drawable::Window(root),
+        });
+        let reply = conn.wait_for_reply(cookie)?;
+
+        let width = reply.width();
+        let height = reply.height();
+        let depth = reply.depth() as size_t;
+
+        let (shmid, shmaddr, shmseg) =
+            Self::init_shm(&conn, width as size_t * height as size_t * depth)?;
+
+        Ok(CaptureInfo {
+            width,
+            height,
+            shmid,
+            shmaddr,
+            shmseg,
+        })
+    }
+
     fn init_shm(conn: &Connection, size: size_t) -> Result<(c_int, *mut u32, Seg), Error> {
         let shmid = unsafe {
             shmget(
@@ -418,20 +471,22 @@ impl X11Api {
     }
 
     fn capture(
-        &self,
+        &mut self,
         window: Window,
         x: u32,
         y: u32,
         width: u32,
         height: u32,
     ) -> Result<Frame, Error> {
-        self.update_shm(window, x, y, width, height)?;
+        let info = self.lazy_init_capture()?;
+
+        self.update_shm(info.shmseg, window, x, y, width, height)?;
 
         let len = width as usize * height as usize;
         let mut buf: Vec<u8> = Vec::with_capacity(len * 3);
 
         unsafe {
-            Self::copy_rgb(self.shmaddr, buf.as_mut_ptr(), len);
+            Self::copy_rgb(info.shmaddr, buf.as_mut_ptr(), len);
             buf.set_len(len * 3);
         }
 
@@ -439,7 +494,7 @@ impl X11Api {
     }
 
     fn update_frame(
-        &self,
+        &mut self,
         window: Window,
         x: u32,
         y: u32,
@@ -447,7 +502,9 @@ impl X11Api {
         height: u32,
         frame: &mut Frame,
     ) -> Result<(), Error> {
-        let len = self.width as usize * self.height as usize;
+        let info = self.lazy_init_capture()?;
+
+        let len = info.width as usize * info.height as usize;
         let data = &mut **frame;
 
         if data.len() != len * 3 {
@@ -455,10 +512,10 @@ impl X11Api {
             return Ok(());
         }
 
-        self.update_shm(window, x, y, width, height)?;
+        self.update_shm(info.shmseg, window, x, y, width, height)?;
 
         unsafe {
-            Self::copy_rgb(self.shmaddr, data.as_mut_ptr(), len);
+            Self::copy_rgb(info.shmaddr, data.as_mut_ptr(), len);
         }
 
         Ok(())
@@ -466,6 +523,7 @@ impl X11Api {
 
     fn update_shm(
         &self,
+        shmseg: Seg,
         window: Window,
         x: u32,
         y: u32,
@@ -480,7 +538,7 @@ impl X11Api {
             height: height as _,
             plane_mask: u32::MAX, // All planes
             format: 2,            // ZPixmap
-            shmseg: self.shmseg,
+            shmseg,
             offset: 0,
         });
         let _reply = self.conn.wait_for_reply(cookie)?;
@@ -535,6 +593,7 @@ impl X11Api {
             )
         }) {
             monitor_list.push(X11MonitorInfo {
+                id: monitor_info.name().resource_id(),
                 name: reply?.name().to_string(),
                 x: monitor_info.x() as u32,
                 y: monitor_info.y() as u32,
@@ -545,6 +604,24 @@ impl X11Api {
 
         self.monitors = monitor_list;
         Ok(())
+    }
+
+    fn get_monitor(&mut self, id: MonitorId) -> Result<&X11MonitorInfo, Error> {
+        // We have to use indices here because for once the programmer is smarter than the borrow
+        // checker
+
+        if let Some(index) = self.get_cached_monitor_index(id) {
+            return Ok(&self.monitors[index]);
+        }
+
+        self.update_monitors()?;
+        self.get_cached_monitor_index(id)
+            .map(|index| &self.monitors[index])
+            .ok_or(Error::UnknownMonitor)
+    }
+
+    fn get_cached_monitor_index(&self, id: MonitorId) -> Option<usize> {
+        self.monitors.iter().position(|monitor| monitor.id == id)
     }
 
     fn list_windows(&self, window: Window, windows: &mut Vec<Window>) -> Result<(), Error> {
@@ -576,12 +653,28 @@ impl X11Api {
             dst = dst.add(3);
         }
     }
+
+    #[inline]
+    fn in_aabb(x1: u32, y1: u32, x2: u32, y2: u32, w: u32, h: u32) -> bool {
+        x1 >= x2 && y1 >= y2 && (x1 - x2) < w && (y1 - y2) < h
+    }
 }
 
 impl Drop for X11Api {
     fn drop(&mut self) {
-        Self::release_shm(&self.conn, self.shmid, self.shmaddr, self.shmseg);
+        if let Some(info) = self.capture_info.as_ref() {
+            Self::release_shm(&self.conn, info.shmid, info.shmaddr, info.shmseg);
+        }
     }
+}
+
+#[derive(Clone, Copy)]
+struct CaptureInfo {
+    width: u16,
+    height: u16,
+    shmid: c_int,
+    shmaddr: *mut u32,
+    shmseg: Seg,
 }
 
 #[derive(thiserror::Error, Debug)]
