@@ -126,7 +126,7 @@ impl WpskkaHostHandler {
         msg: KeyExchange,
     ) -> Result<Option<Vec<u8>>, WpskkaHostError> {
         let key_pair = match mem::replace(&mut self.state, State::Modifying) {
-            State::KeyExchange { key_pair: key_pair } => key_pair,
+            State::KeyExchange { key_pair } => key_pair,
             _ =>
                 return Err(WpskkaHostError::WrongMessageForState(
                     debug(&msg),
@@ -169,7 +169,7 @@ impl WpskkaHostHandler {
                 reliable,
                 unreliable: Arc::new(unreliable),
             }),
-            Err(e) => Err((State::PreInit, WpskkaHostError::RingError)),
+            Err(()) => Err((State::PreInit, WpskkaHostError::RingError)),
         }
     }
 
@@ -399,8 +399,8 @@ impl WpskkaHostHandler {
 
     fn handle_message_reliable(
         &mut self,
-        write: &mut Vec<WpskkaMessage<'_>>,
-        events: &mut Vec<InformEvent>,
+        _write: &mut [WpskkaMessage<'_>],
+        _events: &mut [InformEvent],
         msg: TransportDataMessageReliable<'_>,
     ) -> Result<Option<Vec<u8>>, WpskkaHostError> {
         match self.state {
@@ -420,8 +420,8 @@ impl WpskkaHostHandler {
 
     fn handle_message_unreliable(
         &mut self,
-        write: &mut Vec<WpskkaMessage<'_>>,
-        events: &mut Vec<InformEvent>,
+        _write: &mut [WpskkaMessage<'_>],
+        _events: &mut [InformEvent],
         msg: TransportDataMessageUnreliable<'_>,
     ) -> Result<Option<Vec<u8>>, WpskkaHostError> {
         match &mut self.state {
@@ -518,16 +518,6 @@ impl WpskkaHandlerTrait for WpskkaHostHandler {
             }
         }
     }
-}
-
-enum TryAuthResult {
-    Ok {
-        new_state: State,
-    },
-    Err {
-        new_state: State,
-        error: WpskkaHostError,
-    },
 }
 
 #[derive(Debug, thiserror::Error)]

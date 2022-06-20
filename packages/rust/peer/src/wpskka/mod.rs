@@ -10,7 +10,7 @@ use crate::{
     helpers::{
         cipher_reliable_peer::CipherReliablePeer,
         cipher_unreliable_peer::CipherUnreliablePeer,
-        crypto::{diffie_hellman, parse_foreign_public, KeyPair},
+        crypto::KeyPair,
     },
     InformEvent,
 };

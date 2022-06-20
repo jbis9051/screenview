@@ -91,7 +91,7 @@ fn auth_schemes_check(
     events.clear();
 }
 
-fn test_srp(
+fn test_srp_full(
     host: &mut WpskkaHostHandler,
     client: &mut WpskkaClientHandler,
     write: &mut Vec<WpskkaMessage>,
@@ -103,6 +103,17 @@ fn test_srp(
 
     auth_schemes_check(client, write, events, auth_schemes, Some(&[srp_type]));
 
+    test_srp(host, client, write, events, password, srp_type);
+}
+
+fn test_srp(
+    host: &mut WpskkaHostHandler,
+    client: &mut WpskkaClientHandler,
+    write: &mut Vec<WpskkaMessage>,
+    events: &mut Vec<InformEvent>,
+    password: &[u8],
+    srp_type: AuthSchemeType,
+) {
     let try_auth = client.try_auth(srp_type);
 
     let result = host
@@ -181,14 +192,13 @@ fn test_srp(
     assert!(matches!(evt, WpskkaClientInform::AuthSuccessful));
 }
 
-fn none_auth(
+fn none_auth_full(
     host: &mut WpskkaHostHandler,
     client: &mut WpskkaClientHandler,
     write: &mut Vec<WpskkaMessage>,
     events: &mut Vec<InformEvent>,
 ) {
     let auth_schemes = key_exchange(host, client, write, events);
-
     auth_schemes_check(
         client,
         write,
@@ -196,7 +206,15 @@ fn none_auth(
         auth_schemes,
         Some(&[AuthSchemeType::None]),
     );
+    none_auth(host, client, write, events);
+}
 
+fn none_auth(
+    host: &mut WpskkaHostHandler,
+    client: &mut WpskkaClientHandler,
+    write: &mut Vec<WpskkaMessage>,
+    events: &mut Vec<InformEvent>,
+) {
     let try_auth = client.try_auth(AuthSchemeType::None);
 
     let result = host
@@ -232,6 +250,48 @@ fn none_auth(
     assert!(matches!(evt, WpskkaClientInform::AuthSuccessful));
 }
 
+fn test_ciphers(host: &mut WpskkaHostHandler, client: &mut WpskkaClientHandler) {
+    let data = vec![9, 0, 5, 1];
+
+    // test host encrypt, client decrypt
+    let host_cipher = host.unreliable_cipher();
+    let (ciphertext, counter) = host_cipher.encrypt(&data).unwrap();
+
+    let message = WpskkaMessage::TransportDataMessageUnreliable(TransportDataMessageUnreliable {
+        data: Data(Cow::Owned(ciphertext)),
+        counter,
+    });
+
+    let mut write = Vec::new();
+    let mut events = Vec::new();
+    let result = client
+        .handle(message, &mut write, &mut events)
+        .expect("handler failed")
+        .expect("expected data");
+    assert_eq!(write.len(), 0);
+    assert_eq!(events.len(), 0);
+    assert_eq!(&result, &data);
+
+    // test client encrypt, host decrypt
+    let client_cipher = client.unreliable_cipher();
+    let (ciphertext, counter) = client_cipher.encrypt(&data).unwrap();
+
+    let message = WpskkaMessage::TransportDataMessageUnreliable(TransportDataMessageUnreliable {
+        data: Data(Cow::Owned(ciphertext)),
+        counter,
+    });
+
+    let mut write = Vec::new();
+    let mut events = Vec::new();
+    let result = host
+        .handle(message, &mut write, &mut events)
+        .expect("handler failed")
+        .expect("expected data");
+    assert_eq!(write.len(), 0);
+    assert_eq!(events.len(), 0);
+    assert_eq!(&result, &data);
+}
+
 #[test]
 fn wpskka_test_auth_none() {
     let mut host = WpskkaHostHandler::new();
@@ -241,7 +301,7 @@ fn wpskka_test_auth_none() {
 
     host.set_none_scheme(true);
 
-    none_auth(&mut host, &mut client, &mut write, &mut events);
+    none_auth_full(&mut host, &mut client, &mut write, &mut events);
 }
 
 
@@ -302,7 +362,7 @@ fn wpskka_test_auth_srp_static() {
 
     host.set_static_password(Some(password.to_vec()));
 
-    test_srp(
+    test_srp_full(
         &mut host,
         &mut client,
         &mut write,
@@ -324,7 +384,7 @@ fn wpskka_test_auth_srp_dynamic() {
 
     host.set_dynamic_password(Some(password.to_vec()));
 
-    test_srp(
+    test_srp_full(
         &mut host,
         &mut client,
         &mut write,
@@ -345,7 +405,7 @@ fn wpskka_test_auth_reliable() {
 
     host.set_none_scheme(true);
 
-    none_auth(&mut host, &mut client, &mut write, &mut events);
+    none_auth_full(&mut host, &mut client, &mut write, &mut events);
 
     let data = vec![9, 0, 5, 1];
 
@@ -396,45 +456,75 @@ fn wpskka_test_auth_unreliable() {
 
     host.set_none_scheme(true);
 
+    none_auth_full(&mut host, &mut client, &mut write, &mut events);
+}
+
+#[test]
+fn wpskka_test_auth_srp_interrupt() {
+    let mut host = WpskkaHostHandler::new();
+    let mut client = WpskkaClientHandler::new();
+    let mut write = Vec::new();
+    let mut events = Vec::new();
+
+    let password = b"dynamic";
+
+    host.set_none_scheme(true);
+    host.set_dynamic_password(Some(password.to_vec()));
+
+    let auth_schemes = key_exchange(&mut host, &mut client, &mut write, &mut events);
+
+    auth_schemes_check(
+        &mut client,
+        &mut write,
+        &mut events,
+        auth_schemes,
+        Some(&[AuthSchemeType::SrpDynamic, AuthSchemeType::None]),
+    );
+
+    let try_auth = client.try_auth(AuthSchemeType::SrpDynamic);
+
+    let result = host
+        .handle(try_auth, &mut write, &mut events)
+        .expect("client->host try auth failed");
+
+    assert_eq!(result, None);
+
+    write.clear();
+    events.clear();
+
+
     none_auth(&mut host, &mut client, &mut write, &mut events);
 
-    let data = vec![9, 0, 5, 1];
+    test_ciphers(&mut host, &mut client);
+}
 
-    // test host encrypt, client decrypt
-    let host_cipher = host.unreliable_cipher();
-    let (ciphertext, counter) = host_cipher.encrypt(&data).unwrap();
 
-    let message = WpskkaMessage::TransportDataMessageUnreliable(TransportDataMessageUnreliable {
-        data: Data(Cow::Owned(ciphertext)),
-        counter,
-    });
-
+#[test]
+fn wpskka_test_auth_none_interrupt() {
+    let mut host = WpskkaHostHandler::new();
+    let mut client = WpskkaClientHandler::new();
     let mut write = Vec::new();
     let mut events = Vec::new();
-    let result = client
-        .handle(message, &mut write, &mut events)
-        .expect("handler failed")
-        .expect("expected data");
-    assert_eq!(write.len(), 0);
-    assert_eq!(events.len(), 0);
-    assert_eq!(&result, &data);
 
-    // test client encrypt, host decrypt
-    let client_cipher = client.unreliable_cipher();
-    let (ciphertext, counter) = client_cipher.encrypt(&data).unwrap();
+    let password = b"dynamic";
 
-    let message = WpskkaMessage::TransportDataMessageUnreliable(TransportDataMessageUnreliable {
-        data: Data(Cow::Owned(ciphertext)),
-        counter,
-    });
+    host.set_none_scheme(true);
+    host.set_dynamic_password(Some(password.to_vec()));
 
-    let mut write = Vec::new();
-    let mut events = Vec::new();
-    let result = host
-        .handle(message, &mut write, &mut events)
-        .expect("handler failed")
-        .expect("expected data");
-    assert_eq!(write.len(), 0);
-    assert_eq!(events.len(), 0);
-    assert_eq!(&result, &data);
+    key_exchange(&mut host, &mut client, &mut write, &mut events);
+
+    // i want to do None!
+    client.try_auth(AuthSchemeType::None);
+
+    // eh I changed my mind
+    test_srp(
+        &mut host,
+        &mut client,
+        &mut write,
+        &mut events,
+        password,
+        AuthSchemeType::SrpDynamic,
+    );
+
+    test_ciphers(&mut host, &mut client);
 }
