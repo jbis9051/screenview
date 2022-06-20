@@ -45,7 +45,7 @@ pub enum State {
     Modifying,
     PreInit,
     KeyExchange {
-        key_state: KeyPair,
+        key_pair: KeyPair,
     },
     PreAuthSelect {
         key_state: KeyState,
@@ -104,6 +104,7 @@ impl WpskkaHostHandler {
         write: &mut Vec<WpskkaMessage<'_>>,
         events: &mut Vec<InformEvent>,
     ) -> Result<Option<Vec<u8>>, WpskkaHostError> {
+        // TODO if these return an error the state might be left in State::Modifying
         match msg {
             WpskkaMessage::KeyExchange(msg) => self.handle_key_exchange(write, events, msg),
             WpskkaMessage::TryAuth(msg) => self.handle_try_auth(write, events, msg),
@@ -125,22 +126,23 @@ impl WpskkaHostHandler {
         events: &mut Vec<InformEvent>,
         msg: KeyExchange,
     ) -> Result<Option<Vec<u8>>, WpskkaHostError> {
-        if !matches!(self.state, State::KeyExchange { .. }) {
-            return Err(WpskkaHostError::WrongMessageForState(
-                debug(&msg),
-                debug(&self.state),
-            ));
-        }
+        let key_pair = match mem::replace(&mut self.state, State::Modifying) {
+            State::KeyExchange { key_pair: key_pair } => key_pair,
+            _ =>
+                return Err(WpskkaHostError::WrongMessageForState(
+                    debug(&msg),
+                    debug(&self.state),
+                )),
+        };
 
         let client_public_key = msg.public_key;
-        let keys = keypair().map_err(|_| WpskkaHostError::RingError)?;
 
         write.push(self.auth_schemes());
 
         self.state = State::PreAuthSelect {
             key_state: KeyState {
                 foreign_public_key: client_public_key,
-                key_pair: keys,
+                key_pair,
             },
         };
 
@@ -159,6 +161,7 @@ impl WpskkaHostHandler {
 
     fn handle_try_auth_stateless(
         write: &mut Vec<WpskkaMessage<'_>>,
+        events: &mut Vec<InformEvent>,
         dynamic_password: Option<&[u8]>,
         static_password: Option<&[u8]>,
         key_state: KeyState,
@@ -166,14 +169,24 @@ impl WpskkaHostHandler {
         none_scheme: bool,
     ) -> Result<State, (State, WpskkaHostError)> {
         match auth_scheme {
-            AuthSchemeType::None => {
-                write.push(WpskkaMessage::AuthResult(AuthResult { ok: none_scheme }));
+            AuthSchemeType::None =>
                 if none_scheme {
-                    Self::derive_key_wrapper(key_state)
+                    let res = Self::derive_key_wrapper(key_state);
+                    if res.is_ok() {
+                        write.push(WpskkaMessage::AuthResult(AuthResult { ok: true }));
+                        events.push(InformEvent::WpskkaHostInform(
+                            WpskkaHostInform::AuthSuccessful,
+                        ));
+                    } else {
+                        write.push(WpskkaMessage::AuthResult(AuthResult { ok: false }));
+                        events.push(InformEvent::WpskkaHostInform(WpskkaHostInform::AuthFailed));
+                    }
+                    res
                 } else {
+                    write.push(WpskkaMessage::AuthResult(AuthResult { ok: false }));
+                    events.push(InformEvent::WpskkaHostInform(WpskkaHostInform::AuthFailed));
                     Ok(State::PreAuthSelect { key_state })
-                }
-            }
+                },
             // These are basically the same schemes just with different password sources, so we can handle it together
             AuthSchemeType::SrpDynamic | AuthSchemeType::SrpStatic => {
                 let password = if auth_scheme == AuthSchemeType::SrpDynamic {
@@ -252,6 +265,7 @@ impl WpskkaHostHandler {
 
         match Self::handle_try_auth_stateless(
             write,
+            events,
             self.dynamic_password.as_deref(),
             self.static_password.as_deref(),
             key_state,
@@ -288,7 +302,6 @@ impl WpskkaHostHandler {
                             let data = outgoing
                                 .to_bytes()
                                 .map_err(|_| WpskkaHostError::BadAuthSchemeMessage)?;
-                            write.push(WpskkaMessage::AuthMessage(AuthMessage { data }));
                             if srp_host.is_authenticated() {
                                 events.push(InformEvent::WpskkaHostInform(
                                     WpskkaHostInform::AuthSuccessful,
@@ -303,15 +316,24 @@ impl WpskkaHostHandler {
                                     foreign_public_key: their_pub,
                                 }) {
                                     Ok(state) => {
+                                        write
+                                            .push(WpskkaMessage::AuthMessage(AuthMessage { data }));
+                                        write.push(WpskkaMessage::AuthResult(AuthResult {
+                                            ok: true,
+                                        }));
                                         self.state = state;
                                         Ok(None)
                                     }
                                     Err((state, err)) => {
+                                        write.push(WpskkaMessage::AuthResult(AuthResult {
+                                            ok: false,
+                                        }));
                                         self.state = state;
                                         Err(err)
                                     }
                                 }
                             } else {
+                                write.push(WpskkaMessage::AuthMessage(AuthMessage { data }));
                                 self.state = State::IsAuthenticating {
                                     auth_scheme: AuthScheme::SrpAuthHost(srp_host),
                                     private_key: my_private_key,
@@ -403,6 +425,9 @@ impl WpskkaHostHandler {
 
     pub fn auth_schemes(&self) -> WpskkaMessage<'static> {
         let mut auth_schemes = Vec::new();
+        if self.none_scheme {
+            auth_schemes.push(AuthSchemeType::None);
+        }
         if self.static_password.is_some() {
             auth_schemes.push(AuthSchemeType::SrpStatic);
         }
@@ -428,7 +453,7 @@ impl WpskkaHostHandler {
                 .try_into()
                 .expect("public key could not be converted to array of 32 bytes"),
         });
-        self.state = State::KeyExchange { key_state: keys };
+        self.state = State::KeyExchange { key_pair: keys };
         Ok(msg)
     }
 

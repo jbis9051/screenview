@@ -18,6 +18,7 @@ pub enum State {
     PreHello,
     WaitingUserInputForPassword,
     PreVerify,
+    Failed,
     Done,
 }
 
@@ -26,7 +27,6 @@ pub enum State {
 #[derive(Debug)]
 pub struct SrpAuthClient<const N: usize> {
     state: State,
-    authenticated: bool,
     host_public_key: [u8; N],
     our_public_key: PublicKey,
     host_hello: Option<Box<HostHello>>,
@@ -37,7 +37,6 @@ impl<const N: usize> SrpAuthClient<N> {
     pub fn new(our_public_key: PublicKey, host_public_key: [u8; N]) -> Self {
         Self {
             state: State::PreHello,
-            authenticated: false,
             host_public_key,
             our_public_key,
             host_hello: None,
@@ -50,7 +49,7 @@ impl<const N: usize> SrpAuthClient<N> {
     }
 
     pub fn is_authenticated(&self) -> bool {
-        self.authenticated
+        matches!(self.state, State::Done)
     }
 
     pub fn process_password(&mut self, password: &[u8]) -> Result<SrpMessage, SrpClientError> {
@@ -102,9 +101,9 @@ impl<const N: usize> SrpAuthClient<N> {
                     let hmac_key = self.hmac_key.take().unwrap();
 
                     if !hmac_verify(&*hmac_key, self.host_public_key.as_ref(), &msg.mac) {
+                        self.state = State::Failed;
                         return Err(SrpClientError::AuthFailed);
                     }
-                    self.authenticated = true;
                     self.state = State::Done;
                     Ok(None)
                 }

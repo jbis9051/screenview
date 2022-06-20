@@ -33,7 +33,7 @@ use std::{borrow::Cow, sync::Arc};
 // 7. Host receives the TryAuth message, updates the state to IsAuthenticating get the proper password, creates an SRP instance, initiates it with the password with srp.init, which returns a message, which the Host sends.
 // 8. Client receives a message from Host and emits as an InformEvent::PasswordPrompt event
 // 9. Client::process_password() is called called which returns a message
-// 10. Host receives the message and if authentication is successful, updates the state to IsAuthenticated, and sends a successful AuthResult message. The Host also sends one more SRP message.
+// 10. Host receives the message and if authentication is successful, updates the state to IsAuthenticated, and then sends the last SRP message. The Host also sends a successful AuthResult message.
 // 11. The Client ignores the successful authentication result and uses the message from the Host to authenticate the Host. Once authenticated, the Client updates the state to IsAuthenticated.
 //
 // If authentication fails, the Client emits an InformEvent::AuthFailed and updates the state back to ChooseAuthMethod.  WpsskkaClient::try_auth() should be called again. On the Host side, the state is updated to PreAuthSelect and a InformEvent::AuthFailed is emitted.

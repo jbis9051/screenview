@@ -105,11 +105,10 @@ impl WpskkaClientHandler {
                 self.handle_message_reliable(msg, write, events),
             WpskkaMessage::TransportDataMessageUnreliable(msg) =>
                 self.handle_message_unreliable(msg, write, events),
-            _ =>
-                return Err(WpskkaClientError::WrongMessageForState(
-                    debug(&msg),
-                    debug(&self.state),
-                )),
+            _ => Err(WpskkaClientError::WrongMessageForState(
+                debug(&msg),
+                debug(&self.state),
+            )),
         }
     }
 
@@ -156,13 +155,90 @@ impl WpskkaClientHandler {
         Ok(None)
     }
 
-    fn derive_key_wrapper(key_state: KeyState) -> Result<State, (State, WpskkaClientError)> {
+    fn derive_key_wrapper(
+        &mut self,
+        key_state: KeyState,
+        events: &mut Vec<InformEvent>,
+    ) -> Result<(), WpskkaClientError> {
         match derive_keys(key_state.key_pair, key_state.foreign_public_key) {
-            Ok((reliable, unreliable)) => Ok(State::Authenticated {
-                reliable,
-                unreliable: Arc::new(unreliable),
-            }),
-            Err(e) => Err((State::KeyExchange, WpskkaClientError::RingError)),
+            Ok((reliable, unreliable)) => {
+                self.state = State::Authenticated {
+                    reliable,
+                    unreliable: Arc::new(unreliable),
+                };
+                events.push(InformEvent::WpskkaClientInform(
+                    WpskkaClientInform::AuthSuccessful,
+                ));
+                Ok(())
+            }
+            Err(()) => {
+                self.state = State::KeyExchange;
+                events.push(InformEvent::WpskkaClientInform(
+                    WpskkaClientInform::AuthFailed,
+                ));
+                Err(WpskkaClientError::RingError)
+            }
+        }
+    }
+
+    fn handle_auth_message_srp_auth_client(
+        &mut self,
+        msg: AuthMessage,
+        events: &mut Vec<InformEvent>,
+        mut srp_client: SrpAuthClient<32>,
+        private_key: EphemeralPrivateKey,
+    ) -> Result<Option<Vec<u8>>, WpskkaClientError> {
+        let msg = SrpMessage::read(&mut Cursor::new(&msg.data))
+            .map_err(|_| WpskkaClientError::BadAuthSchemeMessage)?;
+        match srp_client.handle(msg) {
+            Ok(inform) => {
+                if let Some(inform) = inform {
+                    events.push(InformEvent::WpskkaClientInform(inform));
+                }
+                if srp_client.is_authenticated() {
+                    let (my_pub, their_pub) = srp_client.finish();
+                    let keypair = KeyPair {
+                        public_key: my_pub,
+                        ephemeral_private_key: private_key,
+                    };
+                    self.derive_key_wrapper(
+                        KeyState {
+                            key_pair: keypair,
+                            foreign_public_key: their_pub,
+                        },
+                        events,
+                    )?;
+                    Ok(None)
+                } else {
+                    self.state = State::IsAuthenticating {
+                        auth_scheme: AuthScheme::SrpAuthClient(srp_client),
+                        private_key,
+                    };
+                    Ok(None)
+                }
+            }
+            Err(err) => match err {
+                SrpClientError::WrongMessageForState(..) =>
+                    Err(WpskkaClientError::BadAuthSchemeMessage),
+                err => {
+                    events.push(InformEvent::WpskkaClientInform(
+                        WpskkaClientInform::AuthFailed,
+                    ));
+                    let (public_key, foreign_public_key) = srp_client.finish();
+
+                    let key_pair = KeyPair {
+                        public_key,
+                        ephemeral_private_key: private_key,
+                    };
+
+                    self.state = State::ChooseAnAuthScheme {
+                        key_pair,
+                        foreign_public_key,
+                    };
+
+                    Ok(None)
+                }
+            },
         }
     }
 
@@ -175,66 +251,10 @@ impl WpskkaClientHandler {
         match mem::replace(&mut self.state, State::Modifying) {
             State::IsAuthenticating {
                 auth_scheme,
-                private_key: my_private_key,
+                private_key,
             } => match auth_scheme {
-                AuthScheme::SrpAuthClient(mut srp_client) => {
-                    let msg = SrpMessage::read(&mut Cursor::new(&msg.data))
-                        .map_err(|_| WpskkaClientError::BadAuthSchemeMessage)?;
-                    match srp_client.handle(msg) {
-                        Ok(inform) => {
-                            if let Some(inform) = inform {
-                                events.push(InformEvent::WpskkaClientInform(inform));
-                            }
-                            if srp_client.is_authenticated() {
-                                events.push(InformEvent::WpskkaClientInform(
-                                    WpskkaClientInform::AuthSuccessful,
-                                ));
-                                let (my_pub, their_pub) = srp_client.finish();
-                                let keypair = KeyPair {
-                                    public_key: my_pub,
-                                    ephemeral_private_key: my_private_key,
-                                };
-                                match Self::derive_key_wrapper(KeyState {
-                                    key_pair: keypair,
-                                    foreign_public_key: their_pub,
-                                }) {
-                                    Ok(state) => {
-                                        self.state = state;
-                                        Ok(None)
-                                    }
-                                    Err((state, err)) => {
-                                        self.state = state;
-                                        Err(err)
-                                    }
-                                }
-                            } else {
-                                Ok(None)
-                            }
-                        }
-                        Err(err) => match err {
-                            SrpClientError::WrongMessageForState(..) =>
-                                Err(WpskkaClientError::BadAuthSchemeMessage),
-                            _ => {
-                                events.push(InformEvent::WpskkaClientInform(
-                                    WpskkaClientInform::AuthFailed,
-                                ));
-                                let (public_key, foreign_public_key) = srp_client.finish();
-
-                                let key_pair = KeyPair {
-                                    public_key,
-                                    ephemeral_private_key: my_private_key,
-                                };
-
-                                self.state = State::ChooseAnAuthScheme {
-                                    key_pair,
-                                    foreign_public_key,
-                                };
-
-                                Ok(None)
-                            }
-                        },
-                    }
-                }
+                AuthScheme::SrpAuthClient(srp_client) =>
+                    self.handle_auth_message_srp_auth_client(msg, events, srp_client, private_key),
                 _ => {
                     panic!(
                         "Somehow an unsupported auth scheme ended up in the auth scheme. Someone \
@@ -303,20 +323,58 @@ impl WpskkaClientHandler {
 
         // auth was successful
 
-        match &self.state {
-            State::IsAuthenticating { auth_scheme, .. } => match auth_scheme {
+        let key_pair = match mem::replace(&mut self.state, State::Modifying) {
+            State::IsAuthenticating {
+                auth_scheme,
+                private_key,
+            } => match auth_scheme {
+                AuthScheme::None {
+                    public_key,
+                    foreign_public_key,
+                } => {
+                    let key_pair = KeyPair {
+                        public_key,
+                        ephemeral_private_key: private_key,
+                    };
+                    Some((key_pair, foreign_public_key))
+                }
                 // Srp auth is bidirectional so we don't care if the Host auth's us
-                AuthScheme::SrpAuthClient(_) => {}
+                AuthScheme::SrpAuthClient(_) => {
+                    self.state = State::IsAuthenticating {
+                        auth_scheme,
+                        private_key,
+                    };
+                    None
+                }
                 _ => {
                     todo!("handle auth result for non-srp auth scheme");
                 }
             },
-            State::Authenticated { .. } => {}
+            State::Authenticated {
+                reliable,
+                unreliable,
+            } => {
+                self.state = State::Authenticated {
+                    reliable,
+                    unreliable,
+                };
+                None
+            }
             _ =>
                 return Err(WpskkaClientError::WrongMessageForState(
                     debug(&msg),
                     debug(&self.state),
                 )),
+        };
+
+        if let Some((key_pair, foreign_public_key)) = key_pair {
+            self.derive_key_wrapper(
+                KeyState {
+                    key_pair,
+                    foreign_public_key,
+                },
+                events,
+            )?;
         }
 
         Ok(None)
@@ -430,7 +488,10 @@ impl WpskkaHandlerTrait for WpskkaClientHandler {
         events: &mut Vec<InformEvent>,
     ) -> Result<Option<Vec<u8>>, WpskkaError> {
         let ret = self.handle_internal(msg, write, events).map_err(Into::into);
-        assert!(!matches!(self.state, State::Modifying));
+        assert!(
+            !matches!(self.state, State::Modifying),
+            "state was left in modifying state"
+        );
         ret
     }
 
