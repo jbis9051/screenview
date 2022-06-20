@@ -10,7 +10,6 @@ use crate::{
             srp_client::{SrpAuthClient, SrpClientError},
             AuthScheme,
         },
-        derive_keys,
         KeyState,
         WpskkaError,
         WpskkaHandlerTrait,
@@ -155,12 +154,26 @@ impl WpskkaClientHandler {
         Ok(None)
     }
 
+    fn derive_keys(
+        key_pair: KeyPair,
+        foreign_public_key: [u8; 32],
+    ) -> Result<(CipherReliablePeer, CipherUnreliablePeer), ()> {
+        let client_public_key = parse_foreign_public(&foreign_public_key);
+        let (receive_reliable, send_reliable, receive_unreliable, send_unreliable) =
+            diffie_hellman(key_pair.ephemeral_private_key, client_public_key).map_err(|_| ())?;
+        // TODO zero hella
+        Ok((
+            CipherReliablePeer::new(send_reliable.to_vec(), receive_reliable.to_vec()),
+            CipherUnreliablePeer::new(send_unreliable.to_vec(), receive_unreliable.to_vec()),
+        ))
+    }
+
     fn derive_key_wrapper(
         &mut self,
         key_state: KeyState,
         events: &mut Vec<InformEvent>,
     ) -> Result<(), WpskkaClientError> {
-        match derive_keys(key_state.key_pair, key_state.foreign_public_key) {
+        match Self::derive_keys(key_state.key_pair, key_state.foreign_public_key) {
             Ok((reliable, unreliable)) => {
                 self.state = State::Authenticated {
                     reliable,

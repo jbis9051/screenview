@@ -10,7 +10,6 @@ use crate::{
             srp_host::{SrpAuthHost, SrpHostError},
             AuthScheme,
         },
-        derive_keys,
         KeyState,
         WpskkaError,
         WpskkaHandlerTrait,
@@ -149,8 +148,23 @@ impl WpskkaHostHandler {
         Ok(None)
     }
 
+    /// DO NOT CALL THIS FUNCTION WITHOUT AUTHENTICATING THE FOREIGN PUBLIC KEY OR THE WORLD WILL END
+    fn derive_keys(
+        key_pair: KeyPair,
+        foreign_public_key: [u8; 32],
+    ) -> Result<(CipherReliablePeer, CipherUnreliablePeer), ()> {
+        let client_public_key = parse_foreign_public(&foreign_public_key);
+        let (send_reliable, receive_reliable, send_unreliable, receive_unreliable) =
+            diffie_hellman(key_pair.ephemeral_private_key, client_public_key).map_err(|_| ())?;
+        // TODO zero hella
+        Ok((
+            CipherReliablePeer::new(send_reliable.to_vec(), receive_reliable.to_vec()),
+            CipherUnreliablePeer::new(send_unreliable.to_vec(), receive_unreliable.to_vec()),
+        ))
+    }
+
     fn derive_key_wrapper(key_state: KeyState) -> Result<State, (State, WpskkaHostError)> {
-        match derive_keys(key_state.key_pair, key_state.foreign_public_key) {
+        match Self::derive_keys(key_state.key_pair, key_state.foreign_public_key) {
             Ok((reliable, unreliable)) => Ok(State::Authenticated {
                 reliable,
                 unreliable: Arc::new(unreliable),

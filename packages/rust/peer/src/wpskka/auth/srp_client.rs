@@ -74,7 +74,7 @@ impl<const N: usize> SrpAuthClient<N> {
 
 
         Ok(SrpMessage::ClientHello(ClientHello {
-            a_pub: a_pub.try_into().map(Box::new).unwrap(), // TODO this may fail cause math
+            a_pub: a_pub.try_into().map(Box::new).unwrap(),
             mac: mac.try_into().unwrap(),
         }))
     }
