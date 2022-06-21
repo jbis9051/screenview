@@ -18,25 +18,25 @@ pub enum State {
     PreHello,
     WaitingUserInputForPassword,
     PreVerify,
+    Failed,
     Done,
 }
 
 
 // Arbitrary SrpAuthClient. Can be used for any SRP based auth scheme.
-pub struct SrpAuthClient {
+#[derive(Debug)]
+pub struct SrpAuthClient<const N: usize> {
     state: State,
-    authenticated: bool,
-    host_public_key: Vec<u8>,
+    host_public_key: [u8; N],
     our_public_key: PublicKey,
     host_hello: Option<Box<HostHello>>,
     hmac_key: Option<Box<[u8; 32]>>,
 }
 
-impl SrpAuthClient {
-    pub fn new(our_public_key: PublicKey, host_public_key: Vec<u8>) -> Self {
+impl<const N: usize> SrpAuthClient<N> {
+    pub fn new(our_public_key: PublicKey, host_public_key: [u8; N]) -> Self {
         Self {
             state: State::PreHello,
-            authenticated: false,
             host_public_key,
             our_public_key,
             host_hello: None,
@@ -44,8 +44,12 @@ impl SrpAuthClient {
         }
     }
 
+    pub fn finish(self) -> (PublicKey, [u8; N]) {
+        (self.our_public_key, self.host_public_key)
+    }
+
     pub fn is_authenticated(&self) -> bool {
-        self.authenticated
+        matches!(self.state, State::Done)
     }
 
     pub fn process_password(&mut self, password: &[u8]) -> Result<SrpMessage, SrpClientError> {
@@ -70,7 +74,7 @@ impl SrpAuthClient {
 
 
         Ok(SrpMessage::ClientHello(ClientHello {
-            a_pub: a_pub.try_into().map(Box::new).unwrap(), // TODO this may fail cause math
+            a_pub: a_pub.try_into().map(Box::new).unwrap(),
             mac: mac.try_into().unwrap(),
         }))
     }
@@ -97,9 +101,9 @@ impl SrpAuthClient {
                     let hmac_key = self.hmac_key.take().unwrap();
 
                     if !hmac_verify(&*hmac_key, self.host_public_key.as_ref(), &msg.mac) {
+                        self.state = State::Failed;
                         return Err(SrpClientError::AuthFailed);
                     }
-                    self.authenticated = true;
                     self.state = State::Done;
                     Ok(None)
                 }

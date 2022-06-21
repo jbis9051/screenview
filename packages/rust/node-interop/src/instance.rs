@@ -318,7 +318,7 @@ impl Instance {
         password: Vec<u8>,
     ) -> Result<(), anyhow::Error> {
         let result = forward!(self.sv_handler, [ClientSignal, ClientDirect], |stack| stack
-            .process_password(password));
+            .process_password(&password));
         self.settle_with_result(promise, result, Self::undefined);
         Ok(())
     }

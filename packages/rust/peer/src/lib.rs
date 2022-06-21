@@ -1,5 +1,5 @@
 #![deny(rust_2018_idioms)]
-#![allow(clippy::new_without_default)]
+#![allow(clippy::new_without_default, clippy::ptr_arg)]
 
 use crate::{
     io::Source,

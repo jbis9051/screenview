@@ -16,13 +16,13 @@ fn auth_succeed() {
     let host_keys = keypair().unwrap();
     let client_keys = keypair().unwrap();
 
-    let mut host = SrpAuthHost::new(
+    let mut host = SrpAuthHost::<32>::new(
         host_keys.public_key.clone(),
-        client_keys.public_key.as_ref().to_vec(),
+        client_keys.public_key.as_ref().try_into().unwrap(),
     );
-    let mut client = SrpAuthClient::new(
+    let mut client = SrpAuthClient::<32>::new(
         client_keys.public_key,
-        host_keys.public_key.as_ref().to_vec(),
+        host_keys.public_key.as_ref().try_into().unwrap(),
     );
 
     assert!(!host.is_authenticated());
@@ -64,13 +64,13 @@ fn auth_failed() {
     let host_keys = keypair().unwrap();
     let client_keys = keypair().unwrap();
 
-    let mut host = SrpAuthHost::new(
+    let mut host = SrpAuthHost::<32>::new(
         host_keys.public_key.clone(),
-        client_keys.public_key.as_ref().to_vec(),
+        client_keys.public_key.as_ref().try_into().unwrap(),
     );
-    let mut client = SrpAuthClient::new(
+    let mut client = SrpAuthClient::<32>::new(
         client_keys.public_key,
-        host_keys.public_key.as_ref().to_vec(),
+        host_keys.public_key.as_ref().try_into().unwrap(),
     );
 
     let message = host.init(password);
