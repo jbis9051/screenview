@@ -12,10 +12,10 @@ use common::messages::{
     svsc::PeerId,
     Data,
 };
-use std::{borrow::Cow, sync::Arc};
+use std::borrow::Cow;
 
 pub struct SelHandler {
-    unreliable: Option<Arc<CipherUnreliablePeer>>,
+    unreliable: Option<CipherUnreliablePeer>,
     // reliable is TLS and is handled elsewhere
 }
 
@@ -30,8 +30,8 @@ impl SelHandler {
         Self { unreliable: None }
     }
 
-    pub fn unreliable_cipher(&self) -> &Arc<CipherUnreliablePeer> {
-        self.unreliable.as_ref().unwrap()
+    pub fn unreliable_cipher(&mut self) -> &mut CipherUnreliablePeer {
+        self.unreliable.as_mut().unwrap()
     }
 
     pub fn wrap_reliable(msg: Vec<u8>) -> SelMessage<'static> {
@@ -44,7 +44,7 @@ impl SelHandler {
     pub fn wrap_unreliable(
         msg: Vec<u8>,
         peer_id: PeerId,
-        cipher: &CipherUnreliablePeer,
+        cipher: &mut CipherUnreliablePeer,
     ) -> Result<SelMessage<'static>, CipherError> {
         let (data, counter) = cipher.encrypt(&msg)?;
         Ok(SelMessage::TransportDataPeerMessageUnreliable(
@@ -60,10 +60,10 @@ impl SelHandler {
     pub fn derive_unreliable(&mut self, session_id: &[u8], peer_id: &[u8], peer_key: &[u8]) {
         let (send_key, receive_key) = kdf2(hash!(session_id, peer_id, peer_key));
         // TODO Security: Look into zeroing out the data here
-        self.unreliable = Some(Arc::new(CipherUnreliablePeer::new(
+        self.unreliable = Some(CipherUnreliablePeer::new(
             send_key.to_vec(),
             receive_key.to_vec(),
-        )));
+        ));
     }
 
     pub fn handle<'a>(&mut self, msg: &'a SelMessage<'_>) -> Result<Cow<'a, [u8]>, SelError> {

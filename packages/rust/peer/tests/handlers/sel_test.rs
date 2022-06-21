@@ -18,7 +18,7 @@ fn sel_reliable() {
 #[test]
 #[should_panic]
 fn sel_try_reliable_before_ready() {
-    let handler = SelHandler::new();
+    let mut handler = SelHandler::new();
     handler.unreliable_cipher();
 }
 
@@ -37,7 +37,7 @@ fn sel_unreliable() {
 
     // swapped for receiving side
     let (receive_key, send_key) = kdf2(hash!(session_id, &peer_id, peer_key));
-    let server_cipher = CipherUnreliablePeer::new(send_key.to_vec(), receive_key.to_vec());
+    let mut server_cipher = CipherUnreliablePeer::new(send_key.to_vec(), receive_key.to_vec());
 
     handler.derive_unreliable(session_id, &peer_id, peer_key);
 
@@ -59,7 +59,7 @@ fn sel_unreliable() {
         send_data
     );
 
-    let message = match SelHandler::wrap_unreliable(send_data.clone(), peer_id, &server_cipher)
+    let message = match SelHandler::wrap_unreliable(send_data.clone(), peer_id, &mut server_cipher)
         .unwrap()
     {
         SelMessage::TransportDataPeerMessageUnreliable(msg) =>

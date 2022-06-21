@@ -18,7 +18,7 @@ use common::messages::{
     wpskka::{TransportDataMessageReliable, TransportDataMessageUnreliable, WpskkaMessage},
     Data,
 };
-use std::{borrow::Cow, sync::Arc};
+use std::borrow::Cow;
 
 // The initial state for the WPSKKA protocol is WpskkaHost::PreInit and WpskkaClient::KeyExchange.
 //
@@ -59,11 +59,11 @@ pub trait WpskkaHandlerTrait {
         events: &mut Vec<InformEvent>,
     ) -> Result<Option<Vec<u8>>, WpskkaError>;
 
-    fn unreliable_cipher(&self) -> &Arc<CipherUnreliablePeer>;
+    fn unreliable_cipher(&mut self) -> &mut CipherUnreliablePeer;
 
     fn wrap_unreliable(
         msg: Vec<u8>,
-        cipher: &CipherUnreliablePeer,
+        cipher: &mut CipherUnreliablePeer,
     ) -> Result<TransportDataMessageUnreliable<'static>, CipherError> {
         let (data, counter) = cipher.encrypt(&msg)?;
         Ok(TransportDataMessageUnreliable {

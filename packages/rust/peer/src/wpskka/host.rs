@@ -37,7 +37,6 @@ use std::{
     fmt::{Debug, Formatter},
     io::Cursor,
     mem,
-    sync::Arc,
 };
 
 pub enum State {
@@ -56,7 +55,7 @@ pub enum State {
     },
     Authenticated {
         reliable: CipherReliablePeer,
-        unreliable: Arc<CipherUnreliablePeer>,
+        unreliable: CipherUnreliablePeer,
     },
 }
 
@@ -167,7 +166,7 @@ impl WpskkaHostHandler {
         match Self::derive_keys(key_state.key_pair, key_state.foreign_public_key) {
             Ok((reliable, unreliable)) => Ok(State::Authenticated {
                 reliable,
-                unreliable: Arc::new(unreliable),
+                unreliable,
             }),
             Err(()) => Err((State::PreInit, WpskkaHostError::RingError)),
         }
@@ -501,8 +500,8 @@ impl WpskkaHandlerTrait for WpskkaHostHandler {
         ret
     }
 
-    fn unreliable_cipher(&self) -> &Arc<CipherUnreliablePeer> {
-        match &self.state {
+    fn unreliable_cipher(&mut self) -> &mut CipherUnreliablePeer {
+        match &mut self.state {
             State::Authenticated { unreliable, .. } => unreliable,
             _ => {
                 panic!("Trying to get the unreliable cipher when not authenticated");

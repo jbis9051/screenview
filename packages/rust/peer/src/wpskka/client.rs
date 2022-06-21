@@ -37,7 +37,6 @@ use std::{
     fmt::{Debug, Formatter},
     io::Cursor,
     mem,
-    sync::Arc,
 };
 
 pub enum State {
@@ -54,7 +53,7 @@ pub enum State {
     },
     Authenticated {
         reliable: CipherReliablePeer,
-        unreliable: Arc<CipherUnreliablePeer>,
+        unreliable: CipherUnreliablePeer,
     },
 }
 
@@ -175,7 +174,7 @@ impl WpskkaClientHandler {
             Ok((reliable, unreliable)) => {
                 self.state = State::Authenticated {
                     reliable,
-                    unreliable: Arc::new(unreliable),
+                    unreliable,
                 };
                 events.push(InformEvent::WpskkaClientInform(
                     WpskkaClientInform::AuthSuccessful,
@@ -416,7 +415,7 @@ impl WpskkaClientHandler {
         _write: &mut Vec<WpskkaMessage<'_>>,
         _events: &mut Vec<InformEvent>,
     ) -> Result<Option<Vec<u8>>, WpskkaClientError> {
-        match &self.state {
+        match &mut self.state {
             State::Authenticated { unreliable, .. } => Ok(Some(
                 unreliable
                     .decrypt(msg.data.0.as_ref(), msg.counter)
@@ -524,9 +523,9 @@ impl WpskkaHandlerTrait for WpskkaClientHandler {
         ret
     }
 
-    fn unreliable_cipher(&self) -> &Arc<CipherUnreliablePeer> {
-        match &self.state {
-            State::Authenticated { unreliable, .. } => &unreliable,
+    fn unreliable_cipher(&mut self) -> &mut CipherUnreliablePeer {
+        match &mut self.state {
+            State::Authenticated { unreliable, .. } => unreliable,
             _ => panic!("Trying to get the unreliable cipher when not authenticated"),
         }
     }
