@@ -93,8 +93,8 @@ impl WpskkaClientHandler {
         events: &mut Vec<InformEvent>,
     ) -> Result<Option<Vec<u8>>, WpskkaClientError> {
         match msg {
-            WpskkaMessage::KeyExchange(msg) => self.handle_key_exchange(msg, write, events),
-            WpskkaMessage::AuthScheme(msg) => self.handle_auth_scheme(msg, write, events),
+            WpskkaMessage::KeyExchange(msg) => self.handle_key_exchange(msg, write),
+            WpskkaMessage::AuthScheme(msg) => self.handle_auth_scheme(msg, events),
             WpskkaMessage::AuthMessage(msg) => self.handle_auth_message(msg, write, events),
             WpskkaMessage::AuthResult(msg) => self.handle_auth_result(msg, write, events),
             WpskkaMessage::TransportDataMessageReliable(msg) =>
@@ -112,7 +112,6 @@ impl WpskkaClientHandler {
         &mut self,
         msg: KeyExchange,
         write: &mut Vec<WpskkaMessage<'_>>,
-        events: &mut Vec<InformEvent>,
     ) -> Result<Option<Vec<u8>>, WpskkaClientError> {
         if !matches!(self.state, State::KeyExchange) {
             return Err(WpskkaClientError::WrongMessageForState(
@@ -142,7 +141,6 @@ impl WpskkaClientHandler {
     fn handle_auth_scheme(
         &mut self,
         msg: AuthSchemeMessage,
-        write: &mut Vec<WpskkaMessage<'_>>,
         events: &mut Vec<InformEvent>,
     ) -> Result<Option<Vec<u8>>, WpskkaClientError> {
         events.push(InformEvent::WpskkaClientInform(
@@ -435,7 +433,7 @@ impl WpskkaClientHandler {
         match &mut self.state {
             State::IsAuthenticating { auth_scheme, .. } => match auth_scheme {
                 AuthScheme::SrpAuthClient(srp_client) => srp_client
-                    .process_password(&password)
+                    .process_password(password)
                     .map_err(|_| WpskkaClientError::BadAuthSchemeMessage)
                     .and_then(|outgoing| {
                         outgoing

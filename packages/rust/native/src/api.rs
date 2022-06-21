@@ -21,14 +21,14 @@ pub struct Window {
     pub height: u32,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PointerPositionRelative {
     pub x: u32,
     pub y: u32,
     pub window_id: WindowId,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MousePosition {
     pub x: u32,
     pub y: u32,

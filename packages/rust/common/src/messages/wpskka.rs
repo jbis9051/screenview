@@ -4,7 +4,7 @@ use byteorder::{ReadBytesExt, WriteBytesExt};
 use parser::{message_id, MessageComponent};
 use std::io::Cursor;
 
-#[derive(PartialEq, Copy, Clone, Debug)]
+#[derive(PartialEq, Eq, Copy, Clone, Debug)]
 #[repr(u8)]
 pub enum AuthSchemeType {
     None,

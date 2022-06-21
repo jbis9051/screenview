@@ -48,7 +48,7 @@ impl Display {
     }
 }
 
-#[derive(PartialEq, Copy, Clone)]
+#[derive(PartialEq, Eq, Copy, Clone)]
 pub enum DisplayType {
     Monitor,
     Window,

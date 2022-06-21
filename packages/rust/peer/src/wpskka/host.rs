@@ -104,7 +104,7 @@ impl WpskkaHostHandler {
     ) -> Result<Option<Vec<u8>>, WpskkaHostError> {
         // TODO if these return an error the state might be left in State::Modifying
         match msg {
-            WpskkaMessage::KeyExchange(msg) => self.handle_key_exchange(write, events, msg),
+            WpskkaMessage::KeyExchange(msg) => self.handle_key_exchange(write, msg),
             WpskkaMessage::TryAuth(msg) => self.handle_try_auth(write, events, msg),
             WpskkaMessage::AuthMessage(msg) => self.handle_auth_message(write, events, msg),
             WpskkaMessage::TransportDataMessageReliable(msg) =>
@@ -121,7 +121,6 @@ impl WpskkaHostHandler {
     fn handle_key_exchange(
         &mut self,
         write: &mut Vec<WpskkaMessage<'_>>,
-        events: &mut Vec<InformEvent>,
         msg: KeyExchange,
     ) -> Result<Option<Vec<u8>>, WpskkaHostError> {
         let key_pair = match mem::replace(&mut self.state, State::Modifying) {

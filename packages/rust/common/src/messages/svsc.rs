@@ -51,7 +51,7 @@ impl MessageComponent<'_> for ExpirationTime {
     }
 }
 
-#[derive(Debug, MessageComponent, PartialEq, Clone)]
+#[derive(Debug, MessageComponent, PartialEq, Eq, Clone)]
 pub struct LeaseResponseData {
     pub id: u32,
     pub cookie: Cookie,
@@ -115,7 +115,7 @@ pub type SessionId = [u8; 16];
 pub type PeerId = [u8; 16];
 pub type PeerKey = [u8; 16];
 
-#[derive(Debug, MessageComponent, Clone, PartialEq)]
+#[derive(Debug, MessageComponent, Clone, PartialEq, Eq)]
 pub struct SessionData {
     pub session_id: SessionId,
     pub peer_id: PeerId,
