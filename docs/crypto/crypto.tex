@@ -1,0 +1,194 @@
+% Preamble
+\documentclass{article}
+\setlength\parindent{0pt}
+
+% Packages
+\usepackage{amsmath}
+\usepackage{textcomp}
+\usepackage{multirow}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{tikz}
+\usepackage[T1]{fontenc}
+\usepackage[linktocpage]{hyperref}
+\usepackage{amssymb}
+\usepackage{mathtools}
+
+\hypersetup{
+    colorlinks   = true,
+    urlcolor     = blue,
+    linkcolor    = blue,
+    citecolor   = red
+}
+
+\title{\textbf{ScreenView Cryptography White Paper}}
+\author{Josh Brown}
+\date{}
+
+\begin{document}
+    \maketitle
+
+    \begin{abstract}
+        This document serves as the cryptographical white paper for ScreenView.
+        While the specification includes this information already, this document excludes thhings that aren't
+        necessarily cryptography related.
+    \end{abstract}
+
+    \newpage
+
+
+    \section{Introduction}
+
+    ScreenView consists of two layers of cryptographic protocols each with two sub protocols for reliable and unreliable communication.
+    Server Encryption Layer (SEL) provides end-to-end encryption for all communication between the server and peers.
+    Weak Pre Shared Key, Key Authentication (WPSKKA) Protocol provides end-to-end encryption and authentication for
+    all communication between the peers.
+    WPSKKA can be used independently of SEL, for example in the case of direct connections.
+
+    \subsection{Definitions}
+
+    \begin{itemize}
+        \item Host - a peer that is sharing their screen with the Client
+        \item Client - a peer that is viewing the Host's screen
+        \item Peer - a generic term meaning either Host or Client
+        \item Server - the signaling/proxy server used to establish sessions between Host and Client
+        \item Session - a single session between a Host and Client
+    \end{itemize}
+
+    \subsection{Algorithms}
+
+    % TODO: Add algorithms
+
+
+    \section{Server Encryption Layer (SEL)}
+
+    \subsection{Reliable (e.g. TCP)}
+
+    SEL reliable is simply TLS 1.3 as defined in
+    \href{https://datatracker.ietf.org/doc/html/rfc8446}{RFC8446}.
+    TLS v1.3 MUST be used.
+    Previous versions of TLS MUST NOT be used.\\
+
+
+    All further reliable communication between the Peer and the Server occurs over TLS.
+
+    \subsection{Unreliable (e.g. UDP)}
+
+    Unreliable communication cannot occur before a session is established.
+    When a session is established with the signaling server, the server generates a session-id.
+    For each peer, the server generates a peer-id and peer-key.
+    All these values are sent to the peer over the SEL reliable channel.
+    session-id is sent to both peers while the peer-id and peer-key are only sent to the respective peer.
+    session-id, peer-id, and peer-key are all 128-bit random values generated from a cryptographically secure random number generator.
+    We can assume that session-id is globally unique throughout all sessions.
+    We can assume that peer-id and peer-key is globally unique throughout all peers in all sessions.
+
+    Key derivation is performed as follows:
+
+    \begin{align*}
+        &  G\coloneqq \text{session-id}                                                               \\
+        &  H \coloneqq \text{peer-id}                                                                \\
+        &  J \coloneqq \text{peer-key}                                                              \\
+        &  (\mathit{SU}_{peer}^{send} = \mathit{SU}_{serv}^{recv}, \mathit{SU}_{peer}^{recv} = \mathit{SU}_{serv}^{send}) \coloneqq \text{KDF}_2(\text{HASH}(G\,
+        ||\, H\,||\, J), \epsilon)                                        \\
+        &   \mathit{NU}_{peer}^{send} = \mathit{NU}_{serv}^{recv} = \mathit{NU}_{peer}^{recv} = \mathit{NU}_{serv}^{send} \coloneqq 0
+    \end{align*}
+
+    Then to send a message, $P$:
+
+    \begin{align*}
+        & \text{data} \coloneqq \text{AEAD}(\mathit{SU}_{m}^{send}, \mathit{NU}_{m}^{send}, P, \epsilon)\\
+        & \text{counter} \coloneqq \mathit{NU}_{m}^{send}\\
+        & \mathit{NU}_{m}^{send} \coloneqq \mathit{NU}_{m}^{send} + 1
+    \end{align*}
+
+
+    $\mathit{NU}_{m}$ is an 64 bit counter that does not wrap.
+    After a transport message is sent, if $\mathit{NU}_{m}$ equals
+    ($2^{64}-1$) the TCP connection is dropped.
+    Subsequent UDP messages are not sent.\\
+
+    RFC6479 is used to prevent messages from being replayed.
+
+    \section{Weak Pre Shared Key (WPSKKA)}
+
+    Each peer generates an ephemeral keypair.
+    The peers then exchange their public keys over a reliable unencrypted channel.
+
+
+    \subsection{Authentication}
+
+    Next, authentication occurs.
+    The goal of authentication is to ensure the public provided sent by each peer in the key exchange is indeed the
+    public key of the peer.
+
+    There are multiple authentication methods.
+
+    \subsubsection{SRP Static/Dynamic}
+
+    SRP Dynamic and SRP Static use the SRP v6 PAKE (eventually to be replaced by OPAQUE after standardization)
+    to authenticate the public keys.
+    The only difference between SRP Static and SRP Dynamic is that SRP Static uses a static password chosen by the
+    Host user, while SRP Dynamic uses a randomly generated password.
+    The password is intentionally assumed to be weak, specifically the password is assumed to have a minimum of 20
+    bits of entropy when dynamic.
+    The password is generated from a cryptographically secure random number generator.
+    In SRP the Host acts aas the server and the Client acts as the client.
+
+    To begin, the Host generates a username and salt which are each 128-bit cryptographically secure random numbers.
+    The Host registers the password with itself in accordance with the SRP protocol.
+    The Host sends the username, salt, and B value to the Client.
+    The Client computes the SRP premaster key.
+    The Client responds to the Host with it's A value and a MAC, where the MAC is
+    \begin{align*}
+        & \text{HMAC}(\text{client-public-key}, \text{KDF}(\text{srp-premaster-key}))
+    \end{align*}
+    The Host verifies the MAC.
+    THe Host response with a MAC of its own public key.
+    Both the Client and Host have been authenticated.
+
+    \subsection{Key Derivation}
+
+    \begin{align*}
+        & C_{host} = \text{DH}(E_{client}^{pub},\ E_{host}^{priv})\\
+        & C_{client} = \text{DH}(E_{host}^{pub},\ E_{client}^{priv})\\
+        & (\mathit{ST}_{host}^{send} = \mathit{ST}_{client}^{recv},\ \mathit{ST}_{host}^{recv} = \mathit{ST}_{client}^{send}, \mathit{SU}_{host}^{send} = \mathit{SU}_{client}^{recv},\ \mathit{SU}_{host}^{recv} = \mathit{SU}_{client}^{send}) \coloneqq \text{KDF}_4(C_{host} = C_{client},
+        \ \epsilon) \\
+        & \mathit{NT}_{host}^{send} = \mathit{NT}_{client}^{recv} = \mathit{NT}_{host}^{recv} = \mathit{NT}_{client}^{send} = \mathit{NU}_{host}^{send} = \mathit{NU}_{client}^{recv} = \mathit{NU}_{host}^{recv} = \mathit{NU}_{client}^{send} \coloneqq 0
+    \end{align*}
+
+    \subsection{Transport Messages}
+
+    \subsubsection{Reliable}
+
+    \begin{align*}
+        & \text{data} \coloneqq \text{AEAD}(\mathit{ST}_{m}^{send},\mathit{NT}_{m}^{send}, P, \epsilon)\\
+        & \text{counter} \coloneqq \mathit{NT}_{m}^{send}\\
+        & \mathit{NT}_{m}^{send} \coloneqq \mathit{NT}_{m}^{send} + 1
+    \end{align*}
+
+
+    Where \emph{P} is the payload to be transported.\\
+
+    $\mathit{NT}_{m}$ is an 64 bit counter that MUST NOT wrap. After a transport message is sent, if $\mathit{NT}_{m}$ equals
+    ($2^{64}-1$) the UDP and TCP connection MUST be dropped. Subsequent messages MUST NOT be sent. \\
+
+
+    \subsubsection{Unreliable}
+
+    \begin{align*}
+        & \text{data} \coloneqq \text{AEAD}(\mathit{SU}_{m}^{send},\mathit{NU}_{m}^{send}, P, \epsilon)\\
+        & \text{counter} \coloneqq \mathit{NU}_{m}^{send}\\
+        & \mathit{NU}_{m}^{send} \coloneqq \mathit{NU}_{m}^{send} + 1
+    \end{align*}
+
+
+    Where \emph{P} is the payload to be transported.\\
+
+    $\mathit{NU}_{m}$ is an 64 bit counter that MUST NOT wrap .
+    After a transport message is sent, if $\mathit{NU}_{m}$ equals
+    ($2^{64}-1$) the UDP and TCP connection MUST be dropped.
+    Subsequent messages MUST NOT be sent. \\
+
+    RFC6479 is used to prevent messages from being replayed.
+\end{document}
