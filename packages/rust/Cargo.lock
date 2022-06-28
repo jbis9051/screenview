@@ -308,6 +308,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "env-libvpx-sys"
+version = "5.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "972df7bbabbc20c09f9191b0997baf21255ee55c055658ee33794d4dfc6134ef"
+dependencies = [
+ "pkg-config",
+]
+
+[[package]]
 name = "errno"
 version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -695,6 +704,7 @@ dependencies = [
  "cfg-if",
  "common",
  "crossbeam-channel",
+ "env-libvpx-sys",
  "futures-executor",
  "futures-util",
  "image",
