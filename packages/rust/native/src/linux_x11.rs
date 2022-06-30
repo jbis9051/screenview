@@ -328,7 +328,7 @@ impl NativeApiTemplate for X11Api {
         Ok(api_windows)
     }
 
-    fn capture_monitor_frame(&mut self, monitor_id: u32) -> Result<Frame, Error> {
+    fn capture_monitor_frame(&mut self, monitor_id: u32) -> Result<BGRAFrame, Error> {
         let &X11MonitorInfo {
             x,
             y,
@@ -339,7 +339,11 @@ impl NativeApiTemplate for X11Api {
         self.capture(self.root, x, y, width, height)
     }
 
-    fn update_monitor_frame(&mut self, monitor_id: u32, frame: &mut Frame) -> Result<(), Error> {
+    fn update_monitor_frame(
+        &mut self,
+        monitor_id: u32,
+        frame: &mut BGRAFrame,
+    ) -> Result<(), Error> {
         let &X11MonitorInfo {
             x,
             y,
@@ -350,7 +354,7 @@ impl NativeApiTemplate for X11Api {
         self.update_frame(self.root, x, y, width, height, frame)
     }
 
-    fn capture_window_frame(&mut self, window_id: u32) -> Result<Frame, Error> {
+    fn capture_window_frame(&mut self, window_id: u32) -> Result<BGRAFrame, Error> {
         let x11_window = unsafe { Window::new(window_id) };
         let geometry = self
             .conn
@@ -367,7 +371,7 @@ impl NativeApiTemplate for X11Api {
         )
     }
 
-    fn update_window_frame(&mut self, window_id: u32, frame: &mut Frame) -> Result<(), Error> {
+    fn update_window_frame(&mut self, window_id: u32, frame: &mut BGRAFrame) -> Result<(), Error> {
         let x11_window = unsafe { Window::new(window_id) };
         let geometry = self
             .conn
@@ -477,7 +481,7 @@ impl X11Api {
         y: u32,
         width: u32,
         height: u32,
-    ) -> Result<Frame, Error> {
+    ) -> Result<BGRAFrame, Error> {
         let info = self.lazy_init_capture()?;
 
         self.update_shm(info.shmseg, window, x, y, width, height)?;
@@ -500,7 +504,7 @@ impl X11Api {
         y: u32,
         width: u32,
         height: u32,
-        frame: &mut Frame,
+        frame: &mut BGRAFrame,
     ) -> Result<(), Error> {
         let info = self.lazy_init_capture()?;
 

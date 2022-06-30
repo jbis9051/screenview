@@ -173,7 +173,7 @@ impl ScreenCapturerWinGdi {
             }],
         };
 
-        let mut rgba = vec![0u8; rect.width as usize * rect.height as usize * 4];
+        let mut bgra = Vec::with_capacity(rect.width as usize * rect.height as usize * 4);
 
         let res = unsafe {
             GetDIBits(
@@ -181,7 +181,7 @@ impl ScreenCapturerWinGdi {
                 self.bitmap,
                 0,
                 rect.height,
-                &mut rgba[0] as *mut u8 as _,
+                &mut bgra[0] as *mut u8 as _,
                 &mut bmi as _,
                 DIB_RGB_COLORS,
             )
@@ -191,19 +191,8 @@ impl ScreenCapturerWinGdi {
             return Err(());
         }
 
-        let rgb = vec![0u8; rect.width as usize * rect.height as usize * 3];
-        let mut rgba_ptr = rgba.as_ptr();
-        let mut rgb_ptr = rgb.as_ptr();
-        let num_pixels = rect.width as usize * rect.height as usize;
+        unsafe { bgra.set_len(rect.width as usize * rect.height as usize * 4) };
 
-        unsafe {
-            for _ in 0 .. num_pixels {
-                let [b, g, r] = *(rgba_ptr as *const [u8; 3]);
-                *(rgb_ptr as *mut [u8; 3]) = [r, g, b];
-                rgba_ptr = rgba_ptr.add(4);
-                rgb_ptr = rgb_ptr.add(3);
-            }
-        }
-        Ok((rgb, rect.width, rect.height))
+        Ok((bgra, rect.width, rect.height))
     }
 }

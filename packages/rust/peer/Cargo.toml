@@ -17,6 +17,7 @@ tokio = { version = "1.15.0", features=["net", "sync"] }
 env-libvpx-sys = "5.1.1"
 rtp = { git = "https://github.com/Cassy343/rtp", branch = "code-improvements" }
 bytes = "1.1.0"
+dcv-color-primitives = "0.5.1"
 
 [dependencies.image]
 version = "0.23.14"
