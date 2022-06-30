@@ -1,17 +1,25 @@
 use cfg_if::cfg_if;
-use native::api::Frame;
-use std::mem;
-use vpx_sys::*;
+use vpx_sys::{
+    vpx_codec_control_,
+    vpx_codec_ctx_t,
+    vpx_codec_cx_pkt_kind::VPX_CODEC_CX_FRAME_PKT,
+    vpx_codec_destroy,
+    vpx_codec_enc_cfg_t,
+    vpx_codec_enc_config_default,
+    vpx_codec_enc_init_ver,
+    vpx_codec_encode,
+    vpx_codec_err_t,
+    vpx_codec_get_cx_data,
+    vpx_codec_vp9_cx,
+    vpx_image_t,
+    vpx_img_alloc,
+    vpx_img_fmt,
+    vpx_img_free,
+    vpx_img_wrap,
+    VPX_DL_REALTIME,
+};
 
-pub struct VpxImageWrapper(vpx_image_t);
-
-impl Drop for VpxImageWrapper {
-    fn drop(&mut self) {
-        unsafe {
-            vpx_img_free(&mut self.0);
-        }
-    }
-}
+// For the next soul that is looking for documentation, see: https://developer.liveswitch.io/reference/cocoa/api/group__encoder.html, https://docs.freeswitch.org/switch__image_8h.html
 
 pub struct VP9Encoder {
     encoder: vpx_codec_ctx_t,
@@ -19,6 +27,9 @@ pub struct VP9Encoder {
 
     width: u32,
     height: u32,
+
+    raw: *mut vpx_image_t,
+    pts: i64,
 }
 
 macro_rules! vp9_call_unsafe {
@@ -59,34 +70,77 @@ impl VP9Encoder {
             1
         ));
 
+        let raw = unsafe {
+            vpx_img_alloc(
+                std::ptr::null::<vpx_image_t>() as _,
+                vpx_img_fmt::VPX_IMG_FMT_I420,
+                width,
+                height,
+                1,
+            )
+        };
+
+        if raw.is_null() {
+            return Err(Error::VpxAlloc);
+        }
+
 
         Ok(VP9Encoder {
             encoder,
             config,
             width,
             height,
+            raw,
+            pts: 0,
         })
     }
 
-    pub fn encode(&self, frame: &mut [u8]) -> VpxImageWrapper {
-        let mut image = unsafe { mem::zeroed() };
-
-        let res = unsafe {
+    pub fn encode(&mut self, frame: &[u8]) -> Result<Vec<Vec<u8>>, Error> {
+        unsafe {
             vpx_img_wrap(
-                &mut image,
+                self.raw,
                 vpx_img_fmt::VPX_IMG_FMT_I420,
-                self.width as _,
-                self.height as _,
+                self.width,
+                self.height,
                 1,
-                frame.as_mut_ptr(),
+                frame.as_ptr() as _,
             )
         };
+        vp9_call_unsafe!(vpx_codec_encode(
+            &mut self.encoder,
+            self.raw,
+            self.pts,
+            1,
+            0,
+            VPX_DL_REALTIME.into(),
+        ));
 
-        if unsafe { res.as_ref() }.is_none() {
-            panic!("Failed to wrap image");
+
+        let mut datas = Vec::new();
+
+        let mut iter = std::ptr::null();
+        let mut pkt = std::ptr::null();
+        loop {
+            pkt = unsafe { vpx_codec_get_cx_data(&mut self.encoder, &mut iter) };
+            if pkt.is_null() {
+                break;
+            }
+            let pkt = unsafe { &*pkt };
+            if pkt.kind != VPX_CODEC_CX_FRAME_PKT {
+                break;
+            }
+            let mut data = Vec::<u8>::with_capacity(unsafe { pkt.data.frame.sz } as usize);
+            unsafe {
+                std::ptr::copy_nonoverlapping(
+                    pkt.data.frame.buf as _,
+                    data.as_mut_ptr(),
+                    pkt.data.frame.sz as usize,
+                );
+            }
+            unsafe { data.set_len(pkt.data.frame.sz as usize) };
+            datas.push(data);
         }
-
-        VpxImageWrapper(image)
+        Ok(datas)
     }
 }
 
@@ -94,6 +148,9 @@ impl Drop for VP9Encoder {
     fn drop(&mut self) {
         unsafe {
             vpx_codec_destroy(&mut self.encoder);
+        }
+        if !self.raw.is_null() {
+            unsafe { vpx_img_free(self.raw) };
         }
     }
 }
@@ -120,6 +177,8 @@ fn get_cpu_speed(width: u32, height: u32) -> i32 {
 pub enum Error {
     #[error("VPX Codec error: {0:?}")]
     VpxCodec(vpx_codec_err_t),
+    #[error("vpx_img_alloc failed")]
+    VpxAlloc,
 }
 
 impl From<vpx_codec_err_t> for Error {
