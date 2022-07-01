@@ -11,8 +11,8 @@ use common::messages::rvd::{
     RvdMessage,
 };
 use native::api::{
+    BGRAFrame,
     ClipboardType as NativeClipboardType,
-    Frame,
     Key,
     Monitor,
     MonitorId,
@@ -345,11 +345,11 @@ impl NativeApiTemplate for TesterNative {
         Ok(self.windows.clone())
     }
 
-    fn capture_monitor_frame(&mut self, _monitor_id: MonitorId) -> Result<Frame, Self::Error> {
+    fn capture_monitor_frame(&mut self, _monitor_id: MonitorId) -> Result<BGRAFrame, Self::Error> {
         unimplemented!()
     }
 
-    fn capture_window_frame(&mut self, _window_id: WindowId) -> Result<Frame, Self::Error> {
+    fn capture_window_frame(&mut self, _window_id: WindowId) -> Result<BGRAFrame, Self::Error> {
         unimplemented!()
     }
 }
