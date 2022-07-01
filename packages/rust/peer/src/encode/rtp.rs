@@ -1,6 +1,8 @@
 use crate::encode::{vp9, vp9::VP9Encoder};
 use bytes::Bytes;
-use native::api::Frame;
+use dcv_color_primitives as dcp;
+use dcv_color_primitives::{convert_image, get_buffers_size, ColorSpace, ImageFormat, PixelFormat};
+use native::api::BGRAFrame;
 use rtp::{
     codecs::vp9::Vp9Payloader,
     packet::Packet,
@@ -28,8 +30,43 @@ impl RtpEncoder {
         })
     }
 
-    pub fn process(&mut self, _frame: Frame) -> Result<Vec<Packet>, Error> {
-        let i420_image = Vec::new(); // TODO convert frame to i420 type
+    pub fn process(&mut self, frame: &BGRAFrame) -> Result<Vec<Packet>, Error> {
+        dcp::initialize();
+
+
+        let src_format = ImageFormat {
+            pixel_format: PixelFormat::Bgra,
+            color_space: ColorSpace::Rgb,
+            num_planes: 1,
+        };
+
+        let dst_format = ImageFormat {
+            pixel_format: PixelFormat::I420,
+            color_space: ColorSpace::Bt601,
+            num_planes: 1,
+        };
+
+        let sizes: &mut [usize] = &mut [0usize; 1];
+        get_buffers_size(frame.width, frame.height, &dst_format, None, sizes)
+            .map_err(Error::Converter)?;
+
+        let mut i420_image = Vec::with_capacity(sizes[0]);
+
+        convert_image(
+            frame.width,
+            frame.height,
+            &src_format,
+            None,
+            &[&frame.data],
+            &dst_format,
+            None,
+            &mut [&mut i420_image],
+        )
+        .map_err(Error::Converter)?;
+
+        unsafe { i420_image.set_len(sizes[0]) }
+
+
         let datas = self.encoder.encode(&i420_image).map_err(Error::Encoder)?;
         let mut packets = Vec::new();
         for data in datas {
@@ -53,4 +90,6 @@ pub enum Error {
     Encoder(vp9::Error),
     #[error("RTP packetizer error: {0}")]
     Packetizer(rtp::Error),
+    #[error("DCP converter error: {0}")]
+    Converter(dcp::ErrorKind),
 }

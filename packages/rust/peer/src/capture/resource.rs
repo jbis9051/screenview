@@ -1,17 +1,20 @@
-use native::api::Frame;
-
 use super::{processing::ProcessFrame, ViewResources};
 use common::messages::rvd::DisplayId;
+use native::api::BGRAFrame;
 
 pub struct CaptureResources<P: ProcessFrame> {
-    pub(super) frame: Frame,
+    pub(super) frame: BGRAFrame,
     pub(super) processing: P::Resources,
 }
 
 impl<P: ProcessFrame> CaptureResources<P> {
     pub(super) fn new() -> Self {
         Self {
-            frame: Frame::new(0, 0),
+            frame: BGRAFrame {
+                width: 0,
+                height: 0,
+                data: Vec::new(),
+            },
             processing: <P::Resources as Default>::default(),
         }
     }

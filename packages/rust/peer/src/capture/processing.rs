@@ -1,14 +1,17 @@
 use std::iter::FusedIterator;
 
 use common::messages::rvd::DisplayId;
-use native::api::Frame;
+use native::api::BGRAFrame;
 
 pub trait ProcessFrame: Default + 'static {
     type Resources: Send + Default;
 
     // TODO: consider giving more detailed error information
-    fn process(&mut self, frame: &mut Frame, resources: &mut Self::Resources)
-        -> FrameProcessResult;
+    fn process(
+        &mut self,
+        frame: &mut BGRAFrame,
+        resources: &mut Self::Resources,
+    ) -> FrameProcessResult;
 }
 
 pub trait ViewResources<'a> {
@@ -17,7 +20,7 @@ pub trait ViewResources<'a> {
 
     fn to_frame_update(
         resources: &'a Self::Resources,
-        frame: &'a Frame,
+        frame: &'a BGRAFrame,
         display_id: DisplayId,
     ) -> Self::FrameUpdate;
 }
@@ -36,7 +39,7 @@ impl ProcessFrame for DefaultFrameProcessor {
 
     fn process(
         &mut self,
-        _frame: &mut Frame,
+        _frame: &mut BGRAFrame,
         _resources: &mut Self::Resources,
     ) -> FrameProcessResult {
         // TODO: this will contain the logic that implements a protocol like VP9
@@ -50,7 +53,7 @@ impl<'a> ViewResources<'a> for DefaultFrameProcessor {
 
     fn to_frame_update(
         _resources: &'a Self::Resources,
-        frame: &'a Frame,
+        frame: &'a BGRAFrame,
         display_id: DisplayId,
     ) -> Self::FrameUpdate {
         FrameUpdate::new(frame, display_id)
@@ -58,13 +61,13 @@ impl<'a> ViewResources<'a> for DefaultFrameProcessor {
 }
 
 pub struct FrameUpdate<'a> {
-    frame: &'a Frame,
+    frame: &'a BGRAFrame,
     pub(crate) display_id: DisplayId,
     message_fragment_returned: bool,
 }
 
 impl<'a> FrameUpdate<'a> {
-    fn new(frame: &'a Frame, display_id: DisplayId) -> Self {
+    fn new(frame: &'a BGRAFrame, display_id: DisplayId) -> Self {
         Self {
             frame,
             display_id,
@@ -86,7 +89,7 @@ impl<'a> Iterator for FrameUpdate<'a> {
         self.message_fragment_returned = true;
         Some(FrameDataMessageFragment {
             cell_number: 0,
-            data: self.frame.as_raw().clone(),
+            data: self.frame.data.clone(),
         })
     }
 }

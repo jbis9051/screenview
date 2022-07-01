@@ -194,7 +194,7 @@ impl WindowCapturerWinGdi {
                 bitmap,
                 0,
                 rect.height,
-                &mut bgra[0] as *mut u8 as _,
+                bgra.as_mut_ptr() as _,
                 &mut bmi as _,
                 DIB_RGB_COLORS,
             )

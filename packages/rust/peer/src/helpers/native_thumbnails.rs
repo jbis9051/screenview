@@ -3,13 +3,15 @@ use crate::{
     rvd::Display,
 };
 use common::{messages::rvd::DisplayId, sync::event_loop::ThreadWaker};
-use image::{imageops::FilterType, DynamicImage, ImageFormat};
+use dcv_color_primitives as dcp;
+use dcv_color_primitives::{convert_image, get_buffers_size, ColorSpace, ImageFormat, PixelFormat};
+use image::{imageops::FilterType, DynamicImage, ImageFormat as ImageCrateFormat, RgbImage};
 use native::{
-    api::{Frame, NativeApiTemplate},
+    api::{BGRAFrame, NativeApiTemplate},
     NativeApi,
     NativeApiError,
 };
-use std::mem;
+
 
 pub struct ThumbnailCapture {
     pool: CapturePool<ProcessThumbnail>,
@@ -73,16 +75,55 @@ impl ProcessFrame for ProcessThumbnail {
 
     fn process(
         &mut self,
-        frame: &mut Frame,
+        frame: &mut BGRAFrame,
         resources: &mut Self::Resources,
     ) -> FrameProcessResult {
-        let frame = mem::take(frame);
+        dcp::initialize();
+
+
+        let src_format = ImageFormat {
+            pixel_format: PixelFormat::Bgra,
+            color_space: ColorSpace::Rgb,
+            num_planes: 1,
+        };
+
+        let dst_format = ImageFormat {
+            pixel_format: PixelFormat::Rgb,
+            color_space: ColorSpace::Rgb,
+            num_planes: 1,
+        };
+
+        let sizes: &mut [usize] = &mut [0usize; 1];
+
+        if get_buffers_size(frame.width, frame.height, &dst_format, None, sizes).is_err() {
+            return FrameProcessResult::Failure;
+        }
+
+        let mut rgb_image = vec![0u8; sizes[0]];
+
+        if convert_image(
+            frame.width,
+            frame.height,
+            &src_format,
+            None,
+            &[&frame.data],
+            &dst_format,
+            None,
+            &mut [&mut rgb_image],
+        )
+        .is_err()
+        {
+            return FrameProcessResult::Failure;
+        }
+
 
         resources.clear();
         // TODO this can be sped up close to 10x using the resize library for this operation
-        let result = DynamicImage::ImageRgb8(frame)
-            .resize(200, 200, FilterType::Nearest)
-            .write_to(resources, ImageFormat::Jpeg);
+        let result = DynamicImage::ImageRgb8(
+            RgbImage::from_raw(frame.width, frame.height, rgb_image).unwrap(),
+        )
+        .resize(200, 200, FilterType::Nearest)
+        .write_to(resources, ImageCrateFormat::Jpeg);
 
         if result.is_ok() {
             FrameProcessResult::Success
@@ -98,7 +139,7 @@ impl<'a> ViewResources<'a> for ProcessThumbnail {
 
     fn to_frame_update(
         resources: &'a Self::Resources,
-        _frame: &'a Frame,
+        _frame: &'a BGRAFrame,
         display_id: DisplayId,
     ) -> Self::FrameUpdate {
         RawThumbnailData {
