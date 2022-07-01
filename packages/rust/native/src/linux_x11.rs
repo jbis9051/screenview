@@ -1,5 +1,4 @@
 use errno::{errno, Errno};
-use image::RgbImage;
 use libc::{c_int, shmat, shmctl, shmdt, shmget, size_t, IPC_CREAT, IPC_PRIVATE, IPC_RMID};
 use std::{
     error::Error as StdError,
@@ -487,14 +486,18 @@ impl X11Api {
         self.update_shm(info.shmseg, window, x, y, width, height)?;
 
         let len = width as usize * height as usize;
-        let mut buf: Vec<u8> = Vec::with_capacity(len * 3);
+        let mut buf: Vec<u8> = Vec::with_capacity(len * 4);
 
         unsafe {
-            Self::copy_rgb(info.shmaddr, buf.as_mut_ptr(), len);
-            buf.set_len(len * 3);
+            Self::copy_bgra(info.shmaddr, buf.as_mut_ptr(), len);
+            buf.set_len(len * 4);
         }
 
-        Ok(RgbImage::from_vec(width, height, buf).expect("buf does not match width and height"))
+        Ok(BGRAFrame {
+            data: buf,
+            width,
+            height,
+        })
     }
 
     fn update_frame(
@@ -509,7 +512,7 @@ impl X11Api {
         let info = self.lazy_init_capture()?;
 
         let len = info.width as usize * info.height as usize;
-        let data = &mut **frame;
+        let data = &mut frame.data;
 
         if data.len() != len * 3 {
             *frame = self.capture(window, x, y, width, height)?;
@@ -519,7 +522,7 @@ impl X11Api {
         self.update_shm(info.shmseg, window, x, y, width, height)?;
 
         unsafe {
-            Self::copy_rgb(info.shmaddr, data.as_mut_ptr(), len);
+            Self::copy_bgra(info.shmaddr, data.as_mut_ptr(), len);
         }
 
         Ok(())
@@ -649,12 +652,23 @@ impl X11Api {
     }
 
     #[inline]
-    unsafe fn copy_rgb(mut src: *const u32, mut dst: *mut u8, len: usize) {
-        for _ in 0 .. len {
-            let [b, g, r, _a] = (*src).to_le_bytes();
-            *(dst as *mut [u8; 3]) = [r, g, b];
-            src = src.add(1);
-            dst = dst.add(3);
+    unsafe fn copy_bgra(src: *const u32, dst: *mut u8, len: usize) {
+        cfg_if::cfg_if! {
+            if #[cfg(target_endian = "little")] {
+                ptr::copy_nonoverlapping(src as *mut u8, dst, len * 4);
+            } else if #[cfg(target_endian = "big")] {
+                // Rebind to mut to avoid unnecessary mut warnings on LE platforms
+                let mut src = src;
+                let mut dst = dst;
+
+                for _ in 0 .. len {
+                    *(dst as *mut [u8; 4]) = u32::to_le_bytes(*src);
+                    src = src.add(1);
+                    dst = dst.add(4);
+                }
+            } else {
+                compile_error!("Unsupported endianness");
+            }
         }
     }
 
