@@ -29,8 +29,8 @@ jobs:
           components: rustfmt, clippy
           override: true
           profile: minimal
-      - run: apt update
-      - run: apt install libvpx6 -y
+      - run: sudo apt update
+      - run: sudo apt install libvpx6 -y
       - run: cargo fmt --all -- --check
       - run: cargo clippy --all
   test:
@@ -42,6 +42,6 @@ jobs:
           toolchain: stable
           override: true
           profile: minimal
-      - run: apt update
-      - run: apt install libvpx6 -y
+      - run: sudo apt update
+      - run: sudo apt install libvpx6 -y
       - run: cargo test --tests
