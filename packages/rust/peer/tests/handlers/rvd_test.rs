@@ -122,7 +122,7 @@ fn test_rvd_client() {
 
     assert!(matches!(msg, RvdMessage::DisplayChangeReceived(_)));
     assert!(
-        matches!(event, InformEvent::RvdClientInform(RvdClientInform::DisplayChange(c)) if c == change)
+        matches!(event, InformEvent::RvdClientInform(RvdClientInform::DisplayShare(c)) if c == change)
     );
 
 

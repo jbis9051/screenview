@@ -309,7 +309,7 @@ pub enum RvdMessage {
     ProtocolVersion(ProtocolVersion),
     ProtocolVersionResponse(ProtocolVersionResponse),
     PermissionsUpdate(PermissionsUpdate),
-    DisaplyShare(DisplayShare),
+    DisplayShare(DisplayShare),
     DisplayShareAck(DisplayShareAck),
     DisplayUnshare(DisplayUnshare),
     MouseLocation(MouseLocation),
