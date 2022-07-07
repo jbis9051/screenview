@@ -25,7 +25,7 @@ pub struct ProtocolVersionResponse {
 
 bitflags! {
     pub struct PermissionMask: u8 {
-        const CLIPBOARD_READ = 0b01;
+        const CLIPBOARD_READ = 0b1;
         const CLIPBOARD_WRITE = 0b10;
     }
 }
