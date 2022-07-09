@@ -5,21 +5,24 @@ pub struct CipherReliablePeer {
     send_nonce: u64,
     receive_key: Vec<u8>,
     receive_nonce: u64,
+    context: Vec<u8>,
 }
 
 impl CipherReliablePeer {
-    pub fn new(send_key: Vec<u8>, receive_key: Vec<u8>) -> Self {
+    pub fn new(send_key: Vec<u8>, receive_key: Vec<u8>, context: Vec<u8>) -> Self {
         Self {
             send_key,
             send_nonce: 0,
             receive_key,
             receive_nonce: 0,
+            context,
         }
     }
 
     pub fn encrypt(&mut self, plainbytes: &[u8]) -> Result<Vec<u8>, CipherError> {
-        let cipherbytes = sel_cipher::encrypt(plainbytes, &self.send_key, self.send_nonce)
-            .map_err(|_| CipherError::CipherError)?;
+        let cipherbytes =
+            sel_cipher::encrypt(plainbytes, &self.send_key, &self.context, self.send_nonce)
+                .map_err(|_| CipherError::CipherError)?;
         self.send_nonce = self
             .send_nonce
             .checked_add(1)
@@ -28,8 +31,13 @@ impl CipherReliablePeer {
     }
 
     pub fn decrypt(&mut self, cipherbytes: &[u8]) -> Result<Vec<u8>, CipherError> {
-        let plainbytes = sel_cipher::decrypt(cipherbytes, &self.receive_key, self.receive_nonce)
-            .map_err(|_| CipherError::CipherError)?;
+        let plainbytes = sel_cipher::decrypt(
+            cipherbytes,
+            &self.receive_key,
+            &self.context,
+            self.receive_nonce,
+        )
+        .map_err(|_| CipherError::CipherError)?;
         self.receive_nonce = self
             .receive_nonce
             .checked_add(1)

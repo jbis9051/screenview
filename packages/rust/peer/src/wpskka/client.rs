@@ -16,21 +16,24 @@ use crate::{
     },
     InformEvent,
 };
-use common::messages::{
-    auth::srp::SrpMessage,
-    wpskka::{
-        AuthMessage,
-        AuthResult,
-        AuthScheme as AuthSchemeMessage,
-        AuthSchemeType,
-        KeyExchange,
-        TransportDataMessageReliable,
-        TransportDataMessageUnreliable,
-        TryAuth,
-        WpskkaMessage,
+use common::{
+    constants::{WPSKKA_AEAD_RELIABLE_CONTEXT, WPSKKA_AEAD_UNRELIABLE_CONTEXT, WPSKKA_KDF_CONTEXT},
+    messages::{
+        auth::srp::SrpMessage,
+        wpskka::{
+            AuthMessage,
+            AuthResult,
+            AuthScheme as AuthSchemeMessage,
+            AuthSchemeType,
+            KeyExchange,
+            TransportDataMessageReliable,
+            TransportDataMessageUnreliable,
+            TryAuth,
+            WpskkaMessage,
+        },
+        Message,
+        MessageComponent,
     },
-    Message,
-    MessageComponent,
 };
 use ring::agreement::EphemeralPrivateKey;
 use std::{
@@ -155,11 +158,24 @@ impl WpskkaClientHandler {
     ) -> Result<(CipherReliablePeer, CipherUnreliablePeer), ()> {
         let client_public_key = parse_foreign_public(&foreign_public_key);
         let (receive_reliable, send_reliable, receive_unreliable, send_unreliable) =
-            diffie_hellman(key_pair.ephemeral_private_key, client_public_key).map_err(|_| ())?;
+            diffie_hellman(
+                key_pair.ephemeral_private_key,
+                client_public_key,
+                WPSKKA_KDF_CONTEXT,
+            )
+            .map_err(|_| ())?;
         // TODO zero hella
         Ok((
-            CipherReliablePeer::new(send_reliable.to_vec(), receive_reliable.to_vec()),
-            CipherUnreliablePeer::new(send_unreliable.to_vec(), receive_unreliable.to_vec()),
+            CipherReliablePeer::new(
+                send_reliable.to_vec(),
+                receive_reliable.to_vec(),
+                WPSKKA_AEAD_RELIABLE_CONTEXT.to_vec(),
+            ),
+            CipherUnreliablePeer::new(
+                send_unreliable.to_vec(),
+                receive_unreliable.to_vec(),
+                WPSKKA_AEAD_UNRELIABLE_CONTEXT.to_vec(),
+            ),
         ))
     }
 

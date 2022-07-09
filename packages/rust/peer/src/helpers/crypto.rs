@@ -38,27 +38,30 @@ pub fn parse_foreign_public(public_key: &[u8; 32]) -> UnparsedPublicKey<&[u8; 32
     agreement::UnparsedPublicKey::new(&agreement::X25519, public_key)
 }
 
-pub fn kdf1(ikm: &[u8]) -> [u8; 32] {
+pub fn kdf1(ikm: &[u8], info: &[u8]) -> [u8; 32] {
     let kdf = Hkdf::new(None, ikm);
     let mut key = [0u8; 32];
-    kdf.expand(&[], &mut key).unwrap();
+    let info = [&b"ScreenView"[..], info].concat();
+    kdf.expand(&info, &mut key).unwrap();
     key
 }
 
-pub fn kdf2(ikm: &[u8]) -> ([u8; 32], [u8; 32]) {
+pub fn kdf2(ikm: &[u8], info: &[u8]) -> ([u8; 32], [u8; 32]) {
     let kdf = Hkdf::new(None, ikm);
     let mut key = [0u8; 64];
-    kdf.expand(&[], &mut key).unwrap();
+    let info = [&b"ScreenView"[..], info].concat();
+    kdf.expand(&info, &mut key).unwrap();
     (
         (&key[0 .. 32]).try_into().unwrap(),
         (&key[32 .. 64]).try_into().unwrap(),
     )
 }
 
-pub fn kdf4(ikm: &[u8]) -> ([u8; 32], [u8; 32], [u8; 32], [u8; 32]) {
+pub fn kdf4(ikm: &[u8], info: &[u8]) -> ([u8; 32], [u8; 32], [u8; 32], [u8; 32]) {
     let kdf = Hkdf::new(None, ikm);
     let mut key = [0u8; 128];
-    kdf.expand(&[], &mut key).unwrap();
+    let info = [&b"ScreenView"[..], info].concat();
+    kdf.expand(&info, &mut key).unwrap();
     (
         (&key[0 .. 32]).try_into().unwrap(),
         (&key[32 .. 64]).try_into().unwrap(),
@@ -71,12 +74,13 @@ pub fn kdf4(ikm: &[u8]) -> ([u8; 32], [u8; 32], [u8; 32], [u8; 32]) {
 pub fn diffie_hellman(
     my_private_key: EphemeralPrivateKey,
     peer_public_key: UnparsedPublicKey<&[u8; 32]>,
+    kdf_context: &[u8],
 ) -> Result<([u8; 32], [u8; 32], [u8; 32], [u8; 32]), Unspecified> {
     agreement::agree_ephemeral(
         my_private_key,
         &peer_public_key,
         ring::error::Unspecified,
-        |key_material| Ok(kdf4(key_material)),
+        |key_material| Ok(kdf4(key_material, kdf_context)),
     )
 }
 

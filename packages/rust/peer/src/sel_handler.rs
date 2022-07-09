@@ -7,10 +7,13 @@ use crate::{
         crypto::kdf2,
     },
 };
-use common::messages::{
-    sel::{SelMessage, TransportDataMessageReliable, TransportDataPeerMessageUnreliable},
-    svsc::PeerId,
-    Data,
+use common::{
+    constants::{SEL_AEAD_CONTEXT, SEL_KDF_CONTEXT},
+    messages::{
+        sel::{SelMessage, TransportDataMessageReliable, TransportDataPeerMessageUnreliable},
+        svsc::PeerId,
+        Data,
+    },
 };
 use std::borrow::Cow;
 
@@ -58,11 +61,13 @@ impl SelHandler {
 
     /// Warning: This resets unreliable
     pub fn derive_unreliable(&mut self, session_id: &[u8], peer_id: &[u8], peer_key: &[u8]) {
-        let (send_key, receive_key) = kdf2(hash!(session_id, peer_id, peer_key));
+        let (send_key, receive_key) =
+            kdf2(&[session_id, peer_id, peer_key].concat(), SEL_KDF_CONTEXT);
         // TODO Security: Look into zeroing out the data here
         self.unreliable = Some(CipherUnreliablePeer::new(
             send_key.to_vec(),
             receive_key.to_vec(),
+            SEL_AEAD_CONTEXT.to_vec(),
         ));
     }
 

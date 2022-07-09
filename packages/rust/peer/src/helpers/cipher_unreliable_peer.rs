@@ -7,16 +7,18 @@ pub struct CipherUnreliablePeer {
     send_nonce: u64,
     receive_key: Vec<u8>,
     anti_replay: AntiReplay,
+    context: Vec<u8>,
 }
 
 impl CipherUnreliablePeer {
-    pub fn new(send_key: Vec<u8>, receive_key: Vec<u8>) -> Self {
+    pub fn new(send_key: Vec<u8>, receive_key: Vec<u8>, context: Vec<u8>) -> Self {
         // TODO ensure keys are long enough
         Self {
             send_key,
             send_nonce: 0,
             receive_key,
             anti_replay: AntiReplay::new(),
+            context,
         }
     }
 
@@ -27,7 +29,7 @@ impl CipherUnreliablePeer {
             .checked_add(1)
             .ok_or(CipherError::MaximumNonceExceeded("send_nonce"))?;
 
-        let cipherbytes = sel_cipher::encrypt(plainbytes, &self.send_key, prev)
+        let cipherbytes = sel_cipher::encrypt(plainbytes, &self.send_key, &self.context, prev)
             .map_err(|_| CipherError::CipherError)?;
 
         Ok((cipherbytes, prev))
@@ -40,10 +42,9 @@ impl CipherUnreliablePeer {
             return Err(CipherError::MessageTooOld(counter));
         }
 
-        // TODO counter validation https://github.com/WireGuard/wireguard-rs/blob/7d84ef9064559a29b23ab86036f7ef62b450f90c/src/wireguard/router/anti_replay.rs
-        let plainbytes = sel_cipher::decrypt(cipherbytes, &self.receive_key, counter)
-            .map_err(|_| CipherError::CipherError)?;
-        // TODO self.receive_nonce change
+        let plainbytes =
+            sel_cipher::decrypt(cipherbytes, &self.receive_key, &self.context, counter)
+                .map_err(|_| CipherError::CipherError)?;
         Ok(plainbytes)
     }
 }

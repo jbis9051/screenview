@@ -1,4 +1,7 @@
-use common::messages::sel::{SelMessage, TransportDataServerMessageUnreliable};
+use common::{
+    constants::{SEL_AEAD_CONTEXT, SEL_KDF_CONTEXT},
+    messages::sel::{SelMessage, TransportDataServerMessageUnreliable},
+};
 use peer::{
     hash,
     helpers::{cipher_unreliable_peer::CipherUnreliablePeer, crypto::kdf2},
@@ -36,8 +39,15 @@ fn sel_unreliable() {
 
 
     // swapped for receiving side
-    let (receive_key, send_key) = kdf2(hash!(session_id, &peer_id, peer_key));
-    let mut server_cipher = CipherUnreliablePeer::new(send_key.to_vec(), receive_key.to_vec());
+    let (receive_key, send_key) = kdf2(
+        &[&session_id[..], &peer_id[..], &peer_key[..]].concat(),
+        SEL_KDF_CONTEXT,
+    );
+    let mut server_cipher = CipherUnreliablePeer::new(
+        send_key.to_vec(),
+        receive_key.to_vec(),
+        SEL_AEAD_CONTEXT.to_vec(),
+    );
 
     handler.derive_unreliable(session_id, &peer_id, peer_key);
 

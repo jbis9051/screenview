@@ -1,13 +1,13 @@
 use crate::{
     debug,
     helpers::{
-        crypto::{hmac, hmac_verify, kdf1, random_srp_private_value},
+        crypto::{hmac, hmac_verify, kdf1, kdf2, random_srp_private_value},
         left_pad::left_pad,
     },
     wpskka::WpskkaClientInform,
 };
 use common::{
-    constants::{HashAlgo, SRP_PARAM},
+    constants::{HashAlgo, SRP_PARAM, WPSKKA_AUTH_SRP_CONTEXT},
     messages::auth::srp::{ClientHello, HostHello, SrpMessage},
 };
 use ring::agreement::PublicKey;
@@ -30,7 +30,7 @@ pub struct SrpAuthClient<const N: usize> {
     host_public_key: [u8; N],
     our_public_key: PublicKey,
     host_hello: Option<Box<HostHello>>,
-    hmac_key: Option<Box<[u8; 32]>>,
+    srp_key_host: Option<Box<[u8; 32]>>,
 }
 
 impl<const N: usize> SrpAuthClient<N> {
@@ -40,7 +40,7 @@ impl<const N: usize> SrpAuthClient<N> {
             host_public_key,
             our_public_key,
             host_hello: None,
-            hmac_key: None,
+            srp_key_host: None,
         }
     }
 
@@ -64,12 +64,12 @@ impl<const N: usize> SrpAuthClient<N> {
 
         let srp_key = verifier.key();
 
-        let srp_key_kdf = kdf1(srp_key);
+        let (srp_key_client, srp_key_host) = kdf2(srp_key, WPSKKA_AUTH_SRP_CONTEXT);
 
-        let mac = hmac(&srp_key_kdf, self.our_public_key.as_ref());
+        let mac = hmac(&srp_key_client, self.our_public_key.as_ref());
 
         // save some stuff we'll need soon
-        self.hmac_key = Some(Box::new(srp_key_kdf));
+        self.srp_key_host = Some(Box::new(srp_key_host));
         self.state = State::PreVerify;
 
 
@@ -98,7 +98,7 @@ impl<const N: usize> SrpAuthClient<N> {
             },
             State::PreVerify => match msg {
                 SrpMessage::HostVerify(msg) => {
-                    let hmac_key = self.hmac_key.take().unwrap();
+                    let hmac_key = self.srp_key_host.take().unwrap();
 
                     if !hmac_verify(&*hmac_key, self.host_public_key.as_ref(), &msg.mac) {
                         self.state = State::Failed;

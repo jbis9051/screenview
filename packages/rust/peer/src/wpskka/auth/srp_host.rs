@@ -1,13 +1,13 @@
 use crate::{
     debug,
     helpers::{
-        crypto::{hmac, hmac_verify, kdf1, random_bytes, random_srp_private_value},
+        crypto::{hmac, hmac_verify, kdf1, kdf2, random_bytes, random_srp_private_value},
         left_pad::left_pad,
     },
     wpskka::auth::srp_host::State::Done,
 };
 use common::{
-    constants::{HashAlgo, SRP_PARAM},
+    constants::{HashAlgo, SRP_PARAM, WPSKKA_AUTH_SRP_CONTEXT},
     messages::auth::srp::{HostHello, HostVerify, SrpMessage},
 };
 use ring::agreement::PublicKey;
@@ -80,7 +80,7 @@ impl<const N: usize> SrpAuthHost<N> {
                 SrpMessage::ClientHello(msg) => {
                     let srp_server = SrpServer::<'static, HashAlgo>::new(SRP_PARAM);
 
-                    let srp_key_kdf = {
+                    let (srp_key_client, srp_key_host) = {
                         let srp_verifier = srp_server
                             .process_reply(
                                 &self.b.take().unwrap(),
@@ -88,14 +88,14 @@ impl<const N: usize> SrpAuthHost<N> {
                                 &*msg.a_pub,
                             )
                             .map_err(SrpHostError::SrpAuthError)?;
-                        kdf1(srp_verifier.key())
+                        kdf2(srp_verifier.key(), WPSKKA_AUTH_SRP_CONTEXT)
                     };
 
-                    if !hmac_verify(&srp_key_kdf, &self.client_public_key, &msg.mac) {
+                    if !hmac_verify(&srp_key_client, &self.client_public_key, &msg.mac) {
                         return Err(SrpHostError::AuthFailed);
                     }
 
-                    let mac = hmac(&srp_key_kdf, self.our_public_key.as_ref());
+                    let mac = hmac(&srp_key_host, self.our_public_key.as_ref());
 
                     self.state = Done;
                     self.authenticated = true;

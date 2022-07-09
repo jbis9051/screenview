@@ -41,9 +41,8 @@ The Server and Peer derive keys.
     &  G\coloneqq \text{session-id}                                                               \\
     &  H \coloneqq \text{peer-id}                                                                \\
     &  J \coloneqq \text{peer-key}                                                              \\
-    &  (\mathit{SU}_{peer}^{send} = \mathit{SU}_{serv}^{recv}, \mathit{SU}_{peer}^{recv} = \mathit{SU}_{serv}^{send})
-    \coloneqq \text{KDF}_2\text{(G || H || J, "SEL-KeyDerivation-Unreliable")}
-    \\
+    &  (\mathit{SU}_{peer}^{send} = \mathit{SU}_{serv}^{recv}, \mathit{SU}_{peer}^{recv} = \mathit{SU}_{serv}^{send})\\
+    & \coloneqq \text{KDF}_2\text{(G || H || J, "SEL-KeyDerivation-Unreliable")} \\
     &   \mathit{NU}_{peer}^{send} = \mathit{NU}_{serv}^{recv} = \mathit{NU}_{peer}^{recv} = \mathit{NU}_{serv}^{send} \coloneqq 0
 \end{align*}
 

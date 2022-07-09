@@ -136,8 +136,10 @@ If the authentication method failed, the Client MAY attempt another authenticati
 \begin{align*}
     & C_{host} = \text{DH}(E_{client}^{pub},\ E_{host}^{priv})\\
     & C_{client} = \text{DH}(E_{host}^{pub},\ E_{client}^{priv})\\
-    & (\mathit{ST}_{host}^{send} = \mathit{ST}_{client}^{recv},\ \mathit{ST}_{host}^{recv} = \mathit{ST}_{client}^{send}, \mathit{SU}_{host}^{send} = \mathit{SU}_{client}^{recv},\ \mathit{SU}_{host}^{recv} = \mathit{SU}_{client}^{send}) \coloneqq \text{KDF}_4(C_{host} = C_{client},
-    \ \text{"WPSKKA-KeyDerivation"}) \\
+    & (\mathit{ST}_{host}^{send} = \mathit{ST}_{client}^{recv},\ \mathit{ST}_{host}^{recv} =
+    \mathit{ST}_{client}^{send}, \mathit{SU}_{host}^{send} = \mathit{SU}_{client}^{recv},\ \mathit{SU}_{host}^{recv}
+    = \mathit{SU}_{client}^{send}) \\
+    & \coloneqq \text{KDF}_4(C_{host} = C_{client},\text{"WPSKKA-KeyDerivation"}) \\
     & \mathit{NT}_{host}^{send} = \mathit{NT}_{client}^{recv} = \mathit{NT}_{host}^{recv} = \mathit{NT}_{client}^{send} = \mathit{NU}_{host}^{send} = \mathit{NU}_{client}^{recv} = \mathit{NU}_{host}^{recv} = \mathit{NU}_{client}^{send} \coloneqq 0
 \end{align*}
 
