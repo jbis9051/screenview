@@ -6,17 +6,19 @@ document are to be interpreted as described in \href{https://datatracker.ietf.or
 
 \subsection{Cryptographical Definitions}
 
-Based on \href{https://www.wireguard.com/papers/wireguard.pdf}{Wireguard}:\\
+\textbf{\textsc{DH(private key, public key)}} Curve25519 point multiplication of private key and public key, returning 32 bytes of output.\\
 
-
-$\epsilon$ represents an empty zero-length bitstring\\
-\textbf{\textsc{DH(private key, public key)}} Curve25519 point multiplication of private key and public key, re-
-turning 32 bytes of output.\\
 \textbf{\textsc{DH-Generate()} }Generates a random Curve25519 private key and derives its corresponding public key,
 returning a pair of 32 bytes values, (private, public).\\
+
 \textbf{\textsc{Aead(key, counter, plain text, auth text)}} ChaCha20Poly1305 AEAD, as specified in \href{https://www.rfc-editor.org/rfc/rfc7539}{RFC7539},
-with its nonce being composed of 32 bits of zeros followed by the 64-bit little-endian value of counter.\\
+with its nonce being composed of 32 bits of zeros followed by the 64-bit little-endian value of counter and the auth
+text being compose of  ("ScreenView-" || auth text).\\
+
 \textbf{\textsc{Hash(input)}} BLAKE3(input), returning 32 bytes of output.\\
+
 \textbf{\textsc{Hmac(key, input)}} Hmac-BLAKE3(key, input), the ordinary BLAKE3 hash function used in an
 HMAC construction, returning 32 bytes of output.\\
-\textbf{\textsc{Kdf$_n$(key, input)}} returns an n-tuple of 32 byte values from \href{https://eprint.iacr.org/2010/264.pdf}{HKDF} with Hash function.
+
+\textbf{\textsc{Kdf$_n$(key, input)}} returns an n-tuple of 32 byte values from HKDF-Expand function defined in \href{https://datatracker.ietf.org/doc/html/rfc5869}{RFC5869}
+with the Hash hash function. The HKDF-Expand's info paramter composed of ("ScreenView-" || input). \\

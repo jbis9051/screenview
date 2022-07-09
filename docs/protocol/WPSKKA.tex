@@ -137,7 +137,7 @@ If the authentication method failed, the Client MAY attempt another authenticati
     & C_{host} = \text{DH}(E_{client}^{pub},\ E_{host}^{priv})\\
     & C_{client} = \text{DH}(E_{host}^{pub},\ E_{client}^{priv})\\
     & (\mathit{ST}_{host}^{send} = \mathit{ST}_{client}^{recv},\ \mathit{ST}_{host}^{recv} = \mathit{ST}_{client}^{send}, \mathit{SU}_{host}^{send} = \mathit{SU}_{client}^{recv},\ \mathit{SU}_{host}^{recv} = \mathit{SU}_{client}^{send}) \coloneqq \text{KDF}_4(C_{host} = C_{client},
-    \ \epsilon) \\
+    \ \text{"WPSKKA-KeyDerivation"}) \\
     & \mathit{NT}_{host}^{send} = \mathit{NT}_{client}^{recv} = \mathit{NT}_{host}^{recv} = \mathit{NT}_{client}^{send} = \mathit{NU}_{host}^{send} = \mathit{NU}_{client}^{recv} = \mathit{NU}_{host}^{recv} = \mathit{NU}_{client}^{send} \coloneqq 0
 \end{align*}
 
@@ -165,7 +165,8 @@ Transport Data Messages MUST NOT be sent until authentication is complete.
 \end{center}
 
 \begin{align*}
-    & \text{data} \coloneqq \text{AEAD}(\mathit{ST}_{m}^{send},\mathit{NT}_{m}^{send}, P, \epsilon)\\
+    & \text{data} \coloneqq \text{AEAD}(\mathit{ST}_{m}^{send},\mathit{NT}_{m}^{send}, P,
+    \text{"WPSKKA-Encryption-Reliable"})\\
     & \text{counter} \coloneqq \mathit{NT}_{m}^{send}\\
     & \mathit{NT}_{m}^{send} \coloneqq \mathit{NT}_{m}^{send} + 1
 \end{align*}
@@ -196,7 +197,8 @@ $\mathit{NT}_{m}$ is an 64 bit counter that MUST NOT wrap. After a transport mes
 \end{center}
 
 \begin{align*}
-    & \text{data} \coloneqq \text{AEAD}(\mathit{SU}_{m}^{send},\mathit{NU}_{m}^{send}, P, \epsilon)\\
+    & \text{data} \coloneqq \text{AEAD}(\mathit{SU}_{m}^{send},\mathit{NU}_{m}^{send}, P,
+    \text{"WPSKKA-Encryption-Unreliable"})\\
     & \text{counter} \coloneqq \mathit{NU}_{m}^{send}\\
     & \mathit{NU}_{m}^{send} \coloneqq \mathit{NU}_{m}^{send} + 1
 \end{align*}
@@ -268,8 +270,8 @@ The Host sends a HostHello message to the Client.
 
 \begin{align*}
     & \text{srp-A} \coloneqq \text{SRP-A()}\\
-    & L_{client} = L_{host} \coloneqq \text{SRP-PREMASTER()}\\
-    & \text{mac} \coloneqq \text{HMAC}(\text{KDF}_1(L_{client}), \text{public-key})\\
+    & (L_{client}, L_{host}) \coloneqq \text{KDF}_2\text{(SRP-PREMASTER(), \text{"WPSKKA-Auth-SRP"})}\\
+    & \text{mac} \coloneqq \text{HMAC}(L_{client},\text{public-key})\\
 \end{align*}
 
 public-key is the Client's public key
@@ -293,7 +295,7 @@ If the MAC is incorrect a failed MUST be AuthResult is sent.
 \end{center}
 
 \begin{align*}
-    & \text{mac} \coloneqq \text{HMAC}(\text{KDF}_1(L_{host}), \text{public-key})\\
+    & \text{mac} \coloneqq \text{HMAC}(L_{host}, \text{public-key})\\
 \end{align*}
 
 public-key is the Host's public key

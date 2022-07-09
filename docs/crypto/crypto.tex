@@ -13,6 +13,24 @@
 \usepackage[linktocpage]{hyperref}
 \usepackage{amssymb}
 \usepackage{mathtools}
+\usepackage[
+    n,
+    operators,
+    advantage,
+    sets,
+    adversary,
+    landau,
+    probability,
+    notions,
+    logic,
+    ff,
+    mm,
+    primitives,
+    events,
+    complexity,
+    oracles,
+    asymptotics,
+    keys]{cryptocode}
 
 \hypersetup{
     colorlinks   = true,
@@ -55,6 +73,13 @@
         \item Session - a single session between a Host and Client
     \end{itemize}
 
+    \textbf{\textsc{Aead(key, counter, plain text, auth text)}} ChaCha20Poly1305 AEAD, as specified in \href{https://www.rfc-editor.org/rfc/rfc7539}{RFC7539},
+    with its nonce being composed of 32 bits of zeros followed by the 64-bit little-endian value of counter and the auth
+    text being compose of  ("ScreenView-" || auth text).\\
+
+    \textbf{\textsc{Kdf$_n$(key, input)}} returns an n-tuple of 32 byte values from HKDF-Expand function defined in \href{https://datatracker.ietf.org/doc/html/rfc5869}{RFC5869}
+    with the Hash hash function. The HKDF-Expand's info paramter composed of ("ScreenView-" || input). \\
+
     \subsection{Algorithms}
 
     % TODO: Add algorithms
@@ -89,15 +114,17 @@
         &  G\coloneqq \text{session-id}                                                               \\
         &  H \coloneqq \text{peer-id}                                                                \\
         &  J \coloneqq \text{peer-key}                                                              \\
-        &  (\mathit{SU}_{peer}^{send} = \mathit{SU}_{serv}^{recv}, \mathit{SU}_{peer}^{recv} = \mathit{SU}_{serv}^{send}) \coloneqq \text{KDF}_2(\text{HASH}(G\,
-        ||\, H\,||\, J), \epsilon)                                        \\
+        &  (\mathit{SU}_{peer}^{send} = \mathit{SU}_{serv}^{recv}, \mathit{SU}_{peer}^{recv} = \mathit{SU}_{serv}^{send})
+        \coloneqq \text{KDF}_2\text{(G || H || J, "SEL-KeyDerivation-Unreliable")}
+        \\
         &   \mathit{NU}_{peer}^{send} = \mathit{NU}_{serv}^{recv} = \mathit{NU}_{peer}^{recv} = \mathit{NU}_{serv}^{send} \coloneqq 0
     \end{align*}
 
     Then to send a message, $P$:
 
     \begin{align*}
-        & \text{data} \coloneqq \text{AEAD}(\mathit{SU}_{m}^{send}, \mathit{NU}_{m}^{send}, P, \epsilon)\\
+        & \text{data} \coloneqq \text{AEAD}(\mathit{SU}_{m}^{send}, \mathit{NU}_{m}^{send}, P,
+        \text{"SEL-Encryption-Unreliable"})\\
         & \text{counter} \coloneqq \mathit{NU}_{m}^{send}\\
         & \mathit{NU}_{m}^{send} \coloneqq \mathit{NU}_{m}^{send} + 1
     \end{align*}
@@ -110,11 +137,11 @@
 
     RFC6479 is used to prevent messages from being replayed.
 
+
     \section{Weak Pre Shared Key (WPSKKA)}
 
     Each peer generates an ephemeral keypair.
     The peers then exchange their public keys over a reliable unencrypted channel.
-
 
     \subsection{Authentication}
 
@@ -139,12 +166,22 @@
     The Host registers the password with itself in accordance with the SRP protocol.
     The Host sends the username, salt, and B value to the Client.
     The Client computes the SRP premaster key.
-    The Client responds to the Host with it's A value and a MAC, where the MAC is
+    The Client computes:
+
     \begin{align*}
-        & \text{HMAC}(\text{client-public-key}, \text{KDF}(\text{srp-premaster-key}))
+        & \text{srp-A} \coloneqq \text{SRP-A()}\\
+        & (L_{client}, L_{host}) \coloneqq \text{KDF}_2\text{(SRP-PREMASTER(), \text{"WPSKKA-Auth-SRP"})}\\
+        & \text{mac} \coloneqq \text{HMAC}(L_{client},\text{public-key})\\
     \end{align*}
+
+    The Client responds to the Host with it's srp-A value and mac.
     The Host verifies the MAC.
     THe Host response with a MAC of its own public key.
+
+    \begin{align*}
+        & \text{mac} \coloneqq \text{HMAC}(L_{host}, \text{public-key})\\
+    \end{align*}
+
     Both the Client and Host have been authenticated.
 
     \subsection{Key Derivation}
@@ -152,8 +189,11 @@
     \begin{align*}
         & C_{host} = \text{DH}(E_{client}^{pub},\ E_{host}^{priv})\\
         & C_{client} = \text{DH}(E_{host}^{pub},\ E_{client}^{priv})\\
-        & (\mathit{ST}_{host}^{send} = \mathit{ST}_{client}^{recv},\ \mathit{ST}_{host}^{recv} = \mathit{ST}_{client}^{send}, \mathit{SU}_{host}^{send} = \mathit{SU}_{client}^{recv},\ \mathit{SU}_{host}^{recv} = \mathit{SU}_{client}^{send}) \coloneqq \text{KDF}_4(C_{host} = C_{client},
-        \ \epsilon) \\
+        & (\mathit{ST}_{host}^{send} = \mathit{ST}_{client}^{recv},\ \mathit{ST}_{host}^{recv} =
+        \mathit{ST}_{client}^{send}, \mathit{SU}_{host}^{send} = \mathit{SU}_{client}^{recv},\
+        \mathit{SU}_{host}^{recv} = \mathit{SU}_{client}^{send}) \\
+        & \coloneqq\text{KDF}_4(C_{host} = C_{client}, \
+        \text{"WPSKKA-KeyDerivation"}) \\
         & \mathit{NT}_{host}^{send} = \mathit{NT}_{client}^{recv} = \mathit{NT}_{host}^{recv} = \mathit{NT}_{client}^{send} = \mathit{NU}_{host}^{send} = \mathit{NU}_{client}^{recv} = \mathit{NU}_{host}^{recv} = \mathit{NU}_{client}^{send} \coloneqq 0
     \end{align*}
 
@@ -162,7 +202,8 @@
     \subsubsection{Reliable}
 
     \begin{align*}
-        & \text{data} \coloneqq \text{AEAD}(\mathit{ST}_{m}^{send},\mathit{NT}_{m}^{send}, P, \epsilon)\\
+        & \text{data} \coloneqq \text{AEAD}(\mathit{ST}_{m}^{send},\mathit{NT}_{m}^{send}, P,
+        \text{"WPSKKA-Encryption-Reliable"})\\
         & \text{counter} \coloneqq \mathit{NT}_{m}^{send}\\
         & \mathit{NT}_{m}^{send} \coloneqq \mathit{NT}_{m}^{send} + 1
     \end{align*}
@@ -173,11 +214,11 @@
     $\mathit{NT}_{m}$ is an 64 bit counter that MUST NOT wrap. After a transport message is sent, if $\mathit{NT}_{m}$ equals
     ($2^{64}-1$) the UDP and TCP connection MUST be dropped. Subsequent messages MUST NOT be sent. \\
 
-
     \subsubsection{Unreliable}
 
     \begin{align*}
-        & \text{data} \coloneqq \text{AEAD}(\mathit{SU}_{m}^{send},\mathit{NU}_{m}^{send}, P, \epsilon)\\
+        & \text{data} \coloneqq \text{AEAD}(\mathit{SU}_{m}^{send},\mathit{NU}_{m}^{send}, P,
+        \text{"WPSKKA-Encryption-Unreliable"})\\
         & \text{counter} \coloneqq \mathit{NU}_{m}^{send}\\
         & \mathit{NU}_{m}^{send} \coloneqq \mathit{NU}_{m}^{send} + 1
     \end{align*}
@@ -191,4 +232,27 @@
     Subsequent messages MUST NOT be sent. \\
 
     RFC6479 is used to prevent messages from being replayed.
+
+
+    \newpage
+
+
+    \section{Weak Pre Shared Key (WPSKKA) SRP Flow Diagram}
+
+    \procedureblock{WPSKKA-SRP}{%
+        \textbf{Host} \> \> \textbf{Client}  \\
+        \> \sendmessageright*{\text{public-key}} \>  \\
+        \> \sendmessageleft*{\text{public-key}} \>   \\
+        \text{username := RAND(128)}\> \> \\
+        \text{salt := RAND(128)}\> \> \\
+        \text{srp-B := SRP-B()}\> \> \\
+        \> \sendmessageright*{\text{username, salt, srp-B}} \>  \\
+        \> \> \text{srp-A} \coloneqq \text{SRP-A()} \\
+        \> \> (L_{client}, L_{host}) \coloneqq \\
+        \> \> \text{KDF}_2\text{(SRP-PREMASTER(), \text{"WPSKKA-Auth-SRP"})} \\
+        \> \>\text{mac} \coloneqq \text{HMAC}(L_{client},\text{public-key}) \\
+        \> \sendmessageleft*{\text{srp-A, mac}} \>   \\
+        \text{mac} \coloneqq \text{HMAC}(L_{host}, \text{public-key})\> \> \\
+        \> \sendmessageright*{\text{mac}} \>  \\
+    }
 \end{document}
