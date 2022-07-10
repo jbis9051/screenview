@@ -1,7 +1,12 @@
 use crate::{
     debug,
     rvd::{
-        PermissionError::{ClipboardRead, ClipboardWrite, MouseInput},
+        PermissionError::{
+            ClipboardRead,
+            ClipboardWrite,
+            KeyInput as KeyInputPermission,
+            MouseInput,
+        },
         RvdError,
         RvdHandlerTrait,
     },
@@ -216,7 +221,7 @@ impl RvdHostHandler {
                         .find(|(_, s)| s.access_mask.contains(AccessMask::CONTROLLABLE))
                         .is_none()
                     {
-                        return Err(RvdHostError::PermissionsError(MouseInput));
+                        return Err(RvdHostError::PermissionsError(KeyInputPermission));
                     }
 
                     events.push(InformEvent::RvdHostInform(RvdHostInform::KeyboardInput(

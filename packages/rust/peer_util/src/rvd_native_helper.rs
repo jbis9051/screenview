@@ -63,7 +63,7 @@ pub fn rvd_host_native_helper<T: NativeApiTemplate>(
     events: &mut Vec<InformEvent>,
     rvd: &mut RvdHostHandler,
     native: &mut T,
-    rvd_native_id_map: HashMap<DisplayId, NativeId>,
+    rvd_native_id_map: &HashMap<DisplayId, NativeId>,
 ) -> Result<(), HostError<T>> {
     let mut local_events = Vec::new();
     rvd._handle(msg, &mut local_events)?;
