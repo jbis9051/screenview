@@ -1,5 +1,4 @@
 use crate::{
-    capture::FrameUpdate,
     debug,
     rvd::{
         PermissionError::{ClipboardRead, ClipboardWrite, MouseInput},
@@ -24,7 +23,6 @@ use common::{
         RvdMessage,
     },
 };
-use rtp::packet::Packet;
 use std::{
     collections::HashMap,
     fmt::Debug,
@@ -124,22 +122,21 @@ impl RvdHostHandler {
     /// This should be called every so often, at minimum probably every second.
     pub fn check_expired_shares(&mut self) -> Vec<RvdMessage> {
         let mut unshares = Vec::new();
-        for (display_id, share) in self.shared_displays.iter_mut() {
-            match share.share_time {
+        self.shared_displays
+            .retain(|&display_id, share| match share.share_time {
                 ShareTime::WaitingAck(start) =>
                     if start.elapsed() > Duration::from_secs(5) {
-                        self.shared_displays.remove(display_id);
-                        unshares.push(RvdMessage::DisplayUnshare(DisplayUnshare {
-                            display_id: *display_id,
-                        }));
+                        unshares.push(RvdMessage::DisplayUnshare(DisplayUnshare { display_id }));
+                        false
+                    } else {
+                        true
                     },
-                _ => {}
-            }
-        }
+                _ => true,
+            });
         unshares
     }
 
-    pub fn frame_update<'a>(&mut self, pkt: Packet) -> impl Iterator<Item = RvdMessage> + 'a {
+    pub fn frame_update<'a>(&mut self, pkt: &[u8]) -> impl Iterator<Item = RvdMessage> + 'a {
         /* let display_id = fragments.display_id;
         let shared_display = self
             .shared_displays

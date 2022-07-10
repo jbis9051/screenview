@@ -1,13 +1,11 @@
-use crate::{
-    capture::{CapturePool, FrameProcessResult, ProcessFrame, ViewResources},
-    rvd::Display,
-};
-use common::{messages::rvd::DisplayId, sync::event_loop::ThreadWaker};
+use capture::{CapturePool, FrameProcessResult, ProcessFrame, ViewResources};
+use common::messages::rvd::DisplayId;
 use dcv_color_primitives as dcp;
 use dcv_color_primitives::{convert_image, get_buffers_size, ColorSpace, ImageFormat, PixelFormat};
+use event_loop::event_loop::ThreadWaker;
 use image::{imageops::FilterType, DynamicImage, ImageFormat as ImageCrateFormat, RgbImage};
 use native::{
-    api::{BGRAFrame, NativeApiTemplate},
+    api::{BGRAFrame, NativeApiTemplate, NativeId},
     NativeApi,
     NativeApiError,
 };
@@ -26,18 +24,18 @@ impl ThumbnailCapture {
         let mut captures = Vec::with_capacity(monitors.len() + windows.len());
         captures.extend(monitors.into_iter().map(|monitor| ThumbnailData {
             name: monitor.name,
-            display: Display::Monitor(monitor.id),
+            display: NativeId::Monitor(monitor.id),
         }));
         captures.extend(windows.into_iter().map(|window| ThumbnailData {
             name: window.name,
-            display: Display::Window(window.id),
+            display: NativeId::Window(window.id),
         }));
 
         let mut pool = CapturePool::new(waker);
 
         for (index, capture) in captures.iter().enumerate().take(256) {
             pool.get_or_create_inactive()?
-                .activate(capture.display, index as u8);
+                .activate(capture.display.clone(), index as u8);
         }
 
         Ok(Self { pool, captures })
@@ -59,7 +57,7 @@ impl ThumbnailCapture {
             handler(NativeThumbnail {
                 data: raw.data.into(),
                 name: data.name.clone(),
-                display: data.display,
+                display: data.display.clone(),
             });
 
             capture.update(update.resources);
@@ -122,14 +120,15 @@ impl ProcessFrame for ProcessThumbnail {
         let result = DynamicImage::ImageRgb8(
             RgbImage::from_raw(frame.width, frame.height, rgb_image).unwrap(),
         )
-        .resize(200, 200, FilterType::Nearest)
-        .write_to(resources, ImageCrateFormat::Jpeg);
+        .resize(200, 200, FilterType::Nearest);
+        // .write_to(&mut resources, ImageCrateFormat::Jpeg); // TODO
 
-        if result.is_ok() {
+        /* if result.is_ok() {
             FrameProcessResult::Success
         } else {
             FrameProcessResult::Failure
-        }
+        }*/
+        FrameProcessResult::Success
     }
 }
 
@@ -157,10 +156,10 @@ pub struct RawThumbnailData<'a> {
 pub struct NativeThumbnail {
     pub data: Box<[u8]>,
     pub name: String,
-    pub display: Display,
+    pub display: NativeId,
 }
 
 struct ThumbnailData {
     name: String,
-    display: Display,
+    display: NativeId,
 }

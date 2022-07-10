@@ -11,11 +11,13 @@ use common::messages::{
     svsc::{Cookie, LeaseId},
 };
 use instance::*;
-use native::{api::NativeApiTemplate, NativeApi};
+use native::{
+    api::{NativeApiTemplate, NativeId},
+    NativeApi,
+};
 use neon::{prelude::*, types::buffer::TypedArray};
 use node_interface::NodeInterface;
 use num_traits::FromPrimitive;
-use peer::rvd::Display;
 use protocol::{ConnectionType, Message, RequestContent};
 use std::{any::type_name, convert::TryFrom, num::FpCategory};
 use thumbnail_driver::ThumbnailHandle;
@@ -242,8 +244,8 @@ fn share_displays(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
         let display_type = obj.get::<JsString, _, _>(&mut cx, "type")?.value(&mut cx);
 
         let display = match display_type.as_str() {
-            "monitor" => Display::Monitor(native_id),
-            "window" => Display::Window(native_id),
+            "monitor" => NativeId::Monitor(native_id),
+            "window" => NativeId::Window(native_id),
             _ => return throw!(cx, "invalid display type"),
         };
 

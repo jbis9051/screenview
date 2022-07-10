@@ -1,21 +1,20 @@
 use crate::{
-    capture::FrameUpdate,
     helpers::cipher_reliable_peer::CipherError,
     rvd::{
         RvdClientHandler,
-        RvdDisplay,
         RvdError,
         RvdHandlerTrait,
+        RvdHostError,
         RvdHostHandler,
         ShareDisplayResult,
     },
     wpskka::{WpskkaClientHandler, WpskkaError, WpskkaHandlerTrait, WpskkaHostHandler},
-    ChanneledMessage,
     InformEvent,
 };
 use common::messages::{
-    rvd::RvdMessage,
+    rvd::{AccessMask, DisplayId, RvdMessage},
     wpskka::{TransportDataMessageUnreliable, WpskkaMessage},
+    ChanneledMessage,
     Error as MessageComponentError,
     Message,
     MessageComponent,
@@ -80,19 +79,16 @@ impl HigherHandlerHost {
         self.wpskka.set_static_password(static_password)
     }
 
-    pub fn share_display(&mut self, display: RvdDisplay) -> ShareDisplayResult {
-        self.rvd.share_display(display)
-    }
-
-    pub fn display_update(&mut self) -> RvdMessage {
-        self.rvd.display_update()
-    }
-
-    pub fn frame_update<'a>(
+    pub fn share_display(
         &mut self,
-        fragments: FrameUpdate<'a>,
-    ) -> impl Iterator<Item = RvdMessage> + 'a {
-        self.rvd.frame_update(fragments)
+        name: String,
+        access: AccessMask,
+    ) -> Result<(DisplayId, RvdMessage), RvdHostError> {
+        self.rvd.share_display(name, access)
+    }
+
+    pub fn frame_update<'a>(&mut self, pkt: &[u8]) -> impl Iterator<Item = RvdMessage> + 'a {
+        self.rvd.frame_update(pkt)
     }
 }
 

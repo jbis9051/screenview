@@ -1,0 +1,15 @@
+[package]
+name = "process"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+env-libvpx-sys = "5.1.1"
+rtp = { git = "https://github.com/Cassy343/rtp", branch = "code-improvements" }
+bytes = "1.1.0"
+dcv-color-primitives = "0.5.1"
+thiserror = "1.0.30"
+native = "0.1.0"
+cfg-if = "1.0.0"

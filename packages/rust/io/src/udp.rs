@@ -1,10 +1,13 @@
 use super::{SendError, Source, TransportResult, Unreliable, UDP_READ_SIZE, UDP_TIMEOUT};
 use crate::{
-    io::{parse_length_field, TransportError, TransportResponse, LENGTH_FIELD_WIDTH},
+    parse_length_field,
     return_if_err,
+    TransportError,
+    TransportResponse,
+    LENGTH_FIELD_WIDTH,
 };
-use common::sync::{event_loop::ThreadWaker, JoinOnDrop};
 use crossbeam_channel::{unbounded, Receiver, Sender};
+use event_loop::{event_loop::ThreadWaker, JoinOnDrop};
 use std::{
     io::{self, ErrorKind},
     net::{ToSocketAddrs, UdpSocket},

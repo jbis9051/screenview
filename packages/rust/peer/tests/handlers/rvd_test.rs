@@ -6,24 +6,17 @@ use common::messages::rvd::{
     ClipboardNotification,
     ClipboardRequest,
     ClipboardType,
-    DisplayChange,
-    DisplayChangeReceived,
-    DisplayInformation,
+    DisplayShare,
+    DisplayShareAck,
     KeyInput,
     MouseInput,
     MouseLocation,
+    PermissionMask,
     ProtocolVersion,
     RvdMessage,
 };
 use peer::{
-    rvd::{
-        DisplayType,
-        RvdClientHandler,
-        RvdClientInform,
-        RvdDisplay,
-        RvdHostHandler,
-        RvdHostInform,
-    },
+    rvd::{RvdClientHandler, RvdClientInform, RvdHostHandler, RvdHostInform},
     InformEvent,
 };
 
@@ -96,20 +89,13 @@ fn test_rvd_client() {
     let mut client = RvdClientHandler::new();
     handshake(None, Some(&mut client));
 
-    let change = DisplayChange {
-        clipboard_readable: false,
-        display_information: vec![DisplayInformation {
-            display_id: 0,
-            width: 10,
-            height: 20,
-            cell_width: 30,
-            cell_height: 40,
-            access: AccessMask::FLUSH,
-            name: "testing1".to_string(),
-        }],
+    let change = DisplayShare {
+        display_id: 0,
+        access: AccessMask::empty(),
+        name: "testing1".to_string(),
     };
 
-    let msg = RvdMessage::DisplayChange(change.clone());
+    let msg = RvdMessage::DisplayShare(change.clone());
 
     client
         ._handle(msg, &mut write, &mut events)
@@ -120,7 +106,7 @@ fn test_rvd_client() {
     let msg = write.remove(0);
     let event = events.remove(0);
 
-    assert!(matches!(msg, RvdMessage::DisplayChangeReceived(_)));
+    assert!(matches!(msg, RvdMessage::DisplayShareAck(_)));
     assert!(
         matches!(event, InformEvent::RvdClientInform(RvdClientInform::DisplayShare(c)) if c == change)
     );
@@ -177,25 +163,19 @@ fn test_rvd_host() {
     let mut events = Vec::new();
 
     let mut host = RvdHostHandler::new();
-    host.set_clipboard_readable(true);
-    host.set_controllable(true);
     handshake(Some(&mut host), None);
 
     // share_display
     // TODO some more extensive testing of flushing and shtuff
 
-    host.share_display(RvdDisplay {
-        native_id: 10,
-        name: "fakedisplay".to_string(),
-        display_type: DisplayType::Monitor,
-        width: 0,
-        height: 0,
-    });
-    let msg = host.display_update();
-    assert!(matches!(msg, RvdMessage::DisplayChange(_)));
+    let (display_id, msg) = host
+        .share_display("fake_display".to_string(), AccessMask::CONTROLLABLE)
+        .expect("share_display failed");
+
+    assert!(matches!(msg, RvdMessage::DisplayShare(_)));
 
     host._handle(
-        RvdMessage::DisplayChangeReceived(DisplayChangeReceived {}),
+        RvdMessage::DisplayShareAck(DisplayShareAck { display_id }),
         &mut events,
     )
     .expect("handler failed");
@@ -222,8 +202,7 @@ fn test_rvd_host() {
         InformEvent::RvdHostInform(RvdHostInform::MouseInput(event))
         if  event.button_state == ButtonsMask::empty()
             && event.button_delta == ButtonsMask::empty()
-            && event.native_id == 10
-            && event.display_type == DisplayType::Monitor
+            && event.display_id == display_id
             && event.x_location == 1
             && event.y_location == 2
     ));
@@ -248,6 +227,8 @@ fn test_rvd_host() {
 
     // ClipboardRequest
 
+    host.set_permissions(PermissionMask::CLIPBOARD_READ);
+
     host._handle(
         RvdMessage::ClipboardRequest(ClipboardRequest {
             info: ClipboardMeta {
@@ -268,6 +249,8 @@ fn test_rvd_host() {
     );
 
     // ClipboardNotification
+    host.set_permissions(PermissionMask::CLIPBOARD_WRITE);
+
     let content: Vec<u8> = vec![1, 2, 3];
 
     let notification = ClipboardNotification {

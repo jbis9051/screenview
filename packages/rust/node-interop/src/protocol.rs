@@ -2,8 +2,8 @@ use common::messages::{
     rvd::ButtonsMask,
     svsc::{Cookie, LeaseId},
 };
+use native::api::NativeId;
 use neon::types::Deferred;
-use peer::rvd::Display;
 use std::{convert::TryFrom, fmt::Debug};
 
 pub enum Message {
@@ -57,7 +57,7 @@ pub enum RequestContent {
         is_readable: bool,
     },
     ShareDisplays {
-        displays: Vec<Display>,
+        displays: Vec<NativeId>,
     },
 }
 

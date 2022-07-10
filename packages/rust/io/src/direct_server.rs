@@ -1,5 +1,5 @@
-use common::sync::{event_loop::ThreadWaker, JoinOnDrop};
 use crossbeam_channel::{bounded, Receiver, Sender};
+use event_loop::{event_loop::ThreadWaker, JoinOnDrop};
 use std::{
     io::{self, ErrorKind},
     net::{TcpListener, TcpStream, ToSocketAddrs},

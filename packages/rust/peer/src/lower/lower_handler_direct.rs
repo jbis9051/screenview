@@ -1,8 +1,8 @@
 use crate::{
     lower::{LowerError, LowerHandlerTrait},
-    ChanneledMessage,
     InformEvent,
 };
+use common::messages::ChanneledMessage;
 
 use super::sealed::LowerMessage;
 

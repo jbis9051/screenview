@@ -40,7 +40,7 @@ pub struct PermissionsUpdate {
 
 pub type DisplayId = u8;
 
-#[derive(MessageComponent, Debug)]
+#[derive(MessageComponent, Debug, Clone, PartialEq, Eq)]
 #[message_id(3)]
 pub struct DisplayShare {
     pub display_id: DisplayId, // Note: this is not the same as the native id of a monitor or window

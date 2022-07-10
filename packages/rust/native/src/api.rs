@@ -1,5 +1,11 @@
 use std::fmt::{Debug, Display, Formatter};
 
+#[derive(Clone)]
+pub enum NativeId {
+    Monitor(MonitorId),
+    Window(WindowId),
+}
+
 pub type MonitorId = u32;
 pub type WindowId = u32;
 

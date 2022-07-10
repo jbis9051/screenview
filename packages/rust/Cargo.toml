@@ -5,5 +5,10 @@ members = [
     "node-interop",
     "parser",
     "peer",
-    "server"
+    "server",
+    "io",
+    "event_loop",
+    "capture",
+    "process",
+    "peer_util"
 ]

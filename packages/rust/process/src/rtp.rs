@@ -1,8 +1,7 @@
-use crate::encode::{vp9, vp9::VP9Encoder};
+use crate::{vp9, vp9::VP9Encoder};
 use bytes::Bytes;
 use dcv_color_primitives as dcp;
 use dcv_color_primitives::{convert_image, get_buffers_size, ColorSpace, ImageFormat, PixelFormat};
-use native::api::BGRAFrame;
 use rtp::{
     codecs::vp9::Vp9Payloader,
     packet::Packet,
@@ -30,7 +29,12 @@ impl RtpEncoder {
         })
     }
 
-    pub fn process(&mut self, frame: &BGRAFrame) -> Result<Vec<Packet>, Error> {
+    pub fn process_bgra(
+        &mut self,
+        width: u32,
+        height: u32,
+        data: &[u8],
+    ) -> Result<Vec<Packet>, Error> {
         dcp::initialize();
 
 
@@ -47,17 +51,16 @@ impl RtpEncoder {
         };
 
         let sizes: &mut [usize] = &mut [0usize; 1];
-        get_buffers_size(frame.width, frame.height, &dst_format, None, sizes)
-            .map_err(Error::Converter)?;
+        get_buffers_size(width, height, &dst_format, None, sizes).map_err(Error::Converter)?;
 
         let mut i420_image = Vec::with_capacity(sizes[0]);
 
         convert_image(
-            frame.width,
-            frame.height,
+            width,
+            height,
             &src_format,
             None,
-            &[&frame.data],
+            &[&data],
             &dst_format,
             None,
             &mut [&mut i420_image],

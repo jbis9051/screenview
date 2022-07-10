@@ -5,28 +5,24 @@ use crate::{
     protocol::{ConnectionType, Message, RequestContent},
     throw,
 };
-use common::{
-    messages::{
-        rvd::ButtonsMask,
-        svsc::{Cookie, LeaseId},
-    },
-    sync::{
-        event_loop::{event_loop, EventLoopState, ThreadWaker, ThreadWakerCore},
-        oneshot,
-        JoinOnDrop,
-    },
+use capture::{CapturePool, DefaultFrameProcessor};
+use common::messages::{
+    rvd::ButtonsMask,
+    svsc::{Cookie, LeaseId},
 };
 use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
-use native::{NativeApi, NativeApiError};
+use event_loop::{
+    event_loop::{event_loop, EventLoopState, ThreadWaker, ThreadWakerCore},
+    oneshot,
+    JoinOnDrop,
+};
+use io::{DirectServer, TcpHandle};
+use native::{api::NativeId, NativeApi, NativeApiError};
 use neon::{
     prelude::{Channel, Context, Finalize, JsResult, JsUndefined, TaskContext, Value},
     types::Deferred,
 };
-use peer::{
-    capture::{CapturePool, DefaultFrameProcessor, DisplayInfoStore},
-    io::{DirectServer, TcpHandle},
-    rvd::{Display, ShareDisplayResult},
-};
+use peer::rvd::ShareDisplayResult;
 use std::{
     net::TcpStream,
     thread::{self, JoinHandle},
@@ -400,69 +396,69 @@ impl Instance {
     fn handle_share_displays(
         &mut self,
         promise: Deferred,
-        displays: &[Display],
+        displays: &[NativeId],
     ) -> Result<(), anyhow::Error> {
         /*
-         - Step 1: figure out which displays are not currently captured and need to be activated
-         - Step 2: request monitor and window info from native which we will attempt to map onto
-           the captured displays later
-         - Step 3: find inactive frame captures which can be re-activated with a new display
-         - Step 4: add new captures if necessary
-         - Step 5: activate captures and record monitor/window info for a display change update
-         - Step 6: report displays that couldn't be found and send display change message
+                 - Step 1: figure out which displays are not currently captured and need to be activated
+                 - Step 2: request monitor and window info from native which we will attempt to map onto
+                   the captured displays later
+                 - Step 3: find inactive frame captures which can be re-activated with a new display
+                 - Step 4: add new captures if necessary
+                 - Step 5: activate captures and record monitor/window info for a display change update
+                 - Step 6: report displays that couldn't be found and send display change message
+
+
+                let display_info = match DisplayInfoStore::new(&mut self.native) {
+                    Ok(store) => store,
+                    Err(error) => {
+                        self.settle_with_result(promise, Err(error), Self::undefined);
+                        return Ok(());
+                    }
+                };
+
+                let mut display_ids = Vec::with_capacity(displays.len());
+
+                for &display in displays {
+                    let rvd_display = match display_info.gen_display_info(display) {
+                        Some(rvd_display) => rvd_display,
+                        None => todo!("tell node that we couldn't find this display"),
+                    };
+
+                    let id = forward!(self.sv_handler, [HostSignal, HostDirect], |stack| stack
+                        .share_display(rvd_display));
+                    match id {
+                        ShareDisplayResult::NewlyShared(display_id) =>
+                            display_ids.push((display, display_id)),
+                        ShareDisplayResult::AlreadySharing(_) => {} // Ignore
+                        ShareDisplayResult::IdLimitReached =>
+                            todo!("tell node that we ran out of display IDs"),
+                    }
+                }
+
+                let new_displays = display_ids
+                    .iter()
+                    .copied()
+                    .filter(|&(_, display_id)| !self.capture_pool.is_capturing(display_id))
+                    .collect::<Vec<_>>();
+                let num_new_displays = new_displays.len();
+
+                if num_new_displays == 0 {
+                    return Ok(());
+                }
+
+                for (display, display_id) in new_displays {
+                    let capture = match self.capture_pool.get_or_create_inactive() {
+                        Ok(capture) => capture,
+                        Err(_error) => todo!("tell node that we couldn't create a new capture"),
+                    };
+
+                    capture.activate(display, display_id);
+                }
+
+                let result = forward!(self.sv_handler, [HostSignal, HostDirect], |stack| stack
+                    .send_display_update());
+                self.settle_with_result(promise, result, Self::undefined);
         */
-
-        let display_info = match DisplayInfoStore::new(&mut self.native) {
-            Ok(store) => store,
-            Err(error) => {
-                self.settle_with_result(promise, Err(error), Self::undefined);
-                return Ok(());
-            }
-        };
-
-        let mut display_ids = Vec::with_capacity(displays.len());
-
-        for &display in displays {
-            let rvd_display = match display_info.gen_display_info(display) {
-                Some(rvd_display) => rvd_display,
-                None => todo!("tell node that we couldn't find this display"),
-            };
-
-            let id = forward!(self.sv_handler, [HostSignal, HostDirect], |stack| stack
-                .share_display(rvd_display));
-            match id {
-                ShareDisplayResult::NewlyShared(display_id) =>
-                    display_ids.push((display, display_id)),
-                ShareDisplayResult::AlreadySharing(_) => {} // Ignore
-                ShareDisplayResult::IdLimitReached =>
-                    todo!("tell node that we ran out of display IDs"),
-            }
-        }
-
-        let new_displays = display_ids
-            .iter()
-            .copied()
-            .filter(|&(_, display_id)| !self.capture_pool.is_capturing(display_id))
-            .collect::<Vec<_>>();
-        let num_new_displays = new_displays.len();
-
-        if num_new_displays == 0 {
-            return Ok(());
-        }
-
-        for (display, display_id) in new_displays {
-            let capture = match self.capture_pool.get_or_create_inactive() {
-                Ok(capture) => capture,
-                Err(_error) => todo!("tell node that we couldn't create a new capture"),
-            };
-
-            capture.activate(display, display_id);
-        }
-
-        let result = forward!(self.sv_handler, [HostSignal, HostDirect], |stack| stack
-            .send_display_update());
-        self.settle_with_result(promise, result, Self::undefined);
-
         Ok(())
     }
 }

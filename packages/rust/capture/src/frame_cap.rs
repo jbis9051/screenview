@@ -1,11 +1,15 @@
 use std::{thread::JoinHandle, time::Instant};
 
-use common::{messages::rvd::DisplayId, sync::event_loop::ThreadWaker};
+use common::messages::rvd::DisplayId;
 use crossbeam_channel::{bounded, Receiver, Sender, TryRecvError};
-use native::{api::NativeApiTemplate, NativeApi, NativeApiError};
+use event_loop::event_loop::ThreadWaker;
+use native::{
+    api::{NativeApiTemplate, NativeId},
+    NativeApi,
+    NativeApiError,
+};
 use std::{mem, thread, time::Duration};
 
-use crate::rvd::Display;
 
 use super::{processing::ProcessFrame, CaptureResources, ViewResources};
 
@@ -28,7 +32,7 @@ impl<P: ProcessFrame> FrameCapture<P> {
         })
     }
 
-    pub fn activate(&mut self, display: Display, display_id: DisplayId) {
+    pub fn activate(&mut self, display: NativeId, display_id: DisplayId) {
         let (request_sender, request_receiver) = bounded(1);
         let (response_sender, response_receiver) = bounded(1);
 
@@ -125,7 +129,7 @@ impl<P: ProcessFrame> FrameCapture<P> {
     fn start_worker_thread(
         native_api: NativeApi,
         waker: ThreadWaker,
-        display: Display,
+        display: NativeId,
         sender: Sender<CaptureReply<P>>,
         receiver: Receiver<WorkerRequest<P>>,
     ) -> JoinHandle<(NativeApi, ThreadWaker)> {
@@ -135,7 +139,7 @@ impl<P: ProcessFrame> FrameCapture<P> {
     fn capture_frames(
         mut native_api: NativeApi,
         waker: ThreadWaker,
-        display: Display,
+        display: NativeId,
         sender: Sender<CaptureReply<P>>,
         receiver: Receiver<WorkerRequest<P>>,
     ) -> (NativeApi, ThreadWaker) {
@@ -150,8 +154,8 @@ impl<P: ProcessFrame> FrameCapture<P> {
             };
 
             let result = match display {
-                Display::Monitor(id) => native_api.update_monitor_frame(id, &mut resources.frame),
-                Display::Window(id) => native_api.update_window_frame(id, &mut resources.frame),
+                NativeId::Monitor(id) => native_api.update_monitor_frame(id, &mut resources.frame),
+                NativeId::Window(id) => native_api.update_window_frame(id, &mut resources.frame),
             };
 
             if result.is_ok() {

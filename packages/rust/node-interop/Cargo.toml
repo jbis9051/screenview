@@ -11,8 +11,12 @@ crate-type = ["cdylib"]
 anyhow = "1.0.56"
 common = { path = "../common" }
 native = { path = "../native" }
-num-traits = "0.2.15"
+event_loop = { path= "../event_loop" }
 peer = { path = "../peer" }
+capture ={path = "../capture"}
+peer_util = {path ="../peer_util"}
+io = {path = "../io"}
+num-traits = "0.2.15"
 crossbeam-channel = "0.5.2"
 cfg-if = "1.0.0"
 

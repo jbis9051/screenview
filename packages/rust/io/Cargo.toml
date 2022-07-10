@@ -1,10 +1,9 @@
 [package]
-name = "peer"
+name = "io"
 version = "0.0.0"
 edition = "2021"
 
 [dependencies]
+crossbeam-channel = "0.5.2"
 common = { path = "../common" }
-thiserror = "1.0.30"
-srp = "0.6.0"
-ring = "0.16.20"
+event_loop = {path = "../event_loop"}

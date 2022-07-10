@@ -10,11 +10,9 @@ use super::{
     LENGTH_FIELD_WIDTH,
 };
 use crate::return_if_err;
-use common::{
-    messages::Error,
-    sync::{event_loop::ThreadWaker, JoinOnDrop},
-};
+use common::messages::Error;
 use crossbeam_channel::{unbounded, Receiver, Sender};
+use event_loop::{event_loop::ThreadWaker, JoinOnDrop};
 use std::{
     io,
     io::{Read, Write},
