@@ -24,8 +24,12 @@ use common::{
         RvdMessage,
     },
 };
-use std::{collections::HashMap, fmt::Debug, time::Duration};
-use tokio::time::Instant;
+use rtp::packet::Packet;
+use std::{
+    collections::HashMap,
+    fmt::Debug,
+    time::{Duration, Instant},
+};
 
 enum ShareTime {
     WaitingAck(Instant),
@@ -135,10 +139,7 @@ impl RvdHostHandler {
         unshares
     }
 
-    pub fn frame_update<'a>(
-        &mut self,
-        fragments: FrameUpdate<'a>,
-    ) -> impl Iterator<Item = RvdMessage> + 'a {
+    pub fn frame_update<'a>(&mut self, pkt: Packet) -> impl Iterator<Item = RvdMessage> + 'a {
         /* let display_id = fragments.display_id;
         let shared_display = self
             .shared_displays
