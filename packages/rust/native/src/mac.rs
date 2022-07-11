@@ -12,7 +12,6 @@ use accessibility_sys::{
 };
 use std::{
     ffi::CStr,
-    fmt::{Display, Formatter},
     ops::Deref,
     os::raw::c_uchar,
     ptr,
@@ -20,7 +19,6 @@ use std::{
     slice::from_raw_parts,
 };
 
-use block::ConcreteBlock;
 use cocoa::{
     appkit::{
         NSApp,
@@ -47,7 +45,7 @@ use cocoa::{
     },
 };
 use core_foundation::{
-    base::{CFTypeRef, FromMutVoid, FromVoid, TCFType, TCFTypeRef},
+    base::{CFTypeRef, FromVoid, TCFType},
     boolean::CFBoolean,
     number::{kCFNumberIntType, CFNumberGetValue, CFNumberRef},
     string::{CFString, CFStringRef},
@@ -65,7 +63,6 @@ use core_graphics::{
         CFDictionaryGetValueIfPresent,
         CFDictionaryRef,
         CGDisplay,
-        CGMainDisplayID,
         CGRect,
         CGRectNull,
     },

@@ -9,6 +9,6 @@ members = [
     "io",
     "event_loop",
     "capture",
-    "process",
+    "video_process",
     "peer_util"
 ]

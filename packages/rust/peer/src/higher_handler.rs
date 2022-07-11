@@ -1,13 +1,6 @@
 use crate::{
     helpers::cipher_reliable_peer::CipherError,
-    rvd::{
-        RvdClientHandler,
-        RvdError,
-        RvdHandlerTrait,
-        RvdHostError,
-        RvdHostHandler,
-        ShareDisplayResult,
-    },
+    rvd::{RvdClientHandler, RvdError, RvdHandlerTrait, RvdHostError, RvdHostHandler},
     wpskka::{WpskkaClientHandler, WpskkaError, WpskkaHandlerTrait, WpskkaHostHandler},
     InformEvent,
 };

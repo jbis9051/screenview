@@ -1,5 +1,5 @@
 [package]
-name = "process"
+name = "video_process"
 version = "0.1.0"
 edition = "2021"
 

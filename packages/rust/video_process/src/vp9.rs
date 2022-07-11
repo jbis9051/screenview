@@ -119,9 +119,8 @@ impl VP9Encoder {
         let mut datas = Vec::new();
 
         let mut iter = std::ptr::null();
-        let mut pkt = std::ptr::null();
         loop {
-            pkt = unsafe { vpx_codec_get_cx_data(&mut self.encoder, &mut iter) };
+            let pkt = unsafe { vpx_codec_get_cx_data(&mut self.encoder, &mut iter) };
             if pkt.is_null() {
                 break;
             }

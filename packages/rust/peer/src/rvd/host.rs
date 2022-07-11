@@ -141,7 +141,7 @@ impl RvdHostHandler {
         unshares
     }
 
-    pub fn frame_update<'a>(&mut self, pkt: &[u8]) -> impl Iterator<Item = RvdMessage> + 'a {
+    pub fn frame_update<'a>(&mut self, _pkt: &[u8]) -> impl Iterator<Item = RvdMessage> + 'a {
         /* let display_id = fragments.display_id;
         let shared_display = self
             .shared_displays
