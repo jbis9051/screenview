@@ -1,4 +1,5 @@
 pub mod clipboard_type_map;
+pub mod frame_processor;
 pub mod handler_stack;
 pub mod native_thumbnails;
 pub mod network_mouse_button_to_native;

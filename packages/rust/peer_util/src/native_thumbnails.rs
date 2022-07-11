@@ -9,6 +9,7 @@ use native::{
     NativeApi,
     NativeApiError,
 };
+use std::io::Cursor;
 
 
 pub struct ThumbnailCapture {
@@ -17,7 +18,7 @@ pub struct ThumbnailCapture {
 }
 
 impl ThumbnailCapture {
-    pub fn new(mut native: NativeApi, waker: ThreadWaker) -> Result<Self, NativeApiError> {
+    pub fn new(native: &mut NativeApi, waker: ThreadWaker) -> Result<Self, NativeApiError> {
         let monitors = native.monitors()?;
         let windows = native.windows()?;
 
@@ -33,7 +34,7 @@ impl ThumbnailCapture {
 
         let mut pool = CapturePool::new(waker);
 
-        for (index, capture) in captures.iter().enumerate().take(256) {
+        for (index, capture) in captures.iter().enumerate() {
             pool.get_or_create_inactive()?
                 .activate(capture.display.clone(), index as u8);
         }
@@ -120,15 +121,14 @@ impl ProcessFrame for ProcessThumbnail {
         let result = DynamicImage::ImageRgb8(
             RgbImage::from_raw(frame.width, frame.height, rgb_image).unwrap(),
         )
-        .resize(200, 200, FilterType::Nearest);
-        // .write_to(&mut resources, ImageCrateFormat::Jpeg); // TODO
+        .resize(200, 200, FilterType::Nearest)
+        .write_to(&mut Cursor::new(resources), ImageCrateFormat::Jpeg);
 
-        /* if result.is_ok() {
+        if result.is_ok() {
             FrameProcessResult::Success
         } else {
             FrameProcessResult::Failure
-        }*/
-        FrameProcessResult::Success
+        }
     }
 }
 
@@ -136,7 +136,7 @@ impl<'a> ViewResources<'a> for ProcessThumbnail {
     type FrameUpdate = RawThumbnailData<'a>;
     type Resources = <Self as ProcessFrame>::Resources;
 
-    fn to_frame_update(
+    fn frame_update(
         resources: &'a Self::Resources,
         _frame: &'a BGRAFrame,
         display_id: DisplayId,

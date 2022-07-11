@@ -1,4 +1,4 @@
-use capture::FrameUpdate;
+use crate::frame_processor::FrameUpdate;
 use common::messages::{
     rvd::{AccessMask, DisplayId, RvdMessage},
     svsc::{Cookie, LeaseId},

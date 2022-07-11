@@ -5,7 +5,7 @@ use crate::{
     protocol::{ConnectionType, Message, RequestContent},
     throw,
 };
-use capture::{CapturePool, DefaultFrameProcessor};
+use capture::CapturePool;
 use common::messages::{
     rvd::ButtonsMask,
     svsc::{Cookie, LeaseId},
@@ -23,6 +23,7 @@ use neon::{
     types::Deferred,
 };
 use peer::rvd::ShareDisplayResult;
+use peer_util::frame_processor::FrameProcessor;
 use std::{
     net::TcpStream,
     thread::{self, JoinHandle},
@@ -75,7 +76,7 @@ pub struct Instance {
     native: NativeApi,
     sv_handler: ScreenViewHandler,
     node_interface: NodeInterface,
-    capture_pool: CapturePool<DefaultFrameProcessor>,
+    capture_pool: CapturePool<FrameProcessor>,
     channel: Channel,
 }
 

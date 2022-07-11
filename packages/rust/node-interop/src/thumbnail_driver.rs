@@ -55,8 +55,11 @@ fn start_driver_main(
 ) -> JoinHandle<()> {
     thread::spawn(move || {
         let waker_core = ThreadWakerCore::new_current_thread();
-        let capture_result = NativeApi::new().and_then(|api| {
-            ThumbnailCapture::new(api, waker_core.make_waker(Events::ThumbnailUpdate as u32))
+        let capture_result = NativeApi::new().and_then(|mut api| {
+            ThumbnailCapture::new(
+                &mut api,
+                waker_core.make_waker(Events::ThumbnailUpdate as u32),
+            )
         });
 
         let capture = match capture_result {

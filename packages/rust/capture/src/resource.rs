@@ -29,6 +29,6 @@ where
         &self,
         display_id: DisplayId,
     ) -> <P as ViewResources<'_>>::FrameUpdate {
-        <P as ViewResources<'_>>::to_frame_update(&self.processing, &self.frame, display_id)
+        <P as ViewResources<'_>>::frame_update(&self.processing, &self.frame, display_id)
     }
 }
