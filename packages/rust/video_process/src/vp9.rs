@@ -33,6 +33,7 @@ use vpx_sys::{
     vpx_img_wrap,
     VPX_DECODER_ABI_VERSION,
     VPX_DL_REALTIME,
+    VPX_IMG_FMT_HIGHBITDEPTH,
 };
 
 // For the next soul that is looking for documentation, see: https://developer.liveswitch.io/reference/cocoa/api/group__encoder.html, https://docs.freeswitch.org/switch__image_8h.html
@@ -89,7 +90,7 @@ impl VP9Encoder {
         let raw = unsafe {
             vpx_img_alloc(
                 std::ptr::null::<vpx_image_t>() as _,
-                vpx_img_fmt::VPX_IMG_FMT_I420,
+                VPX_IMG_FMT_I420,
                 width,
                 height,
                 1,
@@ -115,15 +116,15 @@ impl VP9Encoder {
         (self.width, self.height)
     }
 
-    pub fn encode(&mut self, frame: &[u8]) -> Result<Vec<Vec<u8>>, Error> {
+    pub fn encode(&mut self, i420_frame: &[u8]) -> Result<Vec<Vec<u8>>, Error> {
         unsafe {
             vpx_img_wrap(
                 self.raw,
-                vpx_img_fmt::VPX_IMG_FMT_I420,
+                VPX_IMG_FMT_I420,
                 self.width,
                 self.height,
                 1,
-                frame.as_ptr() as _,
+                i420_frame.as_ptr() as _,
             )
         };
         vp9_call_unsafe!(vpx_codec_encode(
@@ -208,6 +209,23 @@ impl From<vpx_codec_err_t> for Error {
     }
 }
 
+
+fn vpx_img_plane_width(img: &vpx_image_t, plane: usize) -> u32 {
+    if plane > 0 && img.x_chroma_shift > 0 {
+        (img.d_w + 1) >> img.x_chroma_shift
+    } else {
+        img.d_w
+    }
+}
+
+fn vpx_img_plane_height(img: &vpx_image_t, plane: usize) -> u32 {
+    if plane > 0 && img.y_chroma_shift > 0 {
+        (img.d_h + 1) >> img.y_chroma_shift
+    } else {
+        img.d_h
+    }
+}
+
 struct Vp9Decoder {
     width: u16,
     height: u16,
@@ -270,9 +288,7 @@ impl Vp9Decoder {
         self.height
     }
 
-    pub fn decode(&mut self, data: &[u8]) -> Result<Vec<u8>, Error> {
-        let mut iter: vpx_codec_iter_t = std::ptr::null();
-        let mut img = std::ptr::null();
+    pub fn decode(&mut self, data: &[u8]) -> Result<Vec<Vec<u8>>, Error> {
         let mut buffer = data.as_ptr();
         if data.is_empty() {
             buffer = std::ptr::null(); // Triggers full frame concealment.
@@ -282,29 +298,52 @@ impl Vp9Decoder {
         // In practice libvpx keeps a few (~3-4) buffers alive at a time.
         vp9_call_unsafe!(vpx_codec_decode(
             &mut self.decoder,
-            data.as_ptr() as _,
+            buffer,
             data.len() as _,
             std::ptr::null_mut(),
             VPX_DL_REALTIME as i64
         ));
 
-        img = unsafe { vpx_codec_get_frame(&mut self.decoder, &mut iter) };
-        let qp = 0;
-        vp9_call_unsafe!(vpx_codec_control_(
-            &mut self.decoder,
-            VPXD_GET_LAST_QUANTIZER as _,
-            &qp
-        ));
+        let mut vec = Vec::new();
+        let mut iter: vpx_codec_iter_t = std::ptr::null();
+        loop {
+            let img = unsafe { vpx_codec_get_frame(&mut self.decoder, &mut iter) };
+            if img.is_null() {
+                break;
+            }
+            let img = unsafe { &*img };
 
-        let img = unsafe { &*img };
+            if img.fmt != VPX_IMG_FMT_I420 {
+                return Err(Error::DecoderUnsupportedFormat);
+            }
 
-        if img.fmt != VPX_IMG_FMT_I420 {
-            return Err(Error::DecoderUnsupportedFormat);
+            let mut out = Vec::with_capacity((self.width * self.height * 3) as usize);
+            let mut ptr = out.as_mut_ptr();
+
+            for plane in 0 .. 3 {
+                let mut buf = img.planes[plane];
+                let stride = img.stride[plane];
+                let w = vpx_img_plane_width(img, plane)
+                    * (if img.fmt as u32 & VPX_IMG_FMT_HIGHBITDEPTH == VPX_IMG_FMT_HIGHBITDEPTH {
+                        2
+                    } else {
+                        1
+                    });
+                let h = vpx_img_plane_height(img, plane);
+                let mut y = 0;
+                while y < h {
+                    unsafe { std::ptr::copy_nonoverlapping(buf, ptr, w as usize) };
+                    buf = unsafe { buf.add(stride as usize) };
+                    ptr = unsafe { ptr.add(w as usize) };
+                    y += 1;
+                }
+            }
+
+            unsafe { out.set_len((self.width * self.height * 3) as usize) };
+            vec.push(out);
         }
 
-        // TODO copy to a buffer or something
-
-        Ok(vec![])
+        Ok(vec)
     }
 }
 
@@ -332,7 +371,7 @@ impl Vp9DecoderWrapper {
     pub fn decode(
         &mut self,
         data: Vp9PacketWrapperBecauseTheRtpCrateIsIdiotic,
-    ) -> Result<Vec<u8>, Error> {
+    ) -> Result<Vec<Vec<u8>>, Error> {
         let decoder = match &mut self.decoder {
             None => {
                 if !data.1.y {
