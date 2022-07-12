@@ -5,8 +5,9 @@ use rtp::{
     packetizer::{new_packetizer, Depacketizer, Packetizer},
     sequence::WrappingSequencer,
 };
+use webrtc_util::{Error, Unmarshal};
 
-const VP9_PAYLOAD_TYPE: u8 = 69; // TODO no idea what this is supposed to be
+const VP9_PAYLOAD_TYPE: u8 = 98;
 
 pub struct RtpEncoder {
     packetizer: Box<dyn Packetizer>,
@@ -29,9 +30,37 @@ impl RtpEncoder {
     }
 }
 
+pub struct RtpDecoder {}
 
-pub fn decode_vp9(rtp: Vec<u8>) -> Result<Vp9Packet, rtp::Error> {
-    let mut packet = Vp9Packet::default();
-    packet.depacketize(&Bytes::from(rtp))?;
-    Ok(packet)
+impl Default for RtpDecoder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+
+pub type Vp9PacketWrapperBecauseTheRtpCrateIsIdiotic = (Bytes, Vp9Packet);
+
+impl RtpDecoder {
+    pub fn new() -> Self {
+        Self {}
+    }
+
+    pub fn decode_to_vp9(
+        &mut self,
+        rtp: Vec<u8>,
+    ) -> Result<Option<Vp9PacketWrapperBecauseTheRtpCrateIsIdiotic>, DecoderError> {
+        let pkt = Packet::unmarshal(&mut Bytes::from(rtp))?;
+        let mut vp9packet = Vp9Packet::default();
+        let bytes = vp9packet.depacketize(&pkt.payload)?;
+        Ok(Some((bytes, vp9packet)))
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum DecoderError {
+    #[error("{0}")]
+    PacketUnmarshal(#[from] webrtc_util::Error),
+    #[error("{0}")]
+    Vp9Depacketize(#[from] rtp::Error),
 }

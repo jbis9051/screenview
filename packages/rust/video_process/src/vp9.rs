@@ -1,21 +1,37 @@
+use crate::rtp::Vp9PacketWrapperBecauseTheRtpCrateIsIdiotic;
 use cfg_if::cfg_if;
+use num_cpus;
+use std::{
+    cmp::{max, min},
+    os::raw::c_uint,
+};
 use vpx_sys::{
+    vp8_dec_control_id::{VP9D_SET_LOOP_FILTER_OPT, VPXD_GET_LAST_QUANTIZER},
     vpx_codec_control_,
     vpx_codec_ctx_t,
     vpx_codec_cx_pkt_kind::VPX_CODEC_CX_FRAME_PKT,
+    vpx_codec_dec_cfg_t,
+    vpx_codec_dec_init_ver,
+    vpx_codec_decode,
     vpx_codec_destroy,
     vpx_codec_enc_cfg_t,
     vpx_codec_enc_config_default,
     vpx_codec_enc_init_ver,
     vpx_codec_encode,
     vpx_codec_err_t,
+    vpx_codec_flags_t,
     vpx_codec_get_cx_data,
+    vpx_codec_get_frame,
+    vpx_codec_iter_t,
     vpx_codec_vp9_cx,
+    vpx_codec_vp9_dx,
     vpx_image_t,
     vpx_img_alloc,
     vpx_img_fmt,
+    vpx_img_fmt::VPX_IMG_FMT_I420,
     vpx_img_free,
     vpx_img_wrap,
+    VPX_DECODER_ABI_VERSION,
     VPX_DL_REALTIME,
 };
 
@@ -182,10 +198,165 @@ pub enum Error {
     VpxCodec(vpx_codec_err_t),
     #[error("vpx_img_alloc failed")]
     VpxAlloc,
+    #[error("unsupported image format")]
+    DecoderUnsupportedFormat,
 }
 
 impl From<vpx_codec_err_t> for Error {
     fn from(error: vpx_codec_err_t) -> Self {
         Self::VpxCodec(error)
+    }
+}
+
+struct Vp9Decoder {
+    width: u16,
+    height: u16,
+
+    buffer: Vec<u8>,
+    decoder: vpx_codec_ctx_t,
+}
+
+impl Vp9Decoder {
+    pub fn new(width: u16, height: u16) -> Result<Self, Error> {
+        let number_of_cores = num_cpus::get();
+        let mut cfg: vpx_codec_dec_cfg_t = unsafe { std::mem::zeroed() };
+        // We want to use multithreading when decoding high resolution videos. But
+        // not too many in order to avoid overhead when many stream are decoded
+        // concurrently.
+        // Set 2 thread as target for 1280x720 pixel count, and then scale up
+        // linearly from there - but cap at physical core count.
+        // For common resolutions this results in:
+        // 1 for 360p
+        // 2 for 720p
+        // 4 for 1080p
+        // 8 for 1440p
+        // 18 for 4K
+        let num_threads = max(1, 2 * ((width * height) as u32) / (1280u32 * 720u32));
+        cfg.threads = min(number_of_cores as c_uint, num_threads as c_uint);
+
+        let flags: vpx_codec_flags_t = 0;
+
+        let mut decoder: vpx_codec_ctx_t = unsafe { std::mem::zeroed() };
+
+        vp9_call_unsafe!(vpx_codec_dec_init_ver(
+            &mut decoder,
+            vpx_codec_vp9_dx(),
+            &cfg,
+            flags,
+            VPX_DECODER_ABI_VERSION as _,
+        ));
+
+        vp9_call_unsafe!(vpx_codec_control_(
+            &mut decoder,
+            VP9D_SET_LOOP_FILTER_OPT as _,
+            1
+        ));
+
+        let buffer = vec![0u8; (width * height * 4) as usize];
+
+        Ok(Self {
+            width,
+            height,
+            buffer,
+            decoder,
+        })
+    }
+
+    pub fn width(&self) -> u16 {
+        self.width
+    }
+
+    pub fn height(&self) -> u16 {
+        self.height
+    }
+
+    pub fn decode(&mut self, data: &[u8]) -> Result<Vec<u8>, Error> {
+        let mut iter: vpx_codec_iter_t = std::ptr::null();
+        let mut img = std::ptr::null();
+        let mut buffer = data.as_ptr();
+        if data.is_empty() {
+            buffer = std::ptr::null(); // Triggers full frame concealment.
+        }
+
+        // During decode libvpx may get and release buffers from |frame_buffer_pool_|.
+        // In practice libvpx keeps a few (~3-4) buffers alive at a time.
+        vp9_call_unsafe!(vpx_codec_decode(
+            &mut self.decoder,
+            data.as_ptr() as _,
+            data.len() as _,
+            std::ptr::null_mut(),
+            VPX_DL_REALTIME as i64
+        ));
+
+        img = unsafe { vpx_codec_get_frame(&mut self.decoder, &mut iter) };
+        let qp = 0;
+        vp9_call_unsafe!(vpx_codec_control_(
+            &mut self.decoder,
+            VPXD_GET_LAST_QUANTIZER as _,
+            &qp
+        ));
+
+        let img = unsafe { &*img };
+
+        if img.fmt != VPX_IMG_FMT_I420 {
+            return Err(Error::DecoderUnsupportedFormat);
+        }
+
+        // TODO copy to a buffer or something
+
+        Ok(vec![])
+    }
+}
+
+pub struct Vp9DecoderWrapper {
+    decoder: Option<Vp9Decoder>,
+}
+
+impl Default for Vp9DecoderWrapper {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Vp9DecoderWrapper {
+    pub fn new() -> Self {
+        Self { decoder: None }
+    }
+
+    fn init_decoder(&mut self, width: u16, height: u16) -> Result<(), Error> {
+        let mut decoder = Vp9Decoder::new(width, height)?;
+        self.decoder = Some(decoder);
+        Ok(())
+    }
+
+    pub fn decode(
+        &mut self,
+        data: Vp9PacketWrapperBecauseTheRtpCrateIsIdiotic,
+    ) -> Result<Vec<u8>, Error> {
+        let decoder = match &mut self.decoder {
+            None => {
+                if !data.1.y {
+                    // We need to initialize the decoder with the correct width and height
+                    // y indicates resolution data is present
+                    // so we must skip this packet if the decoder hasn't been initialized yet and we don't have width and height data
+                    return Ok(Vec::new());
+                }
+                self.init_decoder(data.1.width[0] as _, data.1.height[0] as _)?;
+                self.decoder.as_mut().unwrap()
+            }
+            Some(d) =>
+                if !data.1.y {
+                    d
+                } else if data.1.width[0] != d.width() || data.1.height[0] != d.height() {
+                    // Resolution has changed, tear down and re-init a new decoder in
+                    // order to get correct sizing.
+                    self.init_decoder(data.1.width[0] as _, data.1.height[0] as _)?;
+                    self.decoder.as_mut().unwrap()
+                } else {
+                    d
+                },
+        };
+
+        decoder.decode(&data.0)
     }
 }

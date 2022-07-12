@@ -1430,8 +1430,10 @@ dependencies = [
  "dcv-color-primitives",
  "env-libvpx-sys",
  "native 0.1.0",
+ "num_cpus",
  "rtp",
  "thiserror",
+ "webrtc-util",
 ]
 
 [[package]]
