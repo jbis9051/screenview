@@ -17,7 +17,7 @@ pub trait ViewResources<'a> {
     type Resources;
 
     fn frame_update(
-        resources: &'a Self::Resources,
+        resources: &'a mut Self::Resources,
         frame: &'a BGRAFrame,
         display_id: DisplayId,
     ) -> Self::FrameUpdate;

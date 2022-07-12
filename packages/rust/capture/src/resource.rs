@@ -26,9 +26,9 @@ where
     P: for<'a> ViewResources<'a, Resources = <P as ProcessFrame>::Resources>,
 {
     pub(super) fn frame_update(
-        &self,
+        &mut self,
         display_id: DisplayId,
     ) -> <P as ViewResources<'_>>::FrameUpdate {
-        <P as ViewResources<'_>>::frame_update(&self.processing, &self.frame, display_id)
+        <P as ViewResources<'_>>::frame_update(&mut self.processing, &self.frame, display_id)
     }
 }

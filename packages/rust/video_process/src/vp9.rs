@@ -95,6 +95,10 @@ impl VP9Encoder {
         })
     }
 
+    pub fn dimensions(&self) -> (u32, u32) {
+        (self.width, self.height)
+    }
+
     pub fn encode(&mut self, frame: &[u8]) -> Result<Vec<Vec<u8>>, Error> {
         unsafe {
             vpx_img_wrap(

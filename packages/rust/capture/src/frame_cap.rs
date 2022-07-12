@@ -222,7 +222,7 @@ where
     P: ProcessFrame,
     P: for<'a> ViewResources<'a, Resources = <P as ProcessFrame>::Resources>,
 {
-    pub fn frame_update(&self) -> <P as ViewResources<'_>>::FrameUpdate {
+    pub fn frame_update(&mut self) -> <P as ViewResources<'_>>::FrameUpdate {
         self.resources.frame_update(self.display_id)
     }
 }

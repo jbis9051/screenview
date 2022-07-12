@@ -557,7 +557,7 @@ fn instance_main(
             // capacity of 1, so we won't fall behind when processing frames, the capture threads
             // will just block and wait for us
             for capture in instance.capture_pool.active_captures() {
-                let frame_update = match capture.next_update() {
+                let mut frame_update = match capture.next_update() {
                     Some(update) => update,
                     None => continue,
                 };

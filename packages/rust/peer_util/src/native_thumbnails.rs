@@ -45,7 +45,7 @@ impl ThumbnailCapture {
     pub fn handle_thumbnail_updates<F>(&mut self, mut handler: F)
     where F: FnMut(NativeThumbnail) {
         for capture in self.pool.active_captures() {
-            let update = match capture.next_update() {
+            let mut update = match capture.next_update() {
                 Some(update) => update,
                 None => continue,
             };
@@ -137,7 +137,7 @@ impl<'a> ViewResources<'a> for ProcessThumbnail {
     type Resources = <Self as ProcessFrame>::Resources;
 
     fn frame_update(
-        resources: &'a Self::Resources,
+        resources: &'a mut Self::Resources,
         _frame: &'a BGRAFrame,
         display_id: DisplayId,
     ) -> Self::FrameUpdate {

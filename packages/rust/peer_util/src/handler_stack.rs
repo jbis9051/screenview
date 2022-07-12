@@ -1,4 +1,3 @@
-use crate::frame_processor::FrameUpdate;
 use common::messages::{
     rvd::{AccessMask, DisplayId, RvdMessage},
     svsc::{Cookie, LeaseId},
@@ -10,6 +9,7 @@ use peer::{
     rvd::RvdHostError,
     InformEvent,
 };
+use rtp::packet::Packet;
 
 pub struct HandlerStack<H, L, R, U> {
     higher: H,
@@ -133,7 +133,10 @@ where
         self.higher.share_display(name, access) // TODO this should send messages instead of returning
     }
 
-    pub fn send_frame_update(&mut self, fragments: FrameUpdate<'_>) -> Result<(), HandlerError> {
+    pub fn send_frame_update(
+        &mut self,
+        fragments: impl Iterator<Item = Packet>,
+    ) -> Result<(), HandlerError> {
         let messages = self.higher.frame_update(&[0]); // TODO
         for message in messages {
             let higher_output = self.higher.send(message)?;
