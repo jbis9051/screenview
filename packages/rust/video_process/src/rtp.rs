@@ -5,7 +5,7 @@ use rtp::{
     packetizer::{new_packetizer, Depacketizer, Packetizer},
     sequence::WrappingSequencer,
 };
-use webrtc_util::{Error, Unmarshal};
+use webrtc_util::Unmarshal;
 
 const VP9_PAYLOAD_TYPE: u8 = 98;
 

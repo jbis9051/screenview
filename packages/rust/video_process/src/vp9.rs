@@ -3,10 +3,11 @@ use cfg_if::cfg_if;
 use num_cpus;
 use std::{
     cmp::{max, min},
+    mem::MaybeUninit,
     os::raw::c_uint,
 };
 use vpx_sys::{
-    vp8_dec_control_id::{VP9D_SET_LOOP_FILTER_OPT, VPXD_GET_LAST_QUANTIZER},
+    vp8_dec_control_id::VP9D_SET_LOOP_FILTER_OPT,
     vpx_codec_control_,
     vpx_codec_ctx_t,
     vpx_codec_cx_pkt_kind::VPX_CODEC_CX_FRAME_PKT,
@@ -16,6 +17,7 @@ use vpx_sys::{
     vpx_codec_destroy,
     vpx_codec_enc_cfg_t,
     vpx_codec_enc_config_default,
+    vpx_codec_enc_config_set,
     vpx_codec_enc_init_ver,
     vpx_codec_encode,
     vpx_codec_err_t,
@@ -25,14 +27,18 @@ use vpx_sys::{
     vpx_codec_iter_t,
     vpx_codec_vp9_cx,
     vpx_codec_vp9_dx,
+    vpx_enc_pass::VPX_RC_ONE_PASS,
     vpx_image_t,
     vpx_img_alloc,
     vpx_img_fmt,
     vpx_img_fmt::VPX_IMG_FMT_I420,
     vpx_img_free,
     vpx_img_wrap,
+    vpx_rc_mode::VPX_CBR,
     VPX_DECODER_ABI_VERSION,
+    VPX_DL_BEST_QUALITY,
     VPX_DL_REALTIME,
+    VPX_ENCODER_ABI_VERSION,
     VPX_IMG_FMT_HIGHBITDEPTH,
 };
 
@@ -61,21 +67,54 @@ macro_rules! vp9_call_unsafe {
 impl VP9Encoder {
     pub fn new(width: u32, height: u32) -> Result<VP9Encoder, Error> {
         let mut encoder: vpx_codec_ctx_t = unsafe { std::mem::zeroed() };
-        let mut config: vpx_codec_enc_cfg_t = unsafe { std::mem::zeroed() };
-
+        let mut config: MaybeUninit<vpx_codec_enc_cfg_t> = MaybeUninit::uninit();
 
         vp9_call_unsafe!(vpx_codec_enc_config_default(
             vpx_codec_vp9_cx(),
-            &mut config,
+            config.as_mut_ptr(),
             0
         ));
+
+        let mut config = unsafe { config.assume_init() };
+
+        config.g_w = width;
+        config.g_h = height; /*
+                              config.rc_target_bitrate = 0; // in kbit/s
+                             // config_->g_error_resilient = is_svc_ ? VPX_ERROR_RESILIENT_DEFAULT : 0;
+                             // Setting the time base of the codec.
+                             config.g_timebase.num = 1;
+                             config.g_timebase.den = 90000;
+                             config.g_lag_in_frames = 0; // 0- no frame lagging
+                                                         // Rate control settings.
+                                                         // config_->rc_dropframe_thresh = inst->VP9().frameDroppingOn ? 30 : 0;
+                             config.rc_end_usage = VPX_CBR;
+                             config.g_pass = VPX_RC_ONE_PASS;
+                             config.rc_min_quantizer = 8;
+                             config.rc_max_quantizer = 52;
+                             config.rc_undershoot_pct = 50;
+                             config.rc_overshoot_pct = 50;
+                             config.rc_buf_initial_sz = 500;
+                             config.rc_buf_optimal_sz = 600;
+                             config.rc_buf_sz = 1000;
+                             // Set the maximum target size of any key-frame.
+                             // rc_max_intra_target_ = MaxIntraTarget(config_->rc_buf_optimal_sz);
+                             // Key-frame interval is enforced manually by this wrapper.
+                             // config.kf_mode = VPX_KF_DISABLED;
+                             // TODO(webm:1592): work-around for libvpx issue, as it can still
+                             // put some key-frames at will even in VPX_KF_DISABLED kf_mode.
+                             // config_->kf_max_dist = inst->VP9().keyFrameInterval;
+                             // config_->kf_min_dist = config_->kf_max_dist;*/
+        // Determine number of threads based on the image size and #cores.
+        config.g_threads = number_of_threads(width, height, num_cpus::get() as u32);
+
         vp9_call_unsafe!(vpx_codec_enc_init_ver(
             &mut encoder,
             vpx_codec_vp9_cx(),
             &config,
             0,
-            vpx_sys::vpx_bit_depth::VPX_BITS_8 as i32,
+            VPX_ENCODER_ABI_VERSION as _,
         ));
+
         vp9_call_unsafe!(vpx_codec_control_(
             &mut encoder,
             vpx_sys::vp8e_enc_control_id::VP8E_SET_CPUUSED as _,
@@ -86,6 +125,8 @@ impl VP9Encoder {
             vpx_sys::vp8e_enc_control_id::VP9E_SET_ROW_MT as _,
             1
         ));
+
+        vp9_call_unsafe!(vpx_codec_enc_config_set(&mut encoder, &config));
 
         let raw = unsafe {
             vpx_img_alloc(
@@ -117,25 +158,40 @@ impl VP9Encoder {
     }
 
     pub fn encode(&mut self, i420_frame: &[u8]) -> Result<Vec<Vec<u8>>, Error> {
-        unsafe {
-            vpx_img_wrap(
-                self.raw,
-                VPX_IMG_FMT_I420,
-                self.width,
-                self.height,
-                1,
-                i420_frame.as_ptr() as _,
-            )
+        let img = {
+            if i420_frame.is_empty() {
+                std::ptr::null_mut()
+            } else {
+                unsafe {
+                    vpx_img_wrap(
+                        self.raw,
+                        VPX_IMG_FMT_I420,
+                        self.width,
+                        self.height,
+                        0,
+                        i420_frame.as_ptr() as _,
+                    )
+                };
+                self.raw
+            }
         };
+        self.encode_internal(img)
+    }
+
+    fn encode_internal(&mut self, raw: *mut vpx_image_t) -> Result<Vec<Vec<u8>>, Error> {
+        let target_framerate_fps = 20;
+        let duration = 90000 / target_framerate_fps;
+
         vp9_call_unsafe!(vpx_codec_encode(
             &mut self.encoder,
-            self.raw,
+            raw,
             self.pts,
             1,
             0,
-            VPX_DL_REALTIME.into(),
+            VPX_DL_REALTIME as _,
         ));
 
+        self.pts += duration;
 
         let mut datas = Vec::new();
 
@@ -193,6 +249,50 @@ fn get_cpu_speed(width: u32, height: u32) -> i32 {
     }
 }
 
+/*
+int VP9EncoderImpl::NumberOfThreads(int width,
+                                    int height,
+                                    int number_of_cores) {
+  // Keep the number of encoder threads equal to the possible number of column
+  // tiles, which is (1, 2, 4, 8). See comments below for VP9E_SET_TILE_COLUMNS.
+  if (width * height >= 1280 * 720 && number_of_cores > 4) {
+    return 4;
+  } else if (width * height >= 640 * 360 && number_of_cores > 2) {
+    return 2;
+  } else {
+// Use 2 threads for low res on ARM.
+#if defined(WEBRTC_ARCH_ARM) || defined(WEBRTC_ARCH_ARM64) || \
+    defined(WEBRTC_ANDROID)
+    if (width * height >= 320 * 180 && number_of_cores > 2) {
+      return 2;
+    }
+#endif
+    // 1 thread less than VGA.
+    return 1;
+  }
+}
+*/
+
+fn number_of_threads(width: u32, height: u32, number_of_cores: u32) -> u32 {
+    // Keep the number of encoder threads equal to the possible number of column
+    // tiles, which is (1, 2, 4, 8). See comments below for VP9E_SET_TILE_COLUMNS.
+    if width * height >= 1280 * 720 && number_of_cores > 4 {
+        4
+    } else if width * height >= 640 * 360 && number_of_cores > 2 {
+        2
+    } else {
+        // Use 2 threads for low res on ARM.
+        #[cfg(target_arch = "arm64")]
+        {
+            if width * height >= 320 * 180 && number_of_cores > 2 {
+                return 2;
+            }
+        }
+        // 1 thread less than VGA.
+        1
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("VPX Codec error: {0:?}")]
@@ -226,7 +326,7 @@ fn vpx_img_plane_height(img: &vpx_image_t, plane: usize) -> u32 {
     }
 }
 
-struct Vp9Decoder {
+pub struct Vp9Decoder {
     width: u16,
     height: u16,
 
@@ -249,7 +349,7 @@ impl Vp9Decoder {
         // 4 for 1080p
         // 8 for 1440p
         // 18 for 4K
-        let num_threads = max(1, 2 * ((width * height) as u32) / (1280u32 * 720u32));
+        let num_threads = max(1, 2 * ((width as u32 * height as u32) / (1280u32 * 720u32)));
         cfg.threads = min(number_of_cores as c_uint, num_threads as c_uint);
 
         let flags: vpx_codec_flags_t = 0;
@@ -270,7 +370,7 @@ impl Vp9Decoder {
             1
         ));
 
-        let buffer = vec![0u8; (width * height * 4) as usize];
+        let buffer = vec![0u8; (width as usize * height as usize * 4) as usize];
 
         Ok(Self {
             width,
@@ -317,7 +417,8 @@ impl Vp9Decoder {
                 return Err(Error::DecoderUnsupportedFormat);
             }
 
-            let mut out = Vec::with_capacity((self.width * self.height * 3) as usize);
+            let mut out =
+                Vec::with_capacity((self.width as usize * self.height as usize * 3) as usize);
             let mut ptr = out.as_mut_ptr();
 
             for plane in 0 .. 3 {
@@ -339,7 +440,7 @@ impl Vp9Decoder {
                 }
             }
 
-            unsafe { out.set_len((self.width * self.height * 3) as usize) };
+            unsafe { out.set_len((self.width as usize * self.height as usize * 3) as usize) };
             vec.push(out);
         }
 
@@ -363,7 +464,7 @@ impl Vp9DecoderWrapper {
     }
 
     fn init_decoder(&mut self, width: u16, height: u16) -> Result<(), Error> {
-        let mut decoder = Vp9Decoder::new(width, height)?;
+        let decoder = Vp9Decoder::new(width, height)?;
         self.decoder = Some(decoder);
         Ok(())
     }
