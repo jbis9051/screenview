@@ -1348,7 +1348,7 @@ dependencies = [
 [[package]]
 name = "rtp"
 version = "0.6.5"
-source = "git+https://github.com/Cassy343/rtp?branch=code-improvements#d841fefd1dfe07f4a76dc318fa3a12a4eb369002"
+source = "git+https://github.com/Cassy343/rtp?branch=code-improvements#dac3f1660bc4f2eecf8af5c673164b3e0f0b8d8f"
 dependencies = [
  "bytes",
  "rand",
