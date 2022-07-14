@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::rtp::Vp9PacketWrapperBecauseTheRtpCrateIsIdiotic;
 use cfg_if::cfg_if;
 use num_cpus;
@@ -327,15 +329,15 @@ fn vpx_img_plane_height(img: &vpx_image_t, plane: usize) -> u32 {
 }
 
 pub struct Vp9Decoder {
-    width: u16,
-    height: u16,
+    width: usize,
+    height: usize,
 
     buffer: Vec<u8>,
     decoder: vpx_codec_ctx_t,
 }
 
 impl Vp9Decoder {
-    pub fn new(width: u16, height: u16) -> Result<Self, Error> {
+    pub fn new(width: usize, height: usize) -> Result<Self, Error> {
         let number_of_cores = num_cpus::get();
         let mut cfg: vpx_codec_dec_cfg_t = unsafe { std::mem::zeroed() };
         // We want to use multithreading when decoding high resolution videos. But
@@ -370,7 +372,7 @@ impl Vp9Decoder {
             1
         ));
 
-        let buffer = vec![0u8; (width as usize * height as usize * 4) as usize];
+        let buffer = vec![0u8; (width * height * 4) as usize];
 
         Ok(Self {
             width,
@@ -380,11 +382,11 @@ impl Vp9Decoder {
         })
     }
 
-    pub fn width(&self) -> u16 {
+    pub fn width(&self) -> usize {
         self.width
     }
 
-    pub fn height(&self) -> u16 {
+    pub fn height(&self) -> usize {
         self.height
     }
 
@@ -440,7 +442,7 @@ impl Vp9Decoder {
                 }
             }
 
-            unsafe { out.set_len((self.width as usize * self.height as usize * 3) as usize) };
+            unsafe { out.set_len((self.width * self.height * 3) as usize) };
             vec.push(out);
         }
 
@@ -463,7 +465,7 @@ impl Vp9DecoderWrapper {
         Self { decoder: None }
     }
 
-    fn init_decoder(&mut self, width: u16, height: u16) -> Result<(), Error> {
+    fn init_decoder(&mut self, width: usize, height: usize) -> Result<(), Error> {
         let decoder = Vp9Decoder::new(width, height)?;
         self.decoder = Some(decoder);
         Ok(())
@@ -487,7 +489,9 @@ impl Vp9DecoderWrapper {
             Some(d) =>
                 if !data.1.y {
                     d
-                } else if data.1.width[0] != d.width() || data.1.height[0] != d.height() {
+                } else if data.1.width[0] != d.width() as u16
+                    || data.1.height[0] != d.height() as u16
+                {
                     // Resolution has changed, tear down and re-init a new decoder in
                     // order to get correct sizing.
                     self.init_decoder(data.1.width[0] as _, data.1.height[0] as _)?;

@@ -10,8 +10,10 @@ use dcv_color_primitives::{
 use image::{GenericImageView, RgbImage};
 use video_process::{
     convert::convert_bgra_to_i420,
+    rtp::{RtpDecoder, RtpEncoder},
     vp9::{VP9Encoder, Vp9Decoder},
 };
+use webrtc_util::Marshal;
 
 pub fn rgb_to_bgra(width: u32, height: u32, data: &[u8]) -> Result<Vec<u8>, ErrorKind> {
     dcp::initialize();
@@ -152,8 +154,29 @@ pub fn encode_test() {
 }
 
 #[test]
+pub fn rtp_encode() {
+    let frame = include_bytes!("img.vp9");
+    let mut rtp = RtpEncoder::new(10000, 1);
+    let packets = rtp
+        .process_vp9(frame.to_vec())
+        .expect("could not encode frame");
+    assert!(!packets.is_empty());
+}
+
+#[test]
+pub fn rtp_decode() {
+    let packet = include_bytes!("img.rtp");
+    let mut rtp = RtpDecoder::new();
+    let (data, _) = rtp
+        .decode_to_vp9(packet.to_vec())
+        .expect("could not decode frame")
+        .expect("empty packet");
+    assert!(!data.is_empty());
+}
+
+#[test]
 pub fn decode_test() {
-    let img = include_bytes!("img.vp9");
+    let img = include_bytes!("img.rtp.out");
     let (width, height) =
         image::load_from_memory_with_format(include_bytes!("img.png"), image::ImageFormat::Png)
             .expect("unable to open image")
@@ -180,29 +203,66 @@ pub fn finalize() {
 }
 
 // Below test is used if you want to view the encoding result. It should not be run on CI.
-pub fn e2e_encode() {
+pub fn e2e() -> (u32, u32, Vec<u8>) {
+    // Start with a png
     let png =
         image::load_from_memory_with_format(include_bytes!("img.png"), image::ImageFormat::Png)
             .expect("unable to open image");
+
+    // Get our RGB data
     let rgb = png.to_rgb8();
     let (width, height) = rgb.dimensions();
     let rgb_data = rgb.into_raw();
-    let mut bgra = rgb_to_bgra(width, height, &rgb_data).expect("unable to convert image");
-    let i420 = convert_bgra_to_i420(width, height, &mut bgra).expect("unable to convert image");
-    let mut encoder = VP9Encoder::new(width, height).expect("could not construct encoder");
 
+    // Convert to BGRA
+    let mut bgra = rgb_to_bgra(width, height, &rgb_data).expect("unable to convert image");
+
+    // Convert to I420
+    let i420 = convert_bgra_to_i420(width, height, &mut bgra).expect("unable to convert image");
+
+    // Encode to VP9
+    let mut encoder = VP9Encoder::new(width, height).expect("could not construct encoder");
     let mut vp9 = encoder.encode(&i420).expect("could not encode frame");
     vp9.append(&mut encoder.encode(&[]).unwrap());
+
     let vp9_flat: Vec<u8> = vp9.into_iter().flatten().collect();
+    // Packetize to RTP
+    let mut rtp = RtpEncoder::new(100000, 1);
+    let packets = rtp.process_vp9(vp9_flat).expect("could not encode frame");
+    assert_eq!(packets.len(), 1);
+    let packet = packets[0]
+        .marshal()
+        .expect("could not marshal packet")
+        .to_vec();
+
+    // Depacketize to VP9
+    let mut rtp = RtpDecoder::new();
+    let (vp9_out, _) = rtp
+        .decode_to_vp9(packet)
+        .expect("could not decode frame")
+        .expect("empty packet");
+
+    // Decode to VP9
     let mut decoder =
         Vp9Decoder::new(width as _, height as _).expect("could not construct encoder");
-    let mut vp9_dec = decoder.decode(&vp9_flat).expect("could not decode frame");
-    vp9_dec.append(&mut decoder.decode(&[]).unwrap());
-    let vp9_dec_flat: Vec<u8> = vp9_dec.into_iter().flatten().collect();
-    let bgra_dec = i420_to_bgra(width, height, &vp9_dec_flat).expect("unable to convert image");
-    let rgb_dec = bgra_to_rgb(width, height, &bgra_dec).expect("unable to convert image");
-    RgbImage::from_vec(width, height, rgb_dec)
+    let mut i420_out = decoder.decode(&vp9_out).expect("could not decode frame");
+    i420_out.append(&mut decoder.decode(&[]).unwrap());
+    let i420_out_flat: Vec<u8> = i420_out.into_iter().flatten().collect();
+    let bgra_out = i420_to_bgra(width, height, &i420_out_flat).expect("unable to convert image");
+    let rgb_out = bgra_to_rgb(width, height, &bgra_out).expect("unable to convert image");
+
+    (width, height, rgb_out)
+}
+
+#[test]
+pub fn e2e_test() {
+    e2e();
+}
+
+pub fn e2e_demo() {
+    let (width, height, rgb) = e2e();
+    RgbImage::from_vec(width, height, rgb)
         .expect("unable to load image")
-        .save("tests/out.png")
+        .save("out.png")
         .unwrap();
 }
