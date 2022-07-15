@@ -242,13 +242,17 @@ pub fn e2e() -> (u32, u32, Vec<u8>) {
         .expect("could not decode frame")
         .expect("empty packet");
 
-    // Decode to VP9
+    // Decode to i420
     let mut decoder =
         Vp9Decoder::new(width as _, height as _).expect("could not construct encoder");
     let mut i420_out = decoder.decode(&vp9_out).expect("could not decode frame");
     i420_out.append(&mut decoder.decode(&[]).unwrap());
     let i420_out_flat: Vec<u8> = i420_out.into_iter().flatten().collect();
+
+    // Convert to BGRA
     let bgra_out = i420_to_bgra(width, height, &i420_out_flat).expect("unable to convert image");
+
+    // Convert to RGB
     let rgb_out = bgra_to_rgb(width, height, &bgra_out).expect("unable to convert image");
 
     (width, height, rgb_out)

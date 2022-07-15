@@ -215,11 +215,10 @@ impl RvdHostHandler {
                 }
                 RvdMessage::KeyInput(msg) => {
                     // TODO this is dumb, i'm losing brain cells here
-                    if self
+                    if !self
                         .shared_displays
                         .iter()
-                        .find(|(_, s)| s.access_mask.contains(AccessMask::CONTROLLABLE))
-                        .is_none()
+                        .any(|(_, s)| s.access_mask.contains(AccessMask::CONTROLLABLE))
                     {
                         return Err(RvdHostError::PermissionsError(KeyInputPermission));
                     }

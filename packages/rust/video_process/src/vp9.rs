@@ -251,30 +251,6 @@ fn get_cpu_speed(width: u32, height: u32) -> i32 {
     }
 }
 
-/*
-int VP9EncoderImpl::NumberOfThreads(int width,
-                                    int height,
-                                    int number_of_cores) {
-  // Keep the number of encoder threads equal to the possible number of column
-  // tiles, which is (1, 2, 4, 8). See comments below for VP9E_SET_TILE_COLUMNS.
-  if (width * height >= 1280 * 720 && number_of_cores > 4) {
-    return 4;
-  } else if (width * height >= 640 * 360 && number_of_cores > 2) {
-    return 2;
-  } else {
-// Use 2 threads for low res on ARM.
-#if defined(WEBRTC_ARCH_ARM) || defined(WEBRTC_ARCH_ARM64) || \
-    defined(WEBRTC_ANDROID)
-    if (width * height >= 320 * 180 && number_of_cores > 2) {
-      return 2;
-    }
-#endif
-    // 1 thread less than VGA.
-    return 1;
-  }
-}
-*/
-
 fn number_of_threads(width: u32, height: u32, number_of_cores: u32) -> u32 {
     // Keep the number of encoder threads equal to the possible number of column
     // tiles, which is (1, 2, 4, 8). See comments below for VP9E_SET_TILE_COLUMNS.
