@@ -1,12 +1,15 @@
-use crate::{
-    capture::FrameUpdate,
+use common::messages::{
+    rvd::{AccessMask, DisplayId, RvdMessage},
+    svsc::{Cookie, LeaseId},
+};
+use io::{IoHandle, Reliable, SendError, TransportError, TransportResponse, Unreliable};
+use peer::{
     higher_handler::{HigherError, HigherHandlerClient, HigherHandlerHost, HigherHandlerTrait},
-    io::{IoHandle, Reliable, SendError, TransportError, TransportResponse, Unreliable},
     lower::{LowerError, LowerHandlerSignal, LowerHandlerTrait},
-    rvd::{RvdDisplay, ShareDisplayResult},
+    rvd::RvdHostError,
     InformEvent,
 };
-use common::messages::svsc::{Cookie, LeaseId};
+use rtp::packet::Packet;
 
 pub struct HandlerStack<H, L, R, U> {
     higher: H,
@@ -33,8 +36,7 @@ where
         let result = self.io_handle.recv()?;
         Some(match result {
             Ok(TransportResponse::Message(message)) => self.handle(&message),
-            Ok(TransportResponse::Shutdown(source)) =>
-                Ok(vec![InformEvent::TransportShutdown(source)]),
+            Ok(TransportResponse::Shutdown(source)) => Ok(vec![]), // TODO InformEvent::TransportShutdown(source)
             Err(error) => Err(error.into()),
         })
     }
@@ -123,19 +125,19 @@ where
         self.higher.set_static_password(static_password)
     }
 
-    pub fn share_display(&mut self, display: RvdDisplay) -> ShareDisplayResult {
-        self.higher.share_display(display)
+    pub fn share_display(
+        &mut self,
+        name: String,
+        access: AccessMask,
+    ) -> Result<(DisplayId, RvdMessage), RvdHostError> {
+        self.higher.share_display(name, access) // TODO this should send messages instead of returning
     }
 
-    pub fn send_display_update(&mut self) -> Result<(), HandlerError> {
-        let message = self.higher.display_update();
-        let higher_output = self.higher.send(message)?;
-        let lower_output = self.lower.send(higher_output)?;
-        self.io_handle.send(lower_output).map_err(Into::into)
-    }
-
-    pub fn send_frame_update(&mut self, fragments: FrameUpdate<'_>) -> Result<(), HandlerError> {
-        let messages = self.higher.frame_update(fragments);
+    pub fn send_frame_update(
+        &mut self,
+        fragments: impl Iterator<Item = Packet>,
+    ) -> Result<(), HandlerError> {
+        let messages = self.higher.frame_update(&[0]); // TODO
         for message in messages {
             let higher_output = self.higher.send(message)?;
             let lower_output = self.lower.send(higher_output)?;

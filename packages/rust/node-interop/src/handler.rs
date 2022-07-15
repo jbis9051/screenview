@@ -1,12 +1,12 @@
+use io::{DirectServer, IoHandle, TcpHandle, UdpHandle};
 use peer::{
-    handler_stack::{HandlerError, HandlerStack},
     higher_handler::HigherHandler,
-    io::{DirectServer, IoHandle, TcpHandle, UdpHandle},
     lower::{LowerHandlerDirect, LowerHandlerSignal},
     rvd::{RvdClientHandler, RvdHostHandler},
     wpskka::{WpskkaClientHandler, WpskkaHostHandler},
     InformEvent,
 };
+use peer_util::handler_stack::{HandlerError, HandlerStack};
 
 type HStack<W, R, L> = HandlerStack<HigherHandler<W, R>, L, TcpHandle, UdpHandle>;
 type HostSignalStack = HStack<WpskkaHostHandler, RvdHostHandler, LowerHandlerSignal>;

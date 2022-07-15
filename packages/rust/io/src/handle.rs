@@ -1,8 +1,7 @@
-use crate::ChanneledMessage;
-
 use super::DEFAULT_UNRELIABLE_MESSAGE_SIZE;
-use common::{messages::Error, sync::event_loop::ThreadWaker};
+use common::messages::{ChanneledMessage, Error};
 use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
+use event_loop::event_loop::ThreadWaker;
 use std::{
     error::Error as StdError,
     fmt::{self, Debug, Display, Formatter},

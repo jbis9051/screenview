@@ -7,9 +7,9 @@ use common::{
     constants::RVD_VERSION,
     messages::rvd::{
         ClipboardType,
-        DisplayChange,
-        DisplayChangeReceived,
         DisplayId,
+        DisplayShare,
+        DisplayShareAck,
         FrameData,
         MouseLocation,
         ProtocolVersionResponse,
@@ -74,11 +74,13 @@ impl RvdClientHandler {
                     )));
                     Ok(())
                 }
-                RvdMessage::DisplayChange(msg) => {
-                    events.push(InformEvent::RvdClientInform(
-                        RvdClientInform::DisplayChange(msg),
-                    ));
-                    write.push(RvdMessage::DisplayChangeReceived(DisplayChangeReceived {}));
+                RvdMessage::DisplayShare(msg) => {
+                    write.push(RvdMessage::DisplayShareAck(DisplayShareAck {
+                        display_id: msg.display_id,
+                    }));
+                    events.push(InformEvent::RvdClientInform(RvdClientInform::DisplayShare(
+                        msg,
+                    )));
                     Ok(())
                 }
                 RvdMessage::MouseHidden(msg) => {
@@ -138,6 +140,6 @@ pub enum RvdClientInform {
     FrameData(FrameData),
     MouseHidden(DisplayId),
     MouseLocation(MouseLocation),
-    DisplayChange(DisplayChange),
+    DisplayShare(DisplayShare),
     ClipboardNotification(Vec<u8>, ClipboardType), // for now we only care when receive a clipboard notification with content
 }

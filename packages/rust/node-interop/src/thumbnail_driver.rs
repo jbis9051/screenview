@@ -1,11 +1,11 @@
-use common::sync::{
+use event_loop::{
     event_loop::{event_loop, EventLoopState, ThreadWaker, ThreadWakerCore},
     oneshot,
     JoinOnDrop,
 };
-use native::{NativeApi, NativeApiError};
+use native::{api::NativeId, NativeApi, NativeApiError};
 use neon::prelude::*;
-use peer::{helpers::native_thumbnails::ThumbnailCapture, rvd::Display};
+use peer_util::native_thumbnails::ThumbnailCapture;
 use std::{
     sync::Arc,
     thread::{self, JoinHandle},
@@ -55,8 +55,11 @@ fn start_driver_main(
 ) -> JoinHandle<()> {
     thread::spawn(move || {
         let waker_core = ThreadWakerCore::new_current_thread();
-        let capture_result = NativeApi::new().and_then(|api| {
-            ThumbnailCapture::new(api, waker_core.make_waker(Events::ThumbnailUpdate as u32))
+        let capture_result = NativeApi::new().and_then(|mut api| {
+            ThumbnailCapture::new(
+                &mut api,
+                waker_core.make_waker(Events::ThumbnailUpdate as u32),
+            )
         });
 
         let capture = match capture_result {
@@ -105,8 +108,8 @@ fn driver_main(
                         obj.set(&mut cx, "name", str)?;
 
                         let (display_id, display_type) = match thumb.display {
-                            Display::Monitor(id) => (id, "monitor"),
-                            Display::Window(id) => (id, "window"),
+                            NativeId::Monitor(id) => (id, "monitor"),
+                            NativeId::Window(id) => (id, "window"),
                         };
 
                         let num = cx.number(display_id as f64);

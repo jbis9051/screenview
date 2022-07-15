@@ -61,3 +61,19 @@ impl From<RvdMessage> for ScreenViewMessage<'_> {
         Self::RvdMessage(msg)
     }
 }
+
+
+pub enum ChanneledMessage<T> {
+    Reliable(T),
+    Unreliable(T),
+}
+
+impl<T> ChanneledMessage<T> {
+    pub fn map<F, U>(self, f: F) -> ChanneledMessage<U>
+    where F: FnOnce(T) -> U {
+        match self {
+            Self::Reliable(msg) => ChanneledMessage::Reliable(f(msg)),
+            Self::Unreliable(msg) => ChanneledMessage::Unreliable(f(msg)),
+        }
+    }
+}

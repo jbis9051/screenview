@@ -2,7 +2,7 @@ mod helper;
 use crate::helper::test_write;
 use byteorder::{LittleEndian, ReadBytesExt};
 use common::messages::{rvd::*, MessageComponent};
-use std::io::Cursor;
+use std::{io::Cursor, ops::BitAnd};
 
 #[test]
 fn test_version() {
@@ -22,31 +22,38 @@ fn test_version_response() {
 }
 
 #[test]
-fn test_display_change() {
-    let bytes = include_bytes!("binary/rvd/display_change.bin");
-    let message: DisplayChange = DisplayChange::read(&mut Cursor::new(bytes)).unwrap();
-    assert!(message.clipboard_readable);
-    assert_eq!(message.display_information.len(), 2);
-    assert_eq!(message.display_information[0].display_id, 0);
-    assert_eq!(message.display_information[0].width, 200);
-    assert_eq!(message.display_information[0].height, 200);
-    assert_eq!(message.display_information[0].cell_width, 512);
-    assert_eq!(message.display_information[0].cell_height, 512);
-    assert_eq!(message.display_information[0].access, AccessMask::all());
-    assert_eq!(message.display_information[1].display_id, 1);
-    assert_eq!(message.display_information[1].width, 51200);
-    assert_eq!(message.display_information[1].height, 51968);
-    assert_eq!(message.display_information[1].cell_width, 512);
-    assert_eq!(message.display_information[1].cell_height, 512);
-    assert_eq!(message.display_information[1].access, AccessMask::empty());
+fn test_permissions_update() {
+    let bytes = include_bytes!("binary/rvd/permissions_update.bin");
+    let message = PermissionsUpdate::read(&mut Cursor::new(bytes)).unwrap();
+    let mut mask = PermissionMask::CLIPBOARD_READ;
+    assert_eq!(message.permission_mask.bits(), mask.bits());
     test_write(&message, bytes);
 }
 
 #[test]
-fn test_display_change_received() {
-    let bytes = &[0u8; 0];
-    let message: DisplayChangeReceived =
-        DisplayChangeReceived::read(&mut Cursor::new(bytes)).unwrap();
+fn test_display_share() {
+    let bytes = include_bytes!("binary/rvd/display_share.bin");
+    let message = DisplayShare::read(&mut Cursor::new(bytes)).unwrap();
+    assert_eq!(message.display_id, 1);
+    assert_eq!(message.access.bits(), AccessMask::CONTROLLABLE.bits());
+    assert_eq!(message.name, "name");
+    test_write(&message, bytes);
+}
+
+#[test]
+fn test_display_share_ack() {
+    let bytes = include_bytes!("binary/rvd/display_share_ack.bin");
+    let message = DisplayShareAck::read(&mut Cursor::new(bytes)).unwrap();
+    assert_eq!(message.display_id, 1);
+    test_write(&message, bytes);
+}
+
+
+#[test]
+fn test_display_share_unshare() {
+    let bytes = include_bytes!("binary/rvd/display_unshare.bin");
+    let message = DisplayUnshare::read(&mut Cursor::new(bytes)).unwrap();
+    assert_eq!(message.display_id, 1);
     test_write(&message, bytes);
 }
 

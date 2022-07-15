@@ -3,12 +3,12 @@ use crate::{
     lower::{LowerError, LowerHandlerTrait, LowerSendError},
     sel_handler::SelHandler,
     svsc_handler::SvscHandler,
-    ChanneledMessage,
     InformEvent,
 };
 use common::messages::{
     sel::SelMessage,
     svsc::{Cookie, LeaseId, SvscMessage},
+    ChanneledMessage,
     Message,
     MessageComponent,
 };

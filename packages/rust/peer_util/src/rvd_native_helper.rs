@@ -1,10 +1,11 @@
 use crate::{
-    helpers::{
-        clipboard_type_map::get_native_clipboard,
-        network_mouse_button_to_native::network_mouse_button_to_native,
-    },
+    clipboard_type_map::get_native_clipboard,
+    network_mouse_button_to_native::network_mouse_button_to_native,
+};
+use common::messages::rvd::{ButtonsMask, DisplayId, RvdMessage};
+use native::api::{NativeApiTemplate, NativeId};
+use peer::{
     rvd::{
-        DisplayType,
         RvdClientError,
         RvdClientHandler,
         RvdClientInform,
@@ -15,8 +16,7 @@ use crate::{
     },
     InformEvent,
 };
-use common::messages::rvd::{ButtonsMask, RvdMessage};
-use native::api::NativeApiTemplate;
+use std::collections::HashMap;
 
 pub fn rvd_client_native_helper<T: NativeApiTemplate>(
     msg: RvdMessage,
@@ -63,6 +63,7 @@ pub fn rvd_host_native_helper<T: NativeApiTemplate>(
     events: &mut Vec<InformEvent>,
     rvd: &mut RvdHostHandler,
     native: &mut T,
+    rvd_native_id_map: &HashMap<DisplayId, NativeId>,
 ) -> Result<(), HostError<T>> {
     let mut local_events = Vec::new();
     rvd._handle(msg, &mut local_events)?;
@@ -70,31 +71,31 @@ pub fn rvd_host_native_helper<T: NativeApiTemplate>(
         match &inform {
             InformEvent::RvdHostInform(event) => match event {
                 RvdHostInform::MouseInput(event) => {
-                    match event.display_type {
-                        DisplayType::Monitor => {
+                    let native_id = rvd_native_id_map.get(&event.display_id).unwrap(); // TODO
+                    match native_id {
+                        NativeId::Monitor(id) => {
                             native
                                 .set_pointer_position_absolute(
                                     event.x_location as u32,
                                     event.y_location as u32,
-                                    event.native_id,
+                                    *id,
                                 )
                                 .map_err(HostError::NativeError)?;
                         }
-                        DisplayType::Window => {
+                        NativeId::Window(id) => {
                             native
                                 .set_pointer_position_relative(
                                     event.x_location as u32,
                                     event.y_location as u32,
-                                    event.native_id,
+                                    *id,
                                 )
                                 .map_err(HostError::NativeError)?;
                         }
                     }
                     for mask in ButtonsMask::iter() {
-                        let window_id = if event.display_type == DisplayType::Window {
-                            Some(event.native_id)
-                        } else {
-                            None
+                        let window_id = match native_id {
+                            NativeId::Monitor(_) => None,
+                            NativeId::Window(id) => Some(*id),
                         };
                         if event.button_delta.contains(*mask) {
                             native

@@ -1,6 +1,10 @@
 use std::fmt::{Debug, Display, Formatter};
 
-use image::RgbImage;
+#[derive(Clone)]
+pub enum NativeId {
+    Monitor(MonitorId),
+    Window(WindowId),
+}
 
 pub type MonitorId = u32;
 pub type WindowId = u32;
@@ -67,7 +71,11 @@ impl Display for ClipboardType {
     }
 }
 
-pub type Frame = RgbImage;
+pub struct BGRAFrame {
+    pub data: Vec<u8>,
+    pub width: u32,
+    pub height: u32,
+}
 
 pub trait NativeApiTemplate {
     type Error: Debug;
@@ -115,23 +123,23 @@ pub trait NativeApiTemplate {
 
     fn windows(&mut self) -> Result<Vec<Window>, Self::Error>;
 
-    fn capture_monitor_frame(&mut self, monitor_id: MonitorId) -> Result<Frame, Self::Error>;
+    fn capture_monitor_frame(&mut self, monitor_id: MonitorId) -> Result<BGRAFrame, Self::Error>;
 
     fn update_monitor_frame(
         &mut self,
         monitor_id: u32,
-        cap: &mut Frame,
+        cap: &mut BGRAFrame,
     ) -> Result<(), Self::Error> {
         *cap = self.capture_monitor_frame(monitor_id)?;
         Ok(())
     }
 
-    fn capture_window_frame(&mut self, window_id: WindowId) -> Result<Frame, Self::Error>;
+    fn capture_window_frame(&mut self, window_id: WindowId) -> Result<BGRAFrame, Self::Error>;
 
     fn update_window_frame(
         &mut self,
         window_id: WindowId,
-        cap: &mut Frame,
+        cap: &mut BGRAFrame,
     ) -> Result<(), Self::Error> {
         *cap = self.capture_window_frame(window_id)?;
         Ok(())
@@ -215,11 +223,14 @@ pub(crate) mod dummy {
             unimplemented!()
         }
 
-        fn capture_monitor_frame(&mut self, _monitor_id: MonitorId) -> Result<Frame, Self::Error> {
+        fn capture_monitor_frame(
+            &mut self,
+            _monitor_id: MonitorId,
+        ) -> Result<BGRAFrame, Self::Error> {
             unimplemented!()
         }
 
-        fn capture_window_frame(&mut self, _window_id: WindowId) -> Result<Frame, Self::Error> {
+        fn capture_window_frame(&mut self, _window_id: WindowId) -> Result<BGRAFrame, Self::Error> {
             unimplemented!()
         }
     }

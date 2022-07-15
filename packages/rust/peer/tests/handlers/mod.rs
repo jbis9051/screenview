@@ -1,4 +1,3 @@
-mod rvd_native_test;
 mod rvd_test;
 mod sel_test;
 mod svsc_test;

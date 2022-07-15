@@ -1,0 +1,19 @@
+[package]
+name = "peer_util"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+common = {path = "../common"}
+native = {path="../native"}
+peer = {path="../peer"}
+io = {path="../io"}
+capture = {path="../capture"}
+event_loop ={path="../event_loop"}
+video_process = {path="../video_process"}
+rtp = { git = "https://github.com/Cassy343/rtp", branch = "code-improvements" }
+thiserror = "1.0.31"
+dcv-color-primitives = "0.5.1"
+image = "0.24.2"

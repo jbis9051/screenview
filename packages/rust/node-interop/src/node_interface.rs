@@ -1,8 +1,5 @@
 // i got a bit macro happy in this file
-use common::messages::{
-    rvd::{AccessMask, DisplayInformation},
-    svsc::EstablishSessionStatus,
-};
+use common::messages::{rvd::AccessMask, svsc::EstablishSessionStatus};
 use neon::{object::Object, prelude::*};
 use std::sync::Arc;
 
@@ -64,7 +61,7 @@ impl_try_into_js_type!(
     u16 => |cx, me| Ok(JsNumber::new(cx, me).upcast()),
     String => |cx, me| Ok(JsString::new(cx, me).upcast()),
     EstablishSessionStatus => |cx, me| Ok(JsNumber::new(cx, me as u8).upcast()),
-    DisplayInformation => |cx, me| Ok(js_object!(cx,
+    /*DisplayInformation => |cx, me| Ok(js_object!(cx,
         {
             "display_id" : me.display_id,
             "width" : me.width,
@@ -72,9 +69,9 @@ impl_try_into_js_type!(
             "controllable": me.access
                     .contains(AccessMask::CONTROLLABLE)
         }
-    )),
-    Vec<u8> => |cx, me| Ok(JsArrayBuffer::external(cx, me).upcast()),
-    Vec<DisplayInformation> => |cx, me| Ok(js_array!(cx, me))
+    )),*/
+    Vec<u8> => |cx, me| Ok(JsArrayBuffer::external(cx, me).upcast())
+    //Vec<DisplayInformation> => |cx, me| Ok(js_array!(cx, me))
 );
 
 
@@ -134,6 +131,6 @@ vtable_methods!(
     wpskka_client_authentication_successful(),
     wpskka_client_out_of_authentication_schemes(), // aka authentication_failed
     /* rvd - client */
-    rvd_display_update(clipboardReadable: bool, displays: Vec<DisplayInformation>),
+    //rvd_display_update(clipboardReadable: bool, displays: Vec<DisplayInformation>),
     rvd_frame_data(display_id: u8, data: Vec<u8>)
 );

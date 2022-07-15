@@ -1,8 +1,12 @@
 use crate::{
-    capture::FrameUpdate,
     debug,
     rvd::{
-        PermissionError::{ClipboardRead, ClipboardWrite, MouseInput},
+        PermissionError::{
+            ClipboardRead,
+            ClipboardWrite,
+            KeyInput as KeyInputPermission,
+            MouseInput,
+        },
         RvdError,
         RvdHandlerTrait,
     },
@@ -14,73 +18,43 @@ use common::{
         AccessMask,
         ButtonsMask,
         ClipboardType,
-        DisplayChange,
         DisplayId,
-        DisplayInformation,
-        FrameData,
+        DisplayShare,
+        DisplayUnshare,
         KeyInput,
+        PermissionMask,
+        PermissionsUpdate,
         ProtocolVersion,
         RvdMessage,
     },
 };
-use native::api::{MonitorId, WindowId};
-use std::fmt::Debug;
+use std::{
+    collections::HashMap,
+    fmt::Debug,
+    time::{Duration, Instant},
+};
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Display {
-    Monitor(MonitorId),
-    Window(WindowId),
-}
-
-impl Display {
-    pub fn id(&self) -> u32 {
-        match *self {
-            Self::Monitor(id) => id,
-            Self::Window(id) => id,
-        }
-    }
-
-    pub fn display_type(&self) -> DisplayType {
-        match self {
-            Self::Monitor(_) => DisplayType::Monitor,
-            Self::Window(_) => DisplayType::Window,
-        }
-    }
-}
-
-#[derive(PartialEq, Eq, Copy, Clone)]
-pub enum DisplayType {
-    Monitor,
-    Window,
+enum ShareTime {
+    WaitingAck(Instant),
+    Acked,
 }
 
 struct SharedDisplay {
-    needs_flush: bool,
-    frame_number: u32,
-    display: RvdDisplay,
-}
-
-pub struct RvdDisplay {
-    pub native_id: u32,
-    pub name: String,
-    pub display_type: DisplayType,
-    pub width: u16,
-    pub height: u16,
+    share_time: ShareTime,
+    access_mask: AccessMask,
 }
 
 #[derive(Copy, Clone, Debug)]
 pub enum HostState {
     Handshake,
-    WaitingForDisplayChangeReceived,
-    SendData,
+    Ready,
 }
 
 // While the spec allows for each individual display to be controllable or not we only support all are controllable or none are
 pub struct RvdHostHandler {
     state: HostState,
-    clipboard_readable: bool,
-    controllable: bool,
-    shared_displays: Vec<Option<SharedDisplay>>,
+    permissions: PermissionMask,
+    shared_displays: HashMap<DisplayId, SharedDisplay>,
 }
 
 impl Default for RvdHostHandler {
@@ -93,9 +67,8 @@ impl RvdHostHandler {
     pub fn new() -> Self {
         Self {
             state: HostState::Handshake,
-            clipboard_readable: false,
-            controllable: false,
-            shared_displays: Vec::new(),
+            permissions: PermissionMask::empty(),
+            shared_displays: HashMap::new(),
         }
     }
 
@@ -105,115 +78,74 @@ impl RvdHostHandler {
         })
     }
 
-    pub fn set_clipboard_readable(&mut self, is_readable: bool) {
-        if self.clipboard_readable == is_readable {
-            return;
-        }
-        self.clipboard_readable = is_readable;
-        // TODO send update
-    }
-
-    pub fn set_controllable(&mut self, is_controllable: bool) {
-        if self.controllable == is_controllable {
-            return;
-        }
-        self.controllable = is_controllable;
-        // TODO send update
-    }
-
-    pub fn share_display(&mut self, display: RvdDisplay) -> ShareDisplayResult {
-        let mut slot_info = None;
-
-        for (index, slot) in self.shared_displays.iter_mut().enumerate() {
-            match slot {
-                Some(shared) => {
-                    if shared.display.native_id == display.native_id
-                        && shared.display.display_type == display.display_type
-                    {
-                        shared.needs_flush = shared.display.width != display.width
-                            || shared.display.height != display.height;
-                        shared.display = display;
-                        return ShareDisplayResult::AlreadySharing(index as DisplayId);
-                    }
-                }
-                None =>
-                    if slot_info.is_none() {
-                        slot_info = Some((index, slot));
-                    },
-            }
-        }
-
-        let (display_id, slot) = match slot_info {
-            Some((position, slot)) => (position as DisplayId, slot),
-            None => {
-                let num_shared_displays = self.shared_displays.len();
-
-                if num_shared_displays >= 255 {
-                    return ShareDisplayResult::IdLimitReached;
-                }
-
-                self.shared_displays.push(None);
-                (
-                    num_shared_displays as DisplayId,
-                    self.shared_displays.last_mut().unwrap(),
-                )
-            }
-        };
-
-        *slot = Some(SharedDisplay {
-            needs_flush: true,
-            frame_number: 0,
-            display,
-        });
-        ShareDisplayResult::NewlyShared(display_id)
-    }
-
-    /// Add displays using share_display
-    /// This shares all displays in share_buffer. Updates to displays are handled properly.
-    /// share_buffer is cleared (set to Vec::default() aka Vec::new() aka [])
-    pub fn display_update(&mut self) -> RvdMessage {
-        self.state = HostState::WaitingForDisplayChangeReceived;
-
-        let mut access = AccessMask::empty();
-        if self.controllable {
-            access.insert(AccessMask::CONTROLLABLE);
-        }
-
-        let display_information = self
-            .shared_displays
-            .iter_mut()
-            .enumerate()
-            .flat_map(|(index, shared)| shared.as_mut().map(|shared| (index as DisplayId, shared)))
-            .map(|(display_id, shared)| {
-                access.set(AccessMask::FLUSH, shared.needs_flush);
-                shared.needs_flush = false;
-
-                DisplayInformation {
-                    display_id,
-                    width: shared.display.width,
-                    height: shared.display.height,
-                    cell_width: 0,
-                    cell_height: 0,
-                    access,
-                    name: shared.display.name.clone(),
-                }
-            })
-            .collect::<Vec<_>>();
-
-        RvdMessage::DisplayChange(DisplayChange {
-            clipboard_readable: self.clipboard_readable && self.controllable,
-            display_information,
+    pub fn set_permissions(&mut self, permissions: PermissionMask) -> RvdMessage {
+        self.permissions = permissions;
+        RvdMessage::PermissionsUpdate(PermissionsUpdate {
+            permission_mask: permissions,
         })
     }
 
-    pub fn frame_update<'a>(
+    fn find_unused_display_id(&self) -> Option<DisplayId> {
+        for i in 0 .. u8::MAX {
+            if !self.shared_displays.contains_key(&i) {
+                return Some(i);
+            }
+        }
+        None
+    }
+
+    pub fn share_display(
         &mut self,
-        fragments: FrameUpdate<'a>,
-    ) -> impl Iterator<Item = RvdMessage> + 'a {
-        let display_id = fragments.display_id;
+        name: String,
+        access: AccessMask,
+    ) -> Result<(DisplayId, RvdMessage), RvdHostError> {
+        let display_id = self
+            .find_unused_display_id()
+            .ok_or(RvdHostError::RanOutOfDisplayIds)?;
+
+        let msg = RvdMessage::DisplayShare(DisplayShare {
+            display_id,
+            name,
+            access,
+        });
+
+        self.shared_displays.insert(display_id, SharedDisplay {
+            share_time: ShareTime::WaitingAck(Instant::now()),
+            access_mask: access,
+        });
+
+        Ok((display_id, msg))
+    }
+
+    pub fn unshare_display(&mut self, display_id: DisplayId) -> Result<RvdMessage, RvdHostError> {
+        if self.shared_displays.remove(&display_id).is_none() {
+            return Err(RvdHostError::DisplayNotFound(display_id));
+        }
+        Ok(RvdMessage::DisplayUnshare(DisplayUnshare { display_id }))
+    }
+
+    /// This should be called every so often, at minimum probably every second.
+    pub fn check_expired_shares(&mut self) -> Vec<RvdMessage> {
+        let mut unshares = Vec::new();
+        self.shared_displays
+            .retain(|&display_id, share| match share.share_time {
+                ShareTime::WaitingAck(start) =>
+                    if start.elapsed() > Duration::from_secs(5) {
+                        unshares.push(RvdMessage::DisplayUnshare(DisplayUnshare { display_id }));
+                        false
+                    } else {
+                        true
+                    },
+                _ => true,
+            });
+        unshares
+    }
+
+    pub fn frame_update<'a>(&mut self, _pkt: &[u8]) -> impl Iterator<Item = RvdMessage> + 'a {
+        /* let display_id = fragments.display_id;
         let shared_display = self
             .shared_displays
-            .get_mut(display_id as usize)
+            .get_mut(&display_id)
             .and_then(Option::as_mut)
             .expect("invalid or stale display id");
 
@@ -229,7 +161,8 @@ impl RvdHostHandler {
                 cell_number: fragment.cell_number,
                 data: fragment.data,
             })
-        })
+        })*/
+        Vec::new().into_iter()
     }
 
     pub fn _handle(
@@ -244,51 +177,52 @@ impl RvdHostHandler {
                         events.push(InformEvent::RvdHostInform(RvdHostInform::VersionBad));
                         return Ok(());
                     }
-                    self.state = HostState::WaitingForDisplayChangeReceived;
+                    self.state = HostState::Ready;
                     Ok(())
                 }
                 _ => Err(RvdHostError::WrongMessageForState(debug(&msg), self.state)),
             },
-            HostState::WaitingForDisplayChangeReceived => match msg {
-                // TODO edge: Wait for display change and we receive a message
-                RvdMessage::DisplayChangeReceived(_) => {
-                    self.state = HostState::SendData;
+            HostState::Ready => match msg {
+                RvdMessage::DisplayShareAck(msg) => {
+                    let shared = match self.shared_displays.get_mut(&msg.display_id) {
+                        None => return Ok(()),
+                        Some(s) => s,
+                    };
+                    shared.share_time = ShareTime::Acked;
                     Ok(())
                 }
-                _ => Err(RvdHostError::WrongMessageForState(debug(&msg), self.state)),
-            },
-            HostState::SendData => match msg {
                 RvdMessage::MouseInput(msg) => {
-                    if !self.controllable {
+                    let shared = match self.shared_displays.get(&msg.display_id) {
+                        None => return Ok(()),
+                        Some(s) => s,
+                    };
+
+                    if !shared.access_mask.contains(AccessMask::CONTROLLABLE) {
                         return Err(RvdHostError::PermissionsError(MouseInput));
                     }
 
-                    let (_, shared) = self
-                        .shared_displays
-                        .iter()
-                        .enumerate()
-                        .flat_map(|(index, opt)| {
-                            opt.as_ref().map(|shared| (index as DisplayId, shared))
-                        })
-                        .find(|&(id, _)| id == msg.display_id)
-                        .ok_or(RvdHostError::DisplayNotFound(msg.display_id))?;
-
                     events.push(InformEvent::RvdHostInform(RvdHostInform::MouseInput(
                         MouseInputEvent {
+                            display_id: msg.display_id,
                             x_location: msg.x_location,
                             y_location: msg.y_location,
                             button_delta: msg.buttons_delta,
                             button_state: msg.buttons_state,
-                            display_type: shared.display.display_type,
-                            native_id: shared.display.native_id,
                         },
                     )));
+
                     Ok(())
                 }
                 RvdMessage::KeyInput(msg) => {
-                    if !self.controllable {
-                        return Err(RvdHostError::PermissionsError(PermissionError::KeyInput));
+                    // TODO this is dumb, i'm losing brain cells here
+                    if !self
+                        .shared_displays
+                        .iter()
+                        .any(|(_, s)| s.access_mask.contains(AccessMask::CONTROLLABLE))
+                    {
+                        return Err(RvdHostError::PermissionsError(KeyInputPermission));
                     }
+
                     events.push(InformEvent::RvdHostInform(RvdHostInform::KeyboardInput(
                         KeyInput {
                             down: msg.down,
@@ -298,7 +232,7 @@ impl RvdHostHandler {
                     Ok(())
                 }
                 RvdMessage::ClipboardRequest(msg) => {
-                    if !self.clipboard_readable {
+                    if !self.permissions.contains(PermissionMask::CLIPBOARD_READ) {
                         return Err(RvdHostError::PermissionsError(ClipboardRead));
                     }
                     events.push(InformEvent::RvdHostInform(RvdHostInform::ClipboardRequest(
@@ -308,7 +242,7 @@ impl RvdHostHandler {
                     Ok(())
                 }
                 RvdMessage::ClipboardNotification(msg) => {
-                    if !(self.clipboard_readable && self.controllable) {
+                    if !self.permissions.contains(PermissionMask::CLIPBOARD_WRITE) {
                         return Err(RvdHostError::PermissionsError(ClipboardWrite));
                     }
                     if let Some(content) = msg.content {
@@ -352,15 +286,16 @@ pub enum RvdHostError {
     PermissionsError(PermissionError),
     #[error("display not found: id number {0}")]
     DisplayNotFound(DisplayId),
+    #[error("ran out of DisplayIDs. Are you sharing 256 displays?")]
+    RanOutOfDisplayIds,
 }
 
 pub struct MouseInputEvent {
+    pub display_id: DisplayId,
     pub x_location: u16,
     pub y_location: u16,
     pub button_delta: ButtonsMask,
     pub button_state: ButtonsMask,
-    pub display_type: DisplayType,
-    pub native_id: u32,
 }
 
 pub enum RvdHostInform {

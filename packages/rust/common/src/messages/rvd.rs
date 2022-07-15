@@ -22,43 +22,58 @@ pub struct ProtocolVersionResponse {
     pub ok: bool,
 }
 
-#[derive(MessageComponent, Debug, Default, Clone, PartialEq, Eq)]
+
+bitflags! {
+    pub struct PermissionMask: u8 {
+        const CLIPBOARD_READ = 0b1;
+        const CLIPBOARD_WRITE = 0b10;
+    }
+}
+
+impl_bitflags_message_component!(PermissionMask);
+
+#[derive(MessageComponent, Debug)]
 #[message_id(2)]
-pub struct DisplayChange {
-    pub clipboard_readable: bool,
-    #[parse(len_prefixed(1))]
-    pub display_information: Vec<DisplayInformation>,
+pub struct PermissionsUpdate {
+    pub permission_mask: PermissionMask,
 }
 
 pub type DisplayId = u8;
 
 #[derive(MessageComponent, Debug, Clone, PartialEq, Eq)]
-pub struct DisplayInformation {
+#[message_id(3)]
+pub struct DisplayShare {
     pub display_id: DisplayId, // Note: this is not the same as the native id of a monitor or window
-    pub width: u16,
-    pub height: u16,
-    pub cell_width: u16,
-    pub cell_height: u16,
     pub access: AccessMask,
     #[parse(len_prefixed(1))]
     pub name: String,
 }
 
+
 bitflags! {
     pub struct AccessMask: u8 {
-        const FLUSH = 0b01;
-        const CONTROLLABLE = 0b10;
+        const CONTROLLABLE = 0b1;
     }
 }
 
 impl_bitflags_message_component!(AccessMask);
 
 #[derive(MessageComponent, Debug)]
-#[message_id(3)]
-pub struct DisplayChangeReceived {}
+#[message_id(4)]
+pub struct DisplayShareAck {
+    pub display_id: DisplayId,
+}
+
+
+#[derive(MessageComponent, Debug)]
+#[message_id(5)]
+pub struct DisplayUnshare {
+    pub display_id: DisplayId,
+}
+
 
 #[derive(MessageComponent, Debug, Clone, PartialEq, Eq)]
-#[message_id(4)]
+#[message_id(6)]
 pub struct MouseLocation {
     pub display_id: DisplayId,
     pub x_location: u16,
@@ -66,13 +81,13 @@ pub struct MouseLocation {
 }
 
 #[derive(MessageComponent, Debug)]
-#[message_id(5)]
+#[message_id(7)]
 pub struct MouseHidden {
     pub display_id: DisplayId,
 }
 
 #[derive(MessageComponent, Debug)]
-#[message_id(6)]
+#[message_id(8)]
 pub struct MouseInput {
     pub display_id: DisplayId,
     pub x_location: u16,
@@ -111,7 +126,7 @@ impl ButtonsMask {
 impl_bitflags_message_component!(ButtonsMask);
 
 #[derive(MessageComponent, Debug, PartialEq, Eq, Clone)]
-#[message_id(7)]
+#[message_id(9)]
 pub struct KeyInput {
     pub down: bool,
     pub key: u32, // keysym
@@ -265,13 +280,13 @@ impl MessageComponent<'_> for ClipboardMeta {
 }
 
 #[derive(MessageComponent, Debug)]
-#[message_id(8)]
+#[message_id(10)]
 pub struct ClipboardRequest {
     pub info: ClipboardMeta,
 }
 
 #[derive(MessageComponent, Debug, Clone)]
-#[message_id(9)]
+#[message_id(11)]
 pub struct ClipboardNotification {
     pub info: ClipboardMeta,
     pub type_exists: bool,
@@ -293,8 +308,10 @@ pub struct FrameData {
 pub enum RvdMessage {
     ProtocolVersion(ProtocolVersion),
     ProtocolVersionResponse(ProtocolVersionResponse),
-    DisplayChange(DisplayChange),
-    DisplayChangeReceived(DisplayChangeReceived),
+    PermissionsUpdate(PermissionsUpdate),
+    DisplayShare(DisplayShare),
+    DisplayShareAck(DisplayShareAck),
+    DisplayUnshare(DisplayUnshare),
     MouseLocation(MouseLocation),
     MouseHidden(MouseHidden),
     MouseInput(MouseInput),

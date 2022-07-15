@@ -3,10 +3,14 @@ use crate::{
     higher_handler::HigherOutput,
     sel_handler::SelError,
     svsc_handler::SvscError,
-    ChanneledMessage,
     InformEvent,
 };
-use common::messages::{sel::SelMessage, svsc::SvscMessage, Error as MessageComponentError};
+use common::messages::{
+    sel::SelMessage,
+    svsc::SvscMessage,
+    ChanneledMessage,
+    Error as MessageComponentError,
+};
 
 mod lower_handler_direct;
 mod lower_handler_signal;

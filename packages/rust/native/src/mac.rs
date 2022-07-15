@@ -12,14 +12,13 @@ use accessibility_sys::{
 };
 use std::{
     ffi::CStr,
-    fmt::{Display, Formatter},
     ops::Deref,
     os::raw::c_uchar,
     ptr,
+    ptr::copy_nonoverlapping,
     slice::from_raw_parts,
 };
 
-use block::ConcreteBlock;
 use cocoa::{
     appkit::{
         NSApp,
@@ -46,7 +45,7 @@ use cocoa::{
     },
 };
 use core_foundation::{
-    base::{CFTypeRef, FromMutVoid, FromVoid, TCFType, TCFTypeRef},
+    base::{CFTypeRef, FromVoid, TCFType},
     boolean::CFBoolean,
     number::{kCFNumberIntType, CFNumberGetValue, CFNumberRef},
     string::{CFString, CFStringRef},
@@ -64,7 +63,6 @@ use core_graphics::{
         CFDictionaryGetValueIfPresent,
         CFDictionaryRef,
         CGDisplay,
-        CGMainDisplayID,
         CGRect,
         CGRectNull,
     },
@@ -91,7 +89,6 @@ use core_graphics::{
     },
 };
 use core_graphics_types::{base::CGFloat, geometry::CGPoint};
-use image::RgbImage;
 use libc::{c_void, pid_t};
 use objc::{
     runtime::{BOOL, NO, YES},
@@ -227,35 +224,45 @@ impl MacApi {
         true
     }
 
-    fn cgimage_to_frame(image: &CGImage) -> Result<Frame, ()> {
+    fn cgimage_to_frame(image: &CGImage) -> Result<BGRAFrame, ()> {
         let bytes_per_pixel = image.bits_per_pixel() / 8;
+
         if bytes_per_pixel != 4 {
             return Err(());
         }
-        let data = image.data();
-        let rgba = data.bytes();
-        let rgb = vec![0u8; image.width() * image.height() * 3];
-        let mut rgba_ptr = rgba.as_ptr();
-        let mut rgb_ptr = rgb.as_ptr();
+
         let num_pixels = image.width() * image.height();
+
+        let data = image.data();
+        let bgra_padded = data.bytes();
+
+        let mut bgra = Vec::with_capacity(num_pixels * 4);
+
+        let mut bgra_padded_ptr = bgra_padded.as_ptr();
+        let mut bgra_ptr = bgra.as_mut_ptr();
+
         let padding_per_row =
             image.bytes_per_row() - (image.width() * (image.bits_per_pixel() / 8));
+
         let width = image.width();
         unsafe {
             for i in 0 .. num_pixels {
-                let [b, g, r] = *(rgba_ptr as *const [u8; 3]);
-                *(rgb_ptr as *mut [u8; 3]) = [r, g, b];
-                rgba_ptr = rgba_ptr.add(bytes_per_pixel);
+                copy_nonoverlapping(bgra_padded_ptr, bgra_ptr, 4);
+                bgra_padded_ptr = bgra_padded_ptr.add(bytes_per_pixel);
                 if i > 0 && i % width == 0 {
-                    rgba_ptr = rgba_ptr.add(padding_per_row);
+                    bgra_padded_ptr = bgra_padded_ptr.add(padding_per_row);
                 }
-                rgb_ptr = rgb_ptr.add(3);
+                bgra_ptr = bgra_ptr.add(4);
             }
         }
-        Ok(
-            RgbImage::from_vec(image.width() as u32, image.height() as u32, rgb)
-                .expect("couldn't convert"),
-        )
+
+        unsafe { bgra.set_len((num_pixels * 4) as usize) };
+
+        Ok(BGRAFrame {
+            data: bgra,
+            width: width as _,
+            height: image.height() as _,
+        })
     }
 
     fn set_clipboard_content_impl(type_name: id, content: &[u8]) -> Result<(), Error> {
@@ -568,7 +575,7 @@ impl MacApi {
         Ok(())
     }
 
-    fn capture_monitor_frame_impl(monitor_id: MonitorId) -> Result<Frame, Error> {
+    fn capture_monitor_frame_impl(monitor_id: MonitorId) -> Result<BGRAFrame, Error> {
         let core_display = CGDisplay::new(monitor_id);
         let frame = core_display
             .image()
@@ -576,7 +583,7 @@ impl MacApi {
         Self::cgimage_to_frame(&frame).map_err(|_| CaptureDisplayError(monitor_id.to_string()))
     }
 
-    fn capture_window_frame_impl(window_id: WindowId) -> Result<Frame, Error> {
+    fn capture_window_frame_impl(window_id: WindowId) -> Result<BGRAFrame, Error> {
         let image = CGDisplay::screenshot(
             unsafe { CGRectNull },
             kCGWindowListOptionIncludingWindow,
@@ -840,11 +847,11 @@ impl NativeApiTemplate for MacApi {
             .collect())
     }
 
-    fn capture_monitor_frame(&mut self, monitor_id: MonitorId) -> Result<Frame, Error> {
+    fn capture_monitor_frame(&mut self, monitor_id: MonitorId) -> Result<BGRAFrame, Error> {
         Self::capture_monitor_frame_impl(monitor_id)
     }
 
-    fn capture_window_frame(&mut self, window_id: WindowId) -> Result<Frame, Error> {
+    fn capture_window_frame(&mut self, window_id: WindowId) -> Result<BGRAFrame, Error> {
         Self::capture_window_frame_impl(window_id)
     }
 }

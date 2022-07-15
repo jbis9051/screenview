@@ -1,4 +1,4 @@
-use common::messages::rvd::{DisplayChangeReceived, ProtocolVersionResponse, RvdMessage};
+use common::messages::rvd::{DisplayShareAck, ProtocolVersionResponse, RvdMessage};
 use peer::rvd::{RvdClientHandler, RvdHostHandler};
 
 pub fn handshake(host: Option<&mut RvdHostHandler>, client: Option<&mut RvdClientHandler>) {
@@ -15,8 +15,6 @@ pub fn handshake(host: Option<&mut RvdHostHandler>, client: Option<&mut RvdClien
 
     if let Some(host) = host {
         let msg = RvdMessage::ProtocolVersionResponse(ProtocolVersionResponse { ok: true });
-        host._handle(msg, &mut events).expect("handler failed");
-        let msg = RvdMessage::DisplayChangeReceived(DisplayChangeReceived {});
         host._handle(msg, &mut events).expect("handler failed");
     }
 }

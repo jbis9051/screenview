@@ -12,7 +12,6 @@ use crate::{
         window_captuer_win_gdi::WindowCapturerWinGdi,
     },
 };
-use image::RgbImage;
 use std::{collections::HashMap, string::FromUtf16Error};
 use windows::{
     core::{PCWSTR, PSTR},
@@ -656,7 +655,7 @@ impl NativeApiTemplate for WindowsApi {
             .collect())
     }
 
-    fn capture_monitor_frame(&mut self, monitor_id: MonitorId) -> Result<Frame, Self::Error> {
+    fn capture_monitor_frame(&mut self, monitor_id: MonitorId) -> Result<BGRAFrame, Self::Error> {
         let capturer = self
             .monitor_capturers
             .iter()
@@ -681,10 +680,14 @@ impl NativeApiTemplate for WindowsApi {
             .capture()
             .map_err(|()| Error::WindowsApiError("GDI Capture".to_string()))?;
 
-        Ok(RgbImage::from_vec(width, height, data).expect("Failed to create image"))
+        Ok(BGRAFrame {
+            width,
+            height,
+            data,
+        })
     }
 
-    fn capture_window_frame(&mut self, window_id: WindowId) -> Result<Frame, Self::Error> {
+    fn capture_window_frame(&mut self, window_id: WindowId) -> Result<BGRAFrame, Self::Error> {
         let capturer = self
             .window_capturers
             .iter()
@@ -706,7 +709,11 @@ impl NativeApiTemplate for WindowsApi {
             .capture()
             .map_err(|()| Error::WindowsApiError("GDI Capture".to_string()))?;
 
-        Ok(RgbImage::from_vec(width, height, data).expect("Failed to create image"))
+        Ok(BGRAFrame {
+            width,
+            height,
+            data,
+        })
     }
 }
 

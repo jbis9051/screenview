@@ -13,10 +13,6 @@ thiserror = "1.0.30"
 [build-dependencies]
 cfg-if = "1.0.0"
 
-[dependencies.image]
-version = "0.23.14"
-default-features = false
-
 
 [target.'cfg(all(target_os="linux", not(dummy_native)))'.dependencies]
 x11 = { version = "2.19.1", features = ["xtest"] }
@@ -35,5 +31,5 @@ accessibility-sys = "0.1.3"
 block = "0.1.6"
 
 [target.'cfg(all(target_os="windows", not(dummy_native)))'.dependencies]
-windows={version = "0.37.0", features =["Win32_Graphics_Gdi", "Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse", "Win32_System_DataExchange", "Win32_System_SystemServices", "Win32_System_Memory", "Win32_Storage_Xps", "Win32_System_SystemInformation", "Win32_Graphics_Dwm"]}
+windows = { version = "0.37.0", features = ["Win32_Graphics_Gdi", "Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse", "Win32_System_DataExchange", "Win32_System_SystemServices", "Win32_System_Memory", "Win32_Storage_Xps", "Win32_System_SystemInformation", "Win32_Graphics_Dwm"] }
 once_cell = "1.9.0"

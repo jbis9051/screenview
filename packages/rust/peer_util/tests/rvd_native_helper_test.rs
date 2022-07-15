@@ -1,32 +1,53 @@
-use crate::helper::rvd_helper::handshake;
 use common::messages::rvd::{
+    AccessMask,
     ButtonsMask,
     ClipboardMeta,
     ClipboardNotification,
     ClipboardRequest,
     ClipboardType,
-    DisplayChangeReceived,
+    DisplayShareAck,
     KeyInput,
     MouseInput,
+    PermissionMask,
+    ProtocolVersionResponse,
     RvdMessage,
 };
 use native::api::{
+    BGRAFrame,
     ClipboardType as NativeClipboardType,
-    Frame,
     Key,
     Monitor,
     MonitorId,
     MouseButton,
     MousePosition,
     NativeApiTemplate,
+    NativeId,
     Window,
     WindowId,
 };
-use peer::{
-    helpers::rvd_native_helper::{rvd_client_native_helper, rvd_host_native_helper},
-    rvd::{DisplayType, RvdClientHandler, RvdDisplay, RvdHostHandler},
-};
-use std::convert::Infallible;
+use peer::rvd::{RvdClientHandler, RvdHostHandler};
+use peer_util::rvd_native_helper::{rvd_client_native_helper, rvd_host_native_helper};
+use std::{collections::HashMap, convert::Infallible};
+
+// TODO consider not involving the RvdHandlers and just testing rvd_{client, host}_native_helper
+
+pub fn handshake(host: Option<&mut RvdHostHandler>, client: Option<&mut RvdClientHandler>) {
+    let mut write = Vec::new();
+    let mut events = Vec::new();
+
+    if let Some(client) = client {
+        let protocol_message = RvdHostHandler::protocol_version();
+
+        client
+            ._handle(protocol_message, &mut write, &mut events)
+            .expect("handler failed");
+    }
+
+    if let Some(host) = host {
+        let msg = RvdMessage::ProtocolVersionResponse(ProtocolVersionResponse { ok: true });
+        host._handle(msg, &mut events).expect("handler failed");
+    }
+}
 
 
 #[test]
@@ -66,8 +87,8 @@ fn test_host_notification() {
     let mut native = TesterNative::new();
     let mut host = RvdHostHandler::new();
     handshake(Some(&mut host), None);
-    host.set_controllable(true);
-    host.set_clipboard_readable(true);
+
+    host.set_permissions(PermissionMask::CLIPBOARD_WRITE);
 
     let clipboard: Vec<u8> = vec![1, 2, 3];
 
@@ -82,8 +103,15 @@ fn test_host_notification() {
 
     assert_ne!(native.clipboard_content, clipboard);
 
-    rvd_host_native_helper(msg, &mut write, &mut events, &mut host, &mut native)
-        .expect("handler failed");
+    rvd_host_native_helper(
+        msg,
+        &mut write,
+        &mut events,
+        &mut host,
+        &mut native,
+        &HashMap::new(),
+    )
+    .expect("handler failed");
 
     assert_eq!(write.len(), 0);
     assert_eq!(events.len(), 0);
@@ -97,8 +125,11 @@ fn test_host_key_input() {
     let mut events = Vec::new();
     let mut native = TesterNative::new();
     let mut host = RvdHostHandler::new();
+
     handshake(Some(&mut host), None);
-    host.set_controllable(true);
+
+    host.share_display("test".to_string(), AccessMask::CONTROLLABLE)
+        .expect("share_display failed");
 
     let msg = RvdMessage::KeyInput(KeyInput {
         down: true,
@@ -107,7 +138,9 @@ fn test_host_key_input() {
 
     assert!(!native.down_keys.contains(&40));
 
-    rvd_host_native_helper(msg, &mut write, &mut events, &mut host, &mut native)
+    let map = HashMap::new();
+
+    rvd_host_native_helper(msg, &mut write, &mut events, &mut host, &mut native, &map)
         .expect("handler failed");
 
     assert_eq!(write.len(), 0);
@@ -119,7 +152,8 @@ fn test_host_key_input() {
         down: false,
         key: 40,
     });
-    rvd_host_native_helper(msg, &mut write, &mut events, &mut host, &mut native)
+
+    rvd_host_native_helper(msg, &mut write, &mut events, &mut host, &mut native, &map)
         .expect("handler failed");
 
     assert_eq!(write.len(), 0);
@@ -136,30 +170,25 @@ fn test_host_mouse_input() {
     let mut native = TesterNative::new();
     let mut host = RvdHostHandler::new();
     handshake(Some(&mut host), None);
-    host.set_controllable(true);
+
+    let mut map = HashMap::new();
     let monitor = &native.monitors[0];
-    host.share_display(RvdDisplay {
-        native_id: monitor.id,
-        name: monitor.name.clone(),
-        display_type: DisplayType::Monitor,
-        width: monitor.width as u16,
-        height: monitor.height as u16,
-    });
-    let update = host.display_update();
+
+    let (display_id, _) = host
+        .share_display(monitor.name.clone(), AccessMask::CONTROLLABLE)
+        .expect("share_display failed");
+
+    map.insert(display_id, NativeId::Monitor(monitor.id));
+
     host._handle(
-        RvdMessage::DisplayChangeReceived(DisplayChangeReceived {}),
+        RvdMessage::DisplayShareAck(DisplayShareAck { display_id }),
         &mut events,
     )
     .expect("handler failed");
 
-    let update = match update {
-        RvdMessage::DisplayChange(change) => change,
-        _ => panic!("bad update received"),
-    };
-
 
     let msg = RvdMessage::MouseInput(MouseInput {
-        display_id: update.display_information[0].display_id,
+        display_id,
         x_location: 150,
         y_location: 300,
         buttons_delta: ButtonsMask::empty(),
@@ -169,7 +198,7 @@ fn test_host_mouse_input() {
     assert_eq!(native.pointer_x, 0);
     assert_eq!(native.pointer_y, 0);
 
-    rvd_host_native_helper(msg, &mut write, &mut events, &mut host, &mut native)
+    rvd_host_native_helper(msg, &mut write, &mut events, &mut host, &mut native, &map)
         .expect("handler failed");
 
     assert_eq!(write.len(), 0);
@@ -189,7 +218,8 @@ fn test_host_clipboard_request() {
     let mut native = TesterNative::new();
     let mut host = RvdHostHandler::new();
     handshake(Some(&mut host), None);
-    host.set_clipboard_readable(true);
+
+    host.set_permissions(PermissionMask::CLIPBOARD_READ);
 
     let clip: Vec<u8> = vec![10, 20, 30];
 
@@ -202,8 +232,15 @@ fn test_host_clipboard_request() {
         },
     });
 
-    rvd_host_native_helper(msg, &mut write, &mut events, &mut host, &mut native)
-        .expect("handler failed");
+    rvd_host_native_helper(
+        msg,
+        &mut write,
+        &mut events,
+        &mut host,
+        &mut native,
+        &HashMap::new(),
+    )
+    .expect("handler failed");
 
     assert_eq!(write.len(), 1);
     assert_eq!(events.len(), 0);
@@ -345,11 +382,11 @@ impl NativeApiTemplate for TesterNative {
         Ok(self.windows.clone())
     }
 
-    fn capture_monitor_frame(&mut self, _monitor_id: MonitorId) -> Result<Frame, Self::Error> {
+    fn capture_monitor_frame(&mut self, _monitor_id: MonitorId) -> Result<BGRAFrame, Self::Error> {
         unimplemented!()
     }
 
-    fn capture_window_frame(&mut self, _window_id: WindowId) -> Result<Frame, Self::Error> {
+    fn capture_window_frame(&mut self, _window_id: WindowId) -> Result<BGRAFrame, Self::Error> {
         unimplemented!()
     }
 }
