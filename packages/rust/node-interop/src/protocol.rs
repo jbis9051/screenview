@@ -58,6 +58,7 @@ pub enum RequestContent {
     },
     ShareDisplays {
         displays: Vec<NativeId>,
+        controllable: bool,
     },
 }
 

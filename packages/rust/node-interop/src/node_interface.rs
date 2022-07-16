@@ -1,5 +1,5 @@
 // i got a bit macro happy in this file
-use common::messages::{rvd::AccessMask, svsc::EstablishSessionStatus};
+use common::messages::svsc::EstablishSessionStatus;
 use neon::{object::Object, prelude::*};
 use std::sync::Arc;
 

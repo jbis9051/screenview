@@ -129,8 +129,20 @@ where
         &mut self,
         name: String,
         access: AccessMask,
-    ) -> Result<(DisplayId, RvdMessage), RvdHostError> {
-        self.higher.share_display(name, access) // TODO this should send messages instead of returning
+    ) -> Result<DisplayId, HandlerError> {
+        let (display_id, message) = self.higher.share_display(name, access)?; // TODO this should send messages instead of returning
+        let higher_output = self.higher.send(message)?;
+        let lower_output = self.lower.send(higher_output)?;
+        self.io_handle.send(lower_output)?;
+        Ok(display_id)
+    }
+
+    pub fn unshare_display(&mut self, display_id: DisplayId) -> Result<(), HandlerError> {
+        let message = self.higher.unshare_display(display_id)?;
+        let higher_output = self.higher.send(message)?;
+        let lower_output = self.lower.send(higher_output)?;
+        self.io_handle.send(lower_output)?;
+        Ok(())
     }
 
     pub fn send_frame_update(

@@ -7,7 +7,7 @@ use crate::{
 };
 use capture::CapturePool;
 use common::messages::{
-    rvd::ButtonsMask,
+    rvd::{AccessMask, ButtonsMask, DisplayId},
     svsc::{Cookie, LeaseId},
 };
 use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
@@ -17,14 +17,18 @@ use event_loop::{
     JoinOnDrop,
 };
 use io::{DirectServer, TcpHandle};
-use native::{api::NativeId, NativeApi, NativeApiError};
+use native::{
+    api::{NativeApiTemplate, NativeId},
+    NativeApi,
+    NativeApiError,
+};
 use neon::{
     prelude::{Channel, Context, Finalize, JsResult, JsUndefined, TaskContext, Value},
     types::Deferred,
 };
-use peer::rvd::ShareDisplayResult;
 use peer_util::frame_processor::FrameProcessor;
 use std::{
+    collections::HashMap,
     net::TcpStream,
     thread::{self, JoinHandle},
 };
@@ -78,6 +82,7 @@ pub struct Instance {
     node_interface: NodeInterface,
     capture_pool: CapturePool<FrameProcessor>,
     channel: Channel,
+    shared_displays: HashMap<DisplayId, NativeId>,
 }
 
 impl Instance {
@@ -104,6 +109,7 @@ impl Instance {
                         waker_core.make_waker(Events::FrameUpdate as u32),
                     ),
                     channel,
+                    shared_displays: Default::default(),
                 };
 
                 waker_tx
@@ -213,8 +219,10 @@ impl Instance {
                 self.handle_set_controllable(promise, is_controllable),
             RequestContent::SetClipboardReadable { is_readable } =>
                 self.handle_set_clipboard_readable(promise, is_readable),
-            RequestContent::ShareDisplays { ref displays } =>
-                self.handle_share_displays(promise, displays),
+            RequestContent::ShareDisplays {
+                displays,
+                controllable,
+            } => self.handle_share_displays(promise, displays, controllable),
         }
     }
 
@@ -397,69 +405,68 @@ impl Instance {
     fn handle_share_displays(
         &mut self,
         promise: Deferred,
-        displays: &[NativeId],
+        displays: Vec<NativeId>,
+        controllable: bool,
     ) -> Result<(), anyhow::Error> {
-        /*
-                 - Step 1: figure out which displays are not currently captured and need to be activated
-                 - Step 2: request monitor and window info from native which we will attempt to map onto
-                   the captured displays later
-                 - Step 3: find inactive frame captures which can be re-activated with a new display
-                 - Step 4: add new captures if necessary
-                 - Step 5: activate captures and record monitor/window info for a display change update
-                 - Step 6: report displays that couldn't be found and send display change message
+        // Get stuff to unsshare
+        let to_unshare: Vec<_> = self
+            .shared_displays
+            .iter()
+            .filter(|(_, native)| !displays.iter().any(|native1| native1 == *native))
+            .map(|(display_id, _)| *display_id)
+            .collect();
 
+        // Unshare them
+        for display_id in to_unshare {
+            self.shared_displays.remove(&display_id);
+            forward!(self.sv_handler, [HostSignal, HostDirect], |stack| stack
+                .unshare_display(display_id));
+        }
 
-                let display_info = match DisplayInfoStore::new(&mut self.native) {
-                    Ok(store) => store,
-                    Err(error) => {
-                        self.settle_with_result(promise, Err(error), Self::undefined);
-                        return Ok(());
-                    }
-                };
-
-                let mut display_ids = Vec::with_capacity(displays.len());
-
-                for &display in displays {
-                    let rvd_display = match display_info.gen_display_info(display) {
-                        Some(rvd_display) => rvd_display,
-                        None => todo!("tell node that we couldn't find this display"),
-                    };
-
-                    let id = forward!(self.sv_handler, [HostSignal, HostDirect], |stack| stack
-                        .share_display(rvd_display));
-                    match id {
-                        ShareDisplayResult::NewlyShared(display_id) =>
-                            display_ids.push((display, display_id)),
-                        ShareDisplayResult::AlreadySharing(_) => {} // Ignore
-                        ShareDisplayResult::IdLimitReached =>
-                            todo!("tell node that we ran out of display IDs"),
-                    }
-                }
-
-                let new_displays = display_ids
+        // Get stuff to share
+        let to_share: Vec<NativeId> = displays
+            .into_iter()
+            .filter(|native| {
+                !self
+                    .shared_displays
                     .iter()
-                    .copied()
-                    .filter(|&(_, display_id)| !self.capture_pool.is_capturing(display_id))
-                    .collect::<Vec<_>>();
-                let num_new_displays = new_displays.len();
+                    .any(|(_, native_id)| native_id == native)
+            })
+            .collect::<Vec<_>>();
 
-                if num_new_displays == 0 {
-                    return Ok(());
-                }
+        // Get meta info
+        let windows = self.native.windows()?;
+        let monitors = self.native.monitors()?;
 
-                for (display, display_id) in new_displays {
-                    let capture = match self.capture_pool.get_or_create_inactive() {
-                        Ok(capture) => capture,
-                        Err(_error) => todo!("tell node that we couldn't create a new capture"),
-                    };
+        // Share them, skip errors
+        for native_id in to_share {
+            let name = match match native_id {
+                NativeId::Monitor(m) => monitors
+                    .iter()
+                    .find(|m1| m1.id == m)
+                    .map(|m| m.name.clone()),
+                NativeId::Window(w) => windows.iter().find(|w1| w1.id == w).map(|w| w.name.clone()),
+            } {
+                None => continue, // TODO If we can't find it then just skip I guess
+                Some(n) => n,
+            };
+            let display_id =
+                match forward!(self.sv_handler, [HostSignal, HostDirect], |stack| stack
+                    .share_display(
+                        name,
+                        if controllable {
+                            AccessMask::CONTROLLABLE
+                        } else {
+                            AccessMask::empty()
+                        }
+                    )) {
+                    Err(_) => continue, // TODO
+                    Ok(display_id) => display_id,
+                };
+            self.shared_displays.insert(display_id, native_id);
+        }
 
-                    capture.activate(display, display_id);
-                }
-
-                let result = forward!(self.sv_handler, [HostSignal, HostDirect], |stack| stack
-                    .send_display_update());
-                self.settle_with_result(promise, result, Self::undefined);
-        */
+        promise.settle_with(&self.channel, move |mut cx| Ok(cx.undefined()));
         Ok(())
     }
 }

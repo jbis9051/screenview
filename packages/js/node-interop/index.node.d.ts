@@ -96,9 +96,11 @@ export declare function set_clipboard_readable(
     is_readable: boolean
 ): Promise<undefined>;
 
+// Calls to this function replace all current displays with the given ones
 export declare function share_displays(
     handle: HostInstance,
-    displays: Display[]
+    displays: Display[],
+    controllable: boolean
 ): Promise<undefined>;
 
 export declare function thumbnails(

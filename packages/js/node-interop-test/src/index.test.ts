@@ -97,7 +97,7 @@ test('direct connection', async () => {
 
     expect(firstMonitor).toBeDefined();
 
-    await rust.share_displays(host, [firstMonitor!]);
+    await rust.share_displays(host, [firstMonitor!], false);
 
     const [id, data] = (await waitForEvent(
         vtableClient,

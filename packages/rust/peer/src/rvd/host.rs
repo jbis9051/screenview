@@ -307,9 +307,3 @@ pub enum RvdHostInform {
     ClipboardRequest(bool, ClipboardType),
     ClipboardNotification(Vec<u8>, ClipboardType),
 }
-
-pub enum ShareDisplayResult {
-    NewlyShared(DisplayId),
-    AlreadySharing(DisplayId),
-    IdLimitReached,
-}

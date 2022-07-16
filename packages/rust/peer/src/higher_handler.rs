@@ -76,8 +76,18 @@ impl HigherHandlerHost {
         &mut self,
         name: String,
         access: AccessMask,
-    ) -> Result<(DisplayId, RvdMessage), RvdHostError> {
-        self.rvd.share_display(name, access)
+    ) -> Result<(DisplayId, RvdMessage), HigherError> {
+        Ok(self
+            .rvd
+            .share_display(name, access)
+            .map_err(RvdError::Host)?)
+    }
+
+    pub fn unshare_display(&mut self, display_id: DisplayId) -> Result<RvdMessage, HigherError> {
+        Ok(self
+            .rvd
+            .unshare_display(display_id)
+            .map_err(RvdError::Host)?)
     }
 
     pub fn frame_update<'a>(&mut self, pkt: &[u8]) -> impl Iterator<Item = RvdMessage> + 'a {

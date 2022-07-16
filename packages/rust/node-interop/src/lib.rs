@@ -232,6 +232,8 @@ fn set_clipboard_readable(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise
 fn share_displays(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
     let handle = cx.argument::<JsBox<InstanceHandle>>(0)?;
     let js_displays = cx.argument::<JsArray>(1)?;
+    let controllable = cx.argument::<JsBoolean>(2)?.value(&mut cx);
+
     let len = js_displays.len(&mut cx);
     let mut displays = Vec::with_capacity(usize::try_from(len).unwrap());
 
@@ -252,7 +254,10 @@ fn share_displays(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
         displays.push(display);
     }
 
-    send_request(&mut cx, handle, RequestContent::ShareDisplays { displays })
+    send_request(&mut cx, handle, RequestContent::ShareDisplays {
+        displays,
+        controllable,
+    })
 }
 
 
