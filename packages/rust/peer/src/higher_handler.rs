@@ -68,6 +68,10 @@ impl HigherHandlerHost {
         }
     }
 
+    pub fn key_exchange(&mut self) -> Result<WpskkaMessage<'static>, HigherError> {
+        Ok(self.wpskka.key_exchange().map_err(WpskkaError::Host)?)
+    }
+
     pub fn set_static_password(&mut self, static_password: Option<Vec<u8>>) {
         self.wpskka.set_static_password(static_password)
     }

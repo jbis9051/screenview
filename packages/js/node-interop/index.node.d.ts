@@ -154,14 +154,14 @@ export interface VTable {
 
     svsc_error_session_request_rejected(status: EstablishSessionStatus): void;
 
-    svsc_error_lease_extention_request_rejected(): void;
+    svsc_error_lease_extension_request_rejected(): void;
 
     /* wpskka - client */
     wpskka_client_password_prompt(): void;
 
     wpskka_client_authentication_successful(): void;
 
-    wpskka_client_out_of_authentication_schemes(): void;
+    wpskka_client_authentication_failed(): void;
 
     /* rvd - client */
     rvd_display_update(

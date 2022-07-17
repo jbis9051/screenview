@@ -6,6 +6,7 @@ import {
     VTableEmitter,
     VTableEvent,
 } from '@screenview/node-interop';
+import * as console from 'console';
 
 function waitForEvent(
     emitter: VTableEmitter,
@@ -32,21 +33,7 @@ function waitForEvent(
         }
     });
 }
-/*
-test('thumbnails', (done) => {
-    let thumbnailHandle: rust.ThumbnailHandle | null = null;
-    thumbnailHandle = rust.thumbnails((thumbs) => {
-        expect(thumbs.length).toBeGreaterThan(0);
-
-        if (thumbnailHandle) {
-            rust.close_thumbnails(thumbnailHandle);
-        }
-
-        done();
-    });
-}); */
-
-test('direct connection', async () => {
+async function main() {
     const vtableHost = new VTableEmitter();
     const vtableClient = new VTableEmitter();
 
@@ -107,4 +94,6 @@ test('direct connection', async () => {
 
     expect(id).toBe(0);
     expect(data.byteLength).toBeGreaterThan(0);
-});
+}
+
+main();

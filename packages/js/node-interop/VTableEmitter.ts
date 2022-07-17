@@ -12,7 +12,7 @@ export enum VTableEvent {
     SvscErrorLeaseExtentionRequestRejected = 'svsc_error_lease_extention_request_rejected',
     WpsskaClientPasswordPrompt = 'wpsska_client_password_prompt',
     WpsskaClientAuthenticationSuccessful = 'wpsska_client_authentication_successful',
-    WpsskaClientOutOfAuthenticationSchemes = 'wpsska_client_out_of_authentication_schemes',
+    WpsskaClientAuthenticationFailed = 'wpsska_client_authentication_failed',
     RvdDisplayUpdate = 'rvd_display_update',
     RvdFrameData = 'rvd_frame_data',
 }
@@ -72,7 +72,7 @@ export class VTableEmitter extends EventEmitter implements VTable {
         this.emit(VTableEvent.SvscErrorSessionRequestRejected, status);
     }
 
-    svsc_error_lease_extention_request_rejected() {
+    svsc_error_lease_extension_request_rejected() {
         this.emit(VTableEvent.SvscErrorLeaseExtentionRequestRejected);
     }
 
@@ -85,8 +85,8 @@ export class VTableEmitter extends EventEmitter implements VTable {
         this.emit(VTableEvent.WpsskaClientAuthenticationSuccessful);
     }
 
-    wpskka_client_out_of_authentication_schemes() {
-        this.emit(VTableEvent.WpsskaClientOutOfAuthenticationSchemes);
+    wpskka_client_authentication_failed() {
+        this.emit(VTableEvent.WpsskaClientAuthenticationFailed);
     }
 
     /* rvd */

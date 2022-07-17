@@ -297,9 +297,7 @@ pub struct ClipboardNotification {
 #[derive(MessageComponent, Debug)]
 #[message_id(10)]
 pub struct FrameData {
-    pub frame_number: u32,
     pub display_id: u8,
-    pub cell_number: u16,
     #[parse(len_prefixed(2))]
     pub data: Vec<u8>,
 }

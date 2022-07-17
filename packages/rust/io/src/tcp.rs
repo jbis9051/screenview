@@ -29,7 +29,6 @@ pub struct TcpHandle {
 }
 
 impl TcpHandle {
-    // Infallible but returns a result for convenience
     pub fn new_from(
         stream: TcpStream,
         result_sender: Sender<TransportResult>,
@@ -101,7 +100,7 @@ fn read_reliable(stream: Arc<TcpStream>, sender: Sender<TransportResult>, waker:
     // - If data is present, collect the message and parse it, otherwise return
 
     let mut buffer = vec![0u8; INIT_BUFFER_CAPACITY];
-    let mut data_end = 0usize;
+    let mut data_end = 0usize; // One byte past the index of the last byte of data in the buffer
 
     loop {
         // No more data is left in the buffer, so we wait for more
@@ -109,6 +108,7 @@ fn read_reliable(stream: Arc<TcpStream>, sender: Sender<TransportResult>, waker:
             data_end = match Read::read(&mut (&*stream), &mut buffer[..]) {
                 Ok(data_end) => data_end,
                 Err(error) => {
+                    // TODO I don't think this is really an error
                     let _ = sender.send(Err(TransportError::Fatal {
                         source: Source::ReadReliable,
                         error,
@@ -149,11 +149,7 @@ fn read_reliable(stream: Arc<TcpStream>, sender: Sender<TransportResult>, waker:
 
         // If there are more messages in the buffer, move their data to the beginning of the buffer
         if data_parsed < data_end {
-            unsafe {
-                let src = buffer.as_ptr().add(data_parsed);
-                let dst = buffer.as_mut_ptr();
-                ptr::copy(src, dst, data_end - data_parsed);
-            }
+            buffer.drain(.. data_parsed);
         } else {
             debug_assert!(data_parsed == data_end);
         }
@@ -168,16 +164,19 @@ fn collect_and_parse_reliable(
     data_end: &mut usize,
 ) -> Result<Vec<u8>, Error> {
     if *data_end < LENGTH_FIELD_WIDTH {
+        // We need to read the length field but there isn't enough data in the buffer to do so
         Read::read_exact(&mut stream, &mut buffer[*data_end .. LENGTH_FIELD_WIDTH])?;
     }
 
+    // The length field indicates the remaining length of the message so we add on the length
+    // field width to get the total length
     let length = match parse_length_field(buffer).checked_add(LENGTH_FIELD_WIDTH) {
         Some(len) => len,
         None => return Err(Error::BadTransportMessage),
     };
 
     collect_reliable(stream, buffer, data_end, length)?;
-    Ok(buffer[LENGTH_FIELD_WIDTH ..].to_vec())
+    Ok(buffer[LENGTH_FIELD_WIDTH .. length].to_vec())
 }
 
 #[inline]

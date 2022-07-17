@@ -14,6 +14,7 @@ use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
 use event_loop::{
     event_loop::{event_loop, EventLoopState, ThreadWaker, ThreadWakerCore},
     oneshot,
+    oneshot::channel,
     JoinOnDrop,
 };
 use io::{DirectServer, TcpHandle};
@@ -26,7 +27,16 @@ use neon::{
     prelude::{Channel, Context, Finalize, JsResult, JsUndefined, TaskContext, Value},
     types::Deferred,
 };
-use peer_util::frame_processor::FrameProcessor;
+use peer::{
+    rvd::{RvdClientInform, RvdHostInform},
+    svsc_handler::SvscInform,
+    wpskka::{WpskkaClientInform, WpskkaHostInform},
+    InformEvent,
+};
+use peer_util::{
+    frame_processor::FrameProcessor,
+    rvd_native_helper::{rvd_client_native_helper, rvd_host_native_helper},
+};
 use std::{
     collections::HashMap,
     net::TcpStream,
@@ -254,19 +264,30 @@ impl Instance {
         Ok(())
     }
 
-    fn handle_direct_connect(&mut self, waker_core: &ThreadWakerCore, stream: TcpStream) {
+    fn handle_direct_connect(
+        &mut self,
+        waker_core: &ThreadWakerCore,
+        stream: TcpStream,
+    ) -> Result<(), anyhow::Error> {
         let io_handle = self.sv_handler.io_handle();
 
         // Terminate the connection
         if io_handle.is_reliable_connected() {
             drop(stream);
-            return;
+            return Ok(());
         }
 
         let waker = waker_core.make_waker(Events::RemoteMessage as u32);
         io_handle.connect_reliable_with(move |result_sender| {
             TcpHandle::new_from(stream, result_sender, waker)
         });
+
+        forward!(self.sv_handler, [HostDirect], |stack| {
+            stack.key_exchange()
+        })
+        .expect("unable to produce key exchange"); // TODO error handling
+
+        Ok(())
     }
 
     fn handle_start_server(
@@ -517,8 +538,8 @@ fn instance_main(
             while handled < MAX_TO_HANDLE {
                 match instance.sv_handler.handle_next_message() {
                     Some(Ok(events)) =>
-                        for _event in events {
-                            todo!("Handle event")
+                        for event in events {
+                            handle_event(&mut instance, event);
                         },
                     Some(Err(error)) => {
                         todo!("Handle this error properly: {}", error)
@@ -584,4 +605,76 @@ fn instance_main(
 
         EventLoopState::Working
     });
+}
+
+
+fn handle_event(instance: &mut Instance, event: InformEvent) -> Result<(), ()> {
+    match event {
+        InformEvent::SvscInform(event) => match event {
+            SvscInform::VersionBad => instance.node_interface.svsc_version_bad(&instance.channel),
+            SvscInform::LeaseUpdate => {
+                let lease_id = instance.sv_handler.lease_id();
+                instance
+                    .node_interface
+                    .svsc_lease_update(&instance.channel, u32::from_be_bytes(lease_id).to_string())
+            }
+            SvscInform::SessionUpdate => instance
+                .node_interface
+                .svsc_session_update(&instance.channel),
+            SvscInform::SessionEnd => instance.node_interface.svsc_session_end(&instance.channel),
+            SvscInform::LeaseRequestRejected =>
+                instance.node_interface.svsc_session_end(&instance.channel),
+            SvscInform::SessionRequestRejected(status) => instance
+                .node_interface
+                .svsc_error_session_request_rejected(&instance.channel, status),
+            SvscInform::LeaseExtensionRequestRejected => instance
+                .node_interface
+                .svsc_error_lease_extension_request_rejected(&instance.channel),
+        },
+        InformEvent::RvdClientInform(event) => {
+            let event = match rvd_client_native_helper(event, &mut instance.native)
+                .expect("rvd_client_native_helper failed")
+            {
+                None => return Ok(()),
+                Some(event) => event,
+            };
+
+            if let RvdClientInform::FrameData(data) = event {
+                instance.node_interface.rvd_frame_data(
+                    &instance.channel,
+                    data.display_id,
+                    data.data,
+                )
+            }
+            // TODO
+        }
+        InformEvent::RvdHostInform(event) => {
+            let (inform, msg) =
+                rvd_host_native_helper(event, &mut instance.native, &instance.shared_displays)
+                    .expect("rvd_host_native_helper failed");
+            if let Some(_inform) = inform {
+                // TODO
+            }
+            if let Some(_msg) = msg {
+                // TODO
+            }
+        }
+        InformEvent::WpskkaClientInform(event) => match event {
+            WpskkaClientInform::AuthScheme(_) => {}
+            WpskkaClientInform::PasswordPrompt => instance
+                .node_interface
+                .wpskka_client_password_prompt(&instance.channel),
+            WpskkaClientInform::AuthFailed => instance
+                .node_interface
+                .wpskka_client_authentication_failed(&instance.channel),
+            WpskkaClientInform::AuthSuccessful => instance
+                .node_interface
+                .wpskka_client_authentication_successful(&instance.channel),
+        },
+        InformEvent::WpskkaHostInform(event) => match event {
+            WpskkaHostInform::AuthSuccessful => {}
+            WpskkaHostInform::AuthFailed => {}
+        },
+    }
+    Ok(())
 }

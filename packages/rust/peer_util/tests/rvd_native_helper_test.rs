@@ -25,7 +25,10 @@ use native::api::{
     Window,
     WindowId,
 };
-use peer::rvd::{RvdClientHandler, RvdHostHandler};
+use peer::{
+    rvd::{RvdClientHandler, RvdHostHandler},
+    InformEvent,
+};
 use peer_util::rvd_native_helper::{rvd_client_native_helper, rvd_host_native_helper};
 use std::{collections::HashMap, convert::Infallible};
 
@@ -71,18 +74,29 @@ fn test_client() {
 
     assert_ne!(native.clipboard_content, clipboard);
 
-    rvd_client_native_helper(msg, &mut write, &mut events, &mut client, &mut native)
+    client
+        ._handle(msg, &mut write, &mut events)
         .expect("handler failed");
 
     assert_eq!(write.len(), 0);
-    assert_eq!(events.len(), 0);
+    assert_eq!(events.len(), 1);
+
+    let event = events.remove(0);
+
+    let event = match event {
+        InformEvent::RvdClientInform(e) => e,
+        _ => panic!("unexpected event"),
+    };
+
+    assert!(rvd_client_native_helper(event, &mut native)
+        .expect("handler failed")
+        .is_none());
 
     assert_eq!(native.clipboard_content, clipboard);
 }
 
 #[test]
 fn test_host_notification() {
-    let mut write = Vec::new();
     let mut events = Vec::new();
     let mut native = TesterNative::new();
     let mut host = RvdHostHandler::new();
@@ -103,25 +117,28 @@ fn test_host_notification() {
 
     assert_ne!(native.clipboard_content, clipboard);
 
-    rvd_host_native_helper(
-        msg,
-        &mut write,
-        &mut events,
-        &mut host,
-        &mut native,
-        &HashMap::new(),
-    )
-    .expect("handler failed");
+    host._handle(msg, &mut events).expect("handler failed");
 
-    assert_eq!(write.len(), 0);
-    assert_eq!(events.len(), 0);
+    assert_eq!(events.len(), 1);
+
+    let event = events.remove(0);
+    let event = match event {
+        InformEvent::RvdHostInform(e) => e,
+        _ => panic!("unexpected event"),
+    };
+
+
+    let (event, msg) =
+        rvd_host_native_helper(event, &mut native, &HashMap::new()).expect("handler failed");
+
+    assert!(event.is_none());
+    assert!(msg.is_none());
 
     assert_eq!(native.clipboard_content, clipboard);
 }
 
 #[test]
 fn test_host_key_input() {
-    let mut write = Vec::new();
     let mut events = Vec::new();
     let mut native = TesterNative::new();
     let mut host = RvdHostHandler::new();
@@ -138,13 +155,22 @@ fn test_host_key_input() {
 
     assert!(!native.down_keys.contains(&40));
 
-    let map = HashMap::new();
+    host._handle(msg, &mut events).expect("handler failed");
 
-    rvd_host_native_helper(msg, &mut write, &mut events, &mut host, &mut native, &map)
-        .expect("handler failed");
+    assert_eq!(events.len(), 1);
 
-    assert_eq!(write.len(), 0);
-    assert_eq!(events.len(), 0);
+    let event = events.remove(0);
+    let event = match event {
+        InformEvent::RvdHostInform(e) => e,
+        _ => panic!("unexpected event"),
+    };
+
+
+    let (event, msg) =
+        rvd_host_native_helper(event, &mut native, &HashMap::new()).expect("handler failed");
+
+    assert!(event.is_none());
+    assert!(msg.is_none());
 
     assert!(native.down_keys.contains(&40));
 
@@ -153,11 +179,22 @@ fn test_host_key_input() {
         key: 40,
     });
 
-    rvd_host_native_helper(msg, &mut write, &mut events, &mut host, &mut native, &map)
-        .expect("handler failed");
+    host._handle(msg, &mut events).expect("handler failed");
 
-    assert_eq!(write.len(), 0);
-    assert_eq!(events.len(), 0);
+    assert_eq!(events.len(), 1);
+
+    let event = events.remove(0);
+    let event = match event {
+        InformEvent::RvdHostInform(e) => e,
+        _ => panic!("unexpected event"),
+    };
+
+
+    let (event, msg) =
+        rvd_host_native_helper(event, &mut native, &HashMap::new()).expect("handler failed");
+
+    assert!(event.is_none());
+    assert!(msg.is_none());
 
     assert!(!native.down_keys.contains(&40));
 }
@@ -165,7 +202,6 @@ fn test_host_key_input() {
 
 #[test]
 fn test_host_mouse_input() {
-    let mut write = Vec::new();
     let mut events = Vec::new();
     let mut native = TesterNative::new();
     let mut host = RvdHostHandler::new();
@@ -198,11 +234,21 @@ fn test_host_mouse_input() {
     assert_eq!(native.pointer_x, 0);
     assert_eq!(native.pointer_y, 0);
 
-    rvd_host_native_helper(msg, &mut write, &mut events, &mut host, &mut native, &map)
-        .expect("handler failed");
+    host._handle(msg, &mut events).expect("handler failed");
 
-    assert_eq!(write.len(), 0);
-    assert_eq!(events.len(), 0);
+    assert_eq!(events.len(), 1);
+
+    let event = events.remove(0);
+    let event = match event {
+        InformEvent::RvdHostInform(e) => e,
+        _ => panic!("unexpected event"),
+    };
+
+
+    let (event, msg) = rvd_host_native_helper(event, &mut native, &map).expect("handler failed");
+
+    assert!(event.is_none());
+    assert!(msg.is_none());
 
     assert_eq!(native.pointer_x, 150);
     assert_eq!(native.pointer_y, 300);
@@ -213,7 +259,6 @@ fn test_host_mouse_input() {
 
 #[test]
 fn test_host_clipboard_request() {
-    let mut write = Vec::new();
     let mut events = Vec::new();
     let mut native = TesterNative::new();
     let mut host = RvdHostHandler::new();
@@ -232,20 +277,26 @@ fn test_host_clipboard_request() {
         },
     });
 
-    rvd_host_native_helper(
-        msg,
-        &mut write,
-        &mut events,
-        &mut host,
-        &mut native,
-        &HashMap::new(),
-    )
-    .expect("handler failed");
+    host._handle(msg, &mut events).expect("handler failed");
 
-    assert_eq!(write.len(), 1);
-    assert_eq!(events.len(), 0);
+    assert_eq!(events.len(), 1);
 
-    let msg = write.remove(0);
+    let event = events.remove(0);
+    let event = match event {
+        InformEvent::RvdHostInform(e) => e,
+        _ => panic!("unexpected event"),
+    };
+
+
+    let (event, msg) =
+        rvd_host_native_helper(event, &mut native, &HashMap::new()).expect("handler failed");
+
+    assert!(event.is_none());
+
+    let msg = match msg {
+        Some(m) => m,
+        _ => panic!("expected a message but found none"),
+    };
 
     assert!(matches!(msg,
         RvdMessage::ClipboardNotification(notificaiton)

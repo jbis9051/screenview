@@ -125,12 +125,11 @@ vtable_methods!(
     svsc_session_end(),
     svsc_error_lease_request_rejected(),
     svsc_error_session_request_rejected(status: EstablishSessionStatus),
-    svsc_error_lease_extention_request_rejected(),
+    svsc_error_lease_extension_request_rejected(),
     /* wpskka - client */
     wpskka_client_password_prompt(),
     wpskka_client_authentication_successful(),
-    wpskka_client_out_of_authentication_schemes(), // aka authentication_failed
+    wpskka_client_authentication_failed(),
     /* rvd - client */
-    //rvd_display_update(clipboardReadable: bool, displays: Vec<DisplayInformation>),
     rvd_frame_data(display_id: u8, data: Vec<u8>)
 );

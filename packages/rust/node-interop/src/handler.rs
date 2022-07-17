@@ -1,3 +1,4 @@
+use common::messages::svsc::LeaseId;
 use io::{DirectServer, IoHandle, TcpHandle, UdpHandle};
 use peer::{
     higher_handler::HigherHandler,
@@ -106,5 +107,9 @@ impl ScreenViewHandler {
             [HostSignal, HostDirect, ClientSignal, ClientDirect],
             |stack| stack.handle_next_message()
         )
+    }
+
+    pub fn lease_id(&mut self) -> LeaseId {
+        forward!(*self, [HostSignal, ClientSignal], |stack| stack.lease_id())
     }
 }

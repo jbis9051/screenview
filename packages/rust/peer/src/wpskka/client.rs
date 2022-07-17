@@ -513,11 +513,13 @@ impl WpskkaHandlerTrait for WpskkaClientHandler {
         write: &mut Vec<WpskkaMessage<'_>>,
         events: &mut Vec<InformEvent>,
     ) -> Result<Option<Vec<u8>>, WpskkaError> {
+        println!("client received: {:?}", msg);
         let ret = self.handle_internal(msg, write, events).map_err(Into::into);
         assert!(
             !matches!(self.state, State::Modifying),
             "state was left in modifying state"
         );
+        println!("client sent: {:?}", write);
         ret
     }
 
@@ -538,11 +540,11 @@ impl WpskkaHandlerTrait for WpskkaClientHandler {
 
 #[derive(Debug, thiserror::Error)]
 pub enum WpskkaClientError {
-    #[error("invalid message {0} for state {0}")]
+    #[error("invalid message {0} for state {1}")]
     WrongMessageForState(String, String),
-    #[error("invalid state for function call: got {0} but expected {0}")]
+    #[error("invalid state for function call: got {0} but expected {1}")]
     WrongState(String, String),
-    #[error("invalid auth scheme for function call: got {0} but expected {0}")]
+    #[error("invalid auth scheme for function call: got {0} but expected {1}")]
     WrongAuthScheme(&'static str, &'static str),
 
     #[error("unsupported auth scheme type")]

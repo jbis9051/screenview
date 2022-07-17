@@ -7,7 +7,7 @@ use crate::{
 };
 use common::messages::{
     sel::SelMessage,
-    svsc::{Cookie, LeaseId, SvscMessage},
+    svsc::{Cookie, LeaseId, LeaseResponseData, SvscMessage},
     ChanneledMessage,
     Message,
     MessageComponent,
@@ -70,6 +70,10 @@ impl LowerHandlerSignal {
         cookie: Option<Cookie>,
     ) -> ChanneledMessage<SvscMessage<'static>> {
         ChanneledMessage::Reliable(self.svsc.lease_request(cookie))
+    }
+
+    pub fn lease(&self) -> Option<&LeaseResponseData> {
+        self.svsc.lease()
     }
 }
 

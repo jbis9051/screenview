@@ -86,13 +86,12 @@ fn new_instance(mut cx: FunctionContext<'_>) -> JsResult<'_, JsBox<InstanceHandl
         ("client", "signal") => Instance::new_client_signal(channel, node_interface),
         ("host", "signal") => Instance::new_host_signal(channel, node_interface),
         _ =>
-            if peer_type != "client" && peer_type != "host" {
-                return throw!(cx, "Invalid peer type");
+            return if peer_type != "client" && peer_type != "host" {
+                throw!(cx, "Invalid peer type")
             } else {
-                return throw!(cx, "Invalid instance type");
+                throw!(cx, "Invalid instance type")
             },
     };
-
     match handle {
         Ok(handle) => Ok(cx.boxed(handle)),
         Err(error) => throw!(cx, error),

@@ -98,6 +98,10 @@ where
         let data = self.lower.send(message)?;
         self.io_handle.send(data).map_err(Into::into)
     }
+
+    pub fn lease_id(&self) -> LeaseId {
+        self.lower.lease().expect("no lease data").id
+    }
 }
 
 impl<L, R, U> HandlerStack<HigherHandlerClient, L, R, U>
@@ -115,12 +119,28 @@ where
     }
 }
 
+macro_rules! send {
+    ($self: ident, $message: expr) => {
+        let higher_output = $self.higher.send($message)?;
+        let lower_output = $self.lower.send(higher_output)?;
+        $self.io_handle.send(lower_output)?;
+    };
+}
+
 impl<L, R, U> HandlerStack<HigherHandlerHost, L, R, U>
 where
     L: LowerHandlerTrait,
     R: Reliable,
     U: Unreliable,
 {
+    pub fn key_exchange(&mut self) -> Result<(), HandlerError> {
+        let message = self.higher.key_exchange()?;
+        let higher_output = self.higher.send(message)?;
+        let lower_output = self.lower.send(higher_output)?;
+        self.io_handle.send(lower_output)?;
+        Ok(())
+    }
+
     pub fn set_static_password(&mut self, static_password: Option<Vec<u8>>) {
         self.higher.set_static_password(static_password)
     }
@@ -131,17 +151,13 @@ where
         access: AccessMask,
     ) -> Result<DisplayId, HandlerError> {
         let (display_id, message) = self.higher.share_display(name, access)?; // TODO this should send messages instead of returning
-        let higher_output = self.higher.send(message)?;
-        let lower_output = self.lower.send(higher_output)?;
-        self.io_handle.send(lower_output)?;
+        send!(self, message);
         Ok(display_id)
     }
 
     pub fn unshare_display(&mut self, display_id: DisplayId) -> Result<(), HandlerError> {
         let message = self.higher.unshare_display(display_id)?;
-        let higher_output = self.higher.send(message)?;
-        let lower_output = self.lower.send(higher_output)?;
-        self.io_handle.send(lower_output)?;
+        send!(self, message);
         Ok(())
     }
 
@@ -151,9 +167,7 @@ where
     ) -> Result<(), HandlerError> {
         let messages = self.higher.frame_update(&[0]); // TODO
         for message in messages {
-            let higher_output = self.higher.send(message)?;
-            let lower_output = self.lower.send(higher_output)?;
-            self.io_handle.send(lower_output)?;
+            send!(self, message);
         }
         Ok(())
     }

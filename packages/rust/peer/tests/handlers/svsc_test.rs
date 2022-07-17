@@ -107,7 +107,7 @@ fn test_lease() {
 
     // lease response
     let mut response_data = LeaseResponseData {
-        id: 10,
+        id: 10u32.to_be_bytes(),
         cookie: [12u8; 24],
         expiration: MIN_DATETIME,
     };
