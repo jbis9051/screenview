@@ -6,13 +6,14 @@ import {
     VTableEmitter,
     VTableEvent,
 } from '@screenview/node-interop';
+import * as console from 'console';
 
 function waitForEvent(
     emitter: VTableEmitter,
     event: VTableEvent,
     timeout = -1
 ): Promise<any[]> {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
         let expireTimeout: NodeJS.Timeout | null = null;
         const handleEvent = (e: Event, ...arg: any[]) => {
             if (expireTimeout) {
@@ -27,12 +28,12 @@ function waitForEvent(
         if (timeout > 0) {
             expireTimeout = setTimeout(() => {
                 emitter.removeListener('event', handleEvent);
-                throw new Error(`Timeout waiting for event ${event}`);
+                reject(new Error(`Timeout waiting for event ${event}`));
             }, timeout);
         }
     });
 }
-/*
+
 test('thumbnails', (done) => {
     let thumbnailHandle: rust.ThumbnailHandle | null = null;
     thumbnailHandle = rust.thumbnails((thumbs) => {
@@ -44,7 +45,10 @@ test('thumbnails', (done) => {
 
         done();
     });
-}); */
+});
+
+jest.setTimeout(100000);
+jest.useRealTimers();
 
 test('direct connection', async () => {
     const vtableHost = new VTableEmitter();
@@ -71,22 +75,30 @@ test('direct connection', async () => {
     await waitForEvent(
         vtableClient,
         VTableEvent.WpsskaClientPasswordPrompt,
-        500
+        2000
     );
 
-    await rust.process_password(client, 'password');
+    await Promise.all([
+        rust.process_password(client, 'password'),
+        waitForEvent(
+            vtableClient,
+            VTableEvent.WpsskaClientAuthenticationSuccessful,
+            5000
+        ),
+        waitForEvent(
+            vtableHost,
+            VTableEvent.WpsskaHostAuthenticationSuccessful,
+            5000
+        ),
+    ]);
 
     await Promise.all([
         waitForEvent(
             vtableClient,
-            VTableEvent.WpsskaClientAuthenticationSuccessful,
-            500
+            VTableEvent.RvdClientHandshakeComplete,
+            5000
         ),
-        waitForEvent(
-            vtableHost,
-            VTableEvent.WpsskaClientAuthenticationSuccessful,
-            500
-        ),
+        waitForEvent(vtableHost, VTableEvent.RvdHostHandshakeComplete, 5000),
     ]);
 
     const displays = rust.available_displays();
@@ -102,7 +114,7 @@ test('direct connection', async () => {
     const [id, data] = (await waitForEvent(
         vtableClient,
         VTableEvent.RvdFrameData,
-        500
+        5000
     )) as [number, ArrayBuffer];
 
     expect(id).toBe(0);

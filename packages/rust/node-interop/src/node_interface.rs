@@ -81,33 +81,36 @@ macro_rules! vtable_methods {
           $name: ident(
               $($arg: ident: $atype: ty),*
           )
-        ),*
+        ),*,
     ) => {
         struct VTable {
             $($name: Root<JsFunction>,)*
         }
         pub struct NodeInterface {
             vtable: Arc<VTable>,
+            cb_obj: Arc<Root<JsObject>>
         }
 
         impl NodeInterface {
             pub fn from_obj<'a, C: Context<'a>>(cx: &mut C, obj: Handle<'_, JsObject>) -> NeonResult<Self> {
+                let cb_obj = obj.root(cx);
                 $(let $name = obj.get::<JsFunction, _, _>(cx, stringify!($name))?.root(cx);)*
 
                 Ok(Self {
                     vtable: Arc::new(VTable {
                         $($name,)*
                     }),
+                    cb_obj: Arc::new(cb_obj)
                 })
             }
 
             $(
                 pub fn $name(&self, channel: &Channel $(,$arg: $atype)*){
                     let vtable = Arc::clone(&self.vtable);
-
+                    let cb_obj = self.cb_obj.clone();
                     channel.send(move |mut cx| {
+                        let this = cb_obj.to_inner(&mut cx);
                         let func = vtable.$name.to_inner(&mut cx);
-                        let this = cx.null();
                         let args = [$($arg.try_into_js_type(&mut cx)?,)*];
                         func.call(&mut cx, this, args).map(|_| ())
                     });
@@ -130,6 +133,11 @@ vtable_methods!(
     wpskka_client_password_prompt(),
     wpskka_client_authentication_successful(),
     wpskka_client_authentication_failed(),
+    /* wpskka - host */
+    wpskka_host_authentication_successful(),
     /* rvd - client */
-    rvd_frame_data(display_id: u8, data: Vec<u8>)
+    rvd_frame_data(display_id: u8, data: Vec<u8>),
+    rvd_client_handshake_complete(),
+    /* rvd - host */
+    rvd_host_handshake_complete(),
 );

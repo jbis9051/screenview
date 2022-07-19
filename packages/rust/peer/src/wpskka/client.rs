@@ -558,6 +558,7 @@ pub enum WpskkaClientError {
     CipherError(#[from] CipherError),
 }
 
+#[derive(Debug)]
 pub enum WpskkaClientInform {
     AuthScheme(Vec<AuthSchemeType>), // List of available auth schemes
     PasswordPrompt,                  // UI needs to prompt for a password

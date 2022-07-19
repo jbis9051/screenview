@@ -9,6 +9,7 @@ use capture::CapturePool;
 use common::messages::{
     rvd::{AccessMask, ButtonsMask, DisplayId},
     svsc::{Cookie, LeaseId},
+    wpskka::AuthSchemeType,
 };
 use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
 use event_loop::{
@@ -93,6 +94,8 @@ pub struct Instance {
     capture_pool: CapturePool<FrameProcessor>,
     channel: Channel,
     shared_displays: HashMap<DisplayId, NativeId>,
+    auth_schemes: Vec<AuthSchemeType>,
+    password: Option<String>,
 }
 
 impl Instance {
@@ -120,6 +123,8 @@ impl Instance {
                     ),
                     channel,
                     shared_displays: Default::default(),
+                    auth_schemes: Default::default(),
+                    password: None,
                 };
 
                 waker_tx
@@ -490,6 +495,22 @@ impl Instance {
         promise.settle_with(&self.channel, move |mut cx| Ok(cx.undefined()));
         Ok(())
     }
+
+    fn next_auth_scheme(&mut self) -> Result<(), ()> {
+        for scheme in [
+            AuthSchemeType::None,
+            AuthSchemeType::SrpDynamic,
+            AuthSchemeType::SrpStatic,
+        ] {
+            if self.auth_schemes.contains(&scheme) {
+                self.auth_schemes.retain(|&x| x != scheme);
+                forward!(self.sv_handler, [ClientSignal, ClientDirect], |stack| stack
+                    .try_auth(scheme));
+                return Ok(());
+            }
+        }
+        Err(())
+    }
 }
 
 impl Finalize for Instance {}
@@ -639,31 +660,60 @@ fn handle_event(instance: &mut Instance, event: InformEvent) -> Result<(), ()> {
                 Some(event) => event,
             };
 
-            if let RvdClientInform::FrameData(data) = event {
-                instance.node_interface.rvd_frame_data(
+            match event {
+                RvdClientInform::HandshakeComplete => {
+                    instance
+                        .node_interface
+                        .rvd_client_handshake_complete(&instance.channel);
+                }
+                RvdClientInform::FrameData(data) => instance.node_interface.rvd_frame_data(
                     &instance.channel,
                     data.display_id,
                     data.data,
-                )
+                ),
+                _ => {}
             }
-            // TODO
         }
         InformEvent::RvdHostInform(event) => {
             let (inform, msg) =
                 rvd_host_native_helper(event, &mut instance.native, &instance.shared_displays)
                     .expect("rvd_host_native_helper failed");
-            if let Some(_inform) = inform {
-                // TODO
+            if let Some(inform) = inform {
+                match inform {
+                    RvdHostInform::HandshakeComplete => {
+                        instance
+                            .node_interface
+                            .rvd_host_handshake_complete(&instance.channel);
+                    }
+                    _ => {}
+                }
             }
             if let Some(_msg) = msg {
                 // TODO
             }
         }
         InformEvent::WpskkaClientInform(event) => match event {
-            WpskkaClientInform::AuthScheme(_) => {}
-            WpskkaClientInform::PasswordPrompt => instance
-                .node_interface
-                .wpskka_client_password_prompt(&instance.channel),
+            WpskkaClientInform::AuthScheme(auths) => {
+                instance.auth_schemes = auths;
+                match instance.next_auth_scheme() {
+                    Ok(_) => {}
+                    Err(_) => {
+                        instance
+                            .node_interface
+                            .wpskka_client_authentication_failed(&instance.channel);
+                    }
+                };
+            }
+            WpskkaClientInform::PasswordPrompt =>
+                if let Some(password) = &instance.password {
+                    forward!(instance.sv_handler, [ClientSignal, ClientDirect], |stack| {
+                        stack.process_password(password.as_bytes())
+                    });
+                } else {
+                    instance
+                        .node_interface
+                        .wpskka_client_password_prompt(&instance.channel)
+                },
             WpskkaClientInform::AuthFailed => instance
                 .node_interface
                 .wpskka_client_authentication_failed(&instance.channel),
@@ -672,7 +722,14 @@ fn handle_event(instance: &mut Instance, event: InformEvent) -> Result<(), ()> {
                 .wpskka_client_authentication_successful(&instance.channel),
         },
         InformEvent::WpskkaHostInform(event) => match event {
-            WpskkaHostInform::AuthSuccessful => {}
+            WpskkaHostInform::AuthSuccessful => {
+                instance
+                    .node_interface
+                    .wpskka_host_authentication_successful(&instance.channel);
+                forward!(instance.sv_handler, [HostSignal, HostDirect], |stack| {
+                    stack.protocol_version()
+                });
+            }
             WpskkaHostInform::AuthFailed => {}
         },
     }

@@ -57,6 +57,9 @@ impl RvdClientHandler {
                     ));
                     if ok {
                         self.state = ClientState::Data;
+                        events.push(InformEvent::RvdClientInform(
+                            RvdClientInform::HandshakeComplete,
+                        ));
                     } else {
                         events.push(InformEvent::RvdClientInform(RvdClientInform::VersionBad));
                     }
@@ -134,8 +137,11 @@ pub enum RvdClientError {
     PermissionsError(String),
 }
 
+#[derive(Debug)]
 pub enum RvdClientInform {
     VersionBad,
+
+    HandshakeComplete,
 
     FrameData(FrameData),
     MouseHidden(DisplayId),

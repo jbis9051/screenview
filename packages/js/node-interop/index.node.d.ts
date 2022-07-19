@@ -163,11 +163,19 @@ export interface VTable {
 
     wpskka_client_authentication_failed(): void;
 
+    /* wpskka - host */
+    wpskka_host_authentication_successful(): void;
+
     /* rvd - client */
     rvd_display_update(
         clipboard_readable: boolean,
         displays: DisplayInformation[]
     ): void;
 
+    rvd_client_handshake_complete(): void;
+
     rvd_frame_data(display_id: number, data: ArrayBuffer);
+
+    /* rvd - host */
+    rvd_host_handshake_complete(): void;
 }

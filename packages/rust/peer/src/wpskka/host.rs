@@ -538,6 +538,7 @@ pub enum WpskkaHostError {
     CipherError(#[from] CipherError),
 }
 
+#[derive(Debug)]
 pub enum WpskkaHostInform {
     AuthSuccessful,
     AuthFailed,

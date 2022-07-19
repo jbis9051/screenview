@@ -207,6 +207,7 @@ pub enum SvscError {
     WrongMessageForState(String, State),
 }
 
+#[derive(Debug)]
 pub enum SvscInform {
     VersionBad, // emitted in handshake
 

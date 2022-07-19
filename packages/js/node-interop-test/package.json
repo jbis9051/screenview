@@ -2,7 +2,7 @@
     "name": "@screenview/node-interop-test",
     "version": "0.0.0",
     "scripts": {
-        "test": "ts-node src/index.ts"
+        "test": "jest src/index.test.ts"
     },
     "devDependencies": {
         "@types/jest": "^27.5.1",

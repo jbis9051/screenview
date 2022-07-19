@@ -178,6 +178,7 @@ impl RvdHostHandler {
                         return Ok(());
                     }
                     self.state = HostState::Ready;
+                    events.push(InformEvent::RvdHostInform(RvdHostInform::HandshakeComplete));
                     Ok(())
                 }
                 _ => Err(RvdHostError::WrongMessageForState(debug(&msg), self.state)),
@@ -290,6 +291,7 @@ pub enum RvdHostError {
     RanOutOfDisplayIds,
 }
 
+#[derive(Debug)]
 pub struct MouseInputEvent {
     pub display_id: DisplayId,
     pub x_location: u16,
@@ -298,8 +300,11 @@ pub struct MouseInputEvent {
     pub button_state: ButtonsMask,
 }
 
+#[derive(Debug)]
 pub enum RvdHostInform {
     VersionBad,
+
+    HandshakeComplete,
 
     MouseInput(MouseInputEvent),
     KeyboardInput(KeyInput),

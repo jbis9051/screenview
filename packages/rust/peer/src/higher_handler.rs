@@ -6,7 +6,7 @@ use crate::{
 };
 use common::messages::{
     rvd::{AccessMask, DisplayId, RvdMessage},
-    wpskka::{TransportDataMessageUnreliable, WpskkaMessage},
+    wpskka::{AuthSchemeType, TransportDataMessageUnreliable, WpskkaMessage},
     ChanneledMessage,
     Error as MessageComponentError,
     Message,
@@ -68,6 +68,10 @@ impl HigherHandlerHost {
         }
     }
 
+    pub fn protocol_version(&self) -> RvdMessage {
+        RvdHostHandler::protocol_version()
+    }
+
     pub fn key_exchange(&mut self) -> Result<WpskkaMessage<'static>, HigherError> {
         Ok(self.wpskka.key_exchange().map_err(WpskkaError::Host)?)
     }
@@ -114,6 +118,10 @@ impl HigherHandlerClient {
         self.wpskka
             .process_password(password)
             .map_err(|error| HigherError::Wpskka(WpskkaError::Client(error)))
+    }
+
+    pub fn try_auth(&mut self, scheme: AuthSchemeType) -> WpskkaMessage<'static> {
+        self.wpskka.try_auth(scheme)
     }
 }
 

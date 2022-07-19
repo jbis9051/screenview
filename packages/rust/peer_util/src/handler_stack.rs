@@ -1,6 +1,7 @@
 use common::messages::{
     rvd::{AccessMask, DisplayId, RvdMessage},
     svsc::{Cookie, LeaseId},
+    wpskka::AuthSchemeType,
 };
 use io::{IoHandle, Reliable, SendError, TransportError, TransportResponse, Unreliable};
 use peer::{
@@ -10,6 +11,15 @@ use peer::{
     InformEvent,
 };
 use rtp::packet::Packet;
+
+macro_rules! send {
+    ($self: ident, $message: expr) => {
+        let higher_output = $self.higher.send($message)?;
+        let lower_output = $self.lower.send(higher_output)?;
+        $self.io_handle.send(lower_output)?;
+    };
+}
+
 
 pub struct HandlerStack<H, L, R, U> {
     higher: H,
@@ -117,14 +127,12 @@ where
         self.io_handle.send(lower_output)?;
         Ok(())
     }
-}
 
-macro_rules! send {
-    ($self: ident, $message: expr) => {
-        let higher_output = $self.higher.send($message)?;
-        let lower_output = $self.lower.send(higher_output)?;
-        $self.io_handle.send(lower_output)?;
-    };
+    pub fn try_auth(&mut self, scheme: AuthSchemeType) -> Result<(), HandlerError> {
+        let message = self.higher.try_auth(scheme);
+        send!(self, message);
+        Ok(())
+    }
 }
 
 impl<L, R, U> HandlerStack<HigherHandlerHost, L, R, U>
@@ -133,6 +141,12 @@ where
     R: Reliable,
     U: Unreliable,
 {
+    pub fn protocol_version(&mut self) -> Result<(), HandlerError> {
+        let msg = self.higher.protocol_version();
+        send!(self, msg);
+        Ok(())
+    }
+
     pub fn key_exchange(&mut self) -> Result<(), HandlerError> {
         let message = self.higher.key_exchange()?;
         let higher_output = self.higher.send(message)?;

@@ -19,7 +19,7 @@ pub mod lower;
 pub mod sel_handler;
 pub mod svsc_handler;
 
-
+#[derive(Debug)]
 pub enum InformEvent {
     SvscInform(SvscInform),
     RvdClientInform(RvdClientInform),

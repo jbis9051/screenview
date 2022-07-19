@@ -13,8 +13,11 @@ export enum VTableEvent {
     WpsskaClientPasswordPrompt = 'wpsska_client_password_prompt',
     WpsskaClientAuthenticationSuccessful = 'wpsska_client_authentication_successful',
     WpsskaClientAuthenticationFailed = 'wpsska_client_authentication_failed',
+    WpsskaHostAuthenticationSuccessful = 'wpsska_host_authentication_successful',
+    RvdClientHandshakeComplete = 'rvd_client_handshake_complete',
     RvdDisplayUpdate = 'rvd_display_update',
     RvdFrameData = 'rvd_frame_data',
+    RvdHostHandshakeComplete = 'rvd_host_handshake_complete',
 }
 
 export declare interface VTableEmitter extends EventEmitter {
@@ -89,7 +92,15 @@ export class VTableEmitter extends EventEmitter implements VTable {
         this.emit(VTableEvent.WpsskaClientAuthenticationFailed);
     }
 
+    /* wpskka - host */
+    wpskka_host_authentication_successful() {
+        this.emit(VTableEvent.WpsskaHostAuthenticationSuccessful);
+    }
+
     /* rvd */
+    rvd_client_handshake_complete() {
+        this.emit(VTableEvent.RvdClientHandshakeComplete);
+    }
 
     rvd_frame_data(displayId: number, data: ArrayBuffer) {
         this.emit(VTableEvent.RvdFrameData, displayId, data);
@@ -100,6 +111,10 @@ export class VTableEmitter extends EventEmitter implements VTable {
         displays: DisplayInformation[]
     ): void {
         this.emit(VTableEvent.RvdDisplayUpdate, clipboardReadable, displays);
+    }
+
+    rvd_host_handshake_complete() {
+        this.emit(VTableEvent.RvdHostHandshakeComplete);
     }
 }
 
