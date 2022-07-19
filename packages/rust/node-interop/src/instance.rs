@@ -1,8 +1,12 @@
+// an instance represents an instance of a rust interop
+// this can be of type Client or Host and Direct or Signal
+
 use crate::{
+    callback_interface::NodeInterface,
     forward,
-    handler::ScreenViewHandler,
-    node_interface::NodeInterface,
+    instance_main::Events,
     protocol::{ConnectionType, Message, RequestContent},
+    screenview_handler::ScreenViewHandler,
     throw,
 };
 use capture::CapturePool;
@@ -44,140 +48,18 @@ use std::{
     thread::{self, JoinHandle},
 };
 
-#[repr(u32)]
-enum Events {
-    RemoteMessage,
-    InteropMessage,
-    DirectServerConnection,
-    FrameUpdate,
-}
-
-pub struct InstanceHandle {
-    sender: Sender<Message>,
-    waker: ThreadWaker,
-    _thread_handle: JoinOnDrop<()>,
-}
-
-impl InstanceHandle {
-    fn new(sender: Sender<Message>, waker: ThreadWaker, thread_handle: JoinHandle<()>) -> Self {
-        Self {
-            sender,
-            waker,
-            _thread_handle: JoinOnDrop::new(thread_handle),
-        }
-    }
-
-    pub fn send(&self, message: Message) -> bool {
-        let res = self.sender.send(message).is_ok();
-        self.waker.wake();
-        res
-    }
-}
-
-impl Drop for InstanceHandle {
-    fn drop(&mut self) {
-        let _ = self.sender.send(Message::Shutdown);
-        self.waker.wake();
-        // thread_handle is dropped last
-    }
-}
-
-impl Finalize for InstanceHandle {}
-
-// an instance represents an instance of a rust interop
-// this can be of type Client or Host and Direct or Signal
-
 pub struct Instance {
-    native: NativeApi,
-    sv_handler: ScreenViewHandler,
-    node_interface: NodeInterface,
-    capture_pool: CapturePool<FrameProcessor>,
-    channel: Channel,
-    shared_displays: HashMap<DisplayId, NativeId>,
-    auth_schemes: Vec<AuthSchemeType>,
-    password: Option<String>,
+    pub(crate) native: NativeApi,
+    pub(crate) sv_handler: ScreenViewHandler,
+    pub(crate) callback_interface: NodeInterface,
+    pub(crate) capture_pool: CapturePool<FrameProcessor>,
+    pub(crate) channel: Channel,
+    pub(crate) shared_displays: HashMap<DisplayId, NativeId>,
+    pub(crate) auth_schemes: Vec<AuthSchemeType>,
+    pub(crate) password: Option<String>,
 }
 
 impl Instance {
-    fn new_with<F>(
-        channel: Channel,
-        new_sv_handler: F,
-        node_interface: NodeInterface,
-    ) -> Result<InstanceHandle, NativeApiError>
-    where
-        F: FnOnce() -> ScreenViewHandler,
-    {
-        let (waker_tx, waker_rx) = oneshot::channel();
-        let (message_tx, message_rx) = unbounded();
-        let native = NativeApi::new()?;
-        let sv_handler = new_sv_handler();
-
-        let thread_handle = start_instance_main(
-            move |waker_core| {
-                let instance = Self {
-                    native,
-                    sv_handler,
-                    node_interface,
-                    capture_pool: CapturePool::new(
-                        waker_core.make_waker(Events::FrameUpdate as u32),
-                    ),
-                    channel,
-                    shared_displays: Default::default(),
-                    auth_schemes: Default::default(),
-                    password: None,
-                };
-
-                waker_tx
-                    .send(waker_core.make_waker(Events::InteropMessage as u32))
-                    .unwrap();
-                instance
-            },
-            message_rx,
-        );
-
-        Ok(InstanceHandle::new(
-            message_tx,
-            waker_rx.recv().unwrap(),
-            thread_handle,
-        ))
-    }
-
-    pub fn new_host_signal(
-        channel: Channel,
-        node_interface: NodeInterface,
-    ) -> Result<InstanceHandle, NativeApiError> {
-        Self::new_with(channel, ScreenViewHandler::new_host_signal, node_interface)
-    }
-
-    pub fn new_host_direct(
-        channel: Channel,
-        node_interface: NodeInterface,
-    ) -> Result<InstanceHandle, NativeApiError> {
-        Self::new_with(channel, ScreenViewHandler::new_host_direct, node_interface)
-    }
-
-    pub fn new_client_signal(
-        channel: Channel,
-        node_interface: NodeInterface,
-    ) -> Result<InstanceHandle, NativeApiError> {
-        Self::new_with(
-            channel,
-            ScreenViewHandler::new_client_signal,
-            node_interface,
-        )
-    }
-
-    pub fn new_client_direct(
-        channel: Channel,
-        node_interface: NodeInterface,
-    ) -> Result<InstanceHandle, NativeApiError> {
-        Self::new_with(
-            channel,
-            ScreenViewHandler::new_client_direct,
-            node_interface,
-        )
-    }
-
     fn settle_with_result<E, F, V>(&self, promise: Deferred, result: Result<(), E>, ret: F)
     where
         E: ToString,
@@ -196,7 +78,7 @@ impl Instance {
         Ok(cx.undefined())
     }
 
-    fn handle_node_request(
+    pub(crate) fn handle_node_request(
         &mut self,
         content: RequestContent,
         promise: Deferred,
@@ -269,7 +151,7 @@ impl Instance {
         Ok(())
     }
 
-    fn handle_direct_connect(
+    pub(crate) fn handle_direct_connect(
         &mut self,
         waker_core: &ThreadWakerCore,
         stream: TcpStream,
@@ -496,7 +378,7 @@ impl Instance {
         Ok(())
     }
 
-    fn next_auth_scheme(&mut self) -> Result<(), ()> {
+    pub(crate) fn next_auth_scheme(&mut self) -> Result<(), ()> {
         for scheme in [
             AuthSchemeType::None,
             AuthSchemeType::SrpDynamic,
@@ -514,224 +396,3 @@ impl Instance {
 }
 
 impl Finalize for Instance {}
-
-fn start_instance_main<F>(make_instance: F, message_receiver: Receiver<Message>) -> JoinHandle<()>
-where F: FnOnce(&ThreadWakerCore) -> Instance + Send + 'static {
-    thread::spawn(move || {
-        let waker_core = ThreadWakerCore::new_current_thread();
-        let instance = make_instance(&waker_core);
-        instance_main(waker_core, instance, message_receiver)
-    })
-}
-
-fn instance_main(
-    waker_core: ThreadWakerCore,
-    mut instance: Instance,
-    message_receiver: Receiver<Message>,
-) {
-    // TODO: do things with ThreadWaker and atomics so we know which channels to check
-
-    event_loop(waker_core, move |waker_core| {
-        // Handle incoming messages from node
-        if waker_core.check_and_unset(Events::InteropMessage as u32) {
-            // Infinite loop to clear the channel since node isn't a malicious party
-            loop {
-                match message_receiver.try_recv() {
-                    Ok(Message::Request { content, promise }) => {
-                        match instance.handle_node_request(content, promise, waker_core) {
-                            Ok(()) => { /* yay */ }
-                            Err(error) =>
-                                panic!("Internal error while handling node request: {}", error),
-                        }
-                    }
-                    Ok(Message::Shutdown) => return EventLoopState::Complete,
-                    Err(TryRecvError::Empty) => break,
-                    Err(TryRecvError::Disconnected) => return EventLoopState::Complete,
-                }
-            }
-        }
-
-        // Handle messages from remote party
-        if waker_core.check_and_unset(Events::RemoteMessage as u32) {
-            const MAX_TO_HANDLE: usize = 8;
-            let mut handled = 0;
-
-            while handled < MAX_TO_HANDLE {
-                match instance.sv_handler.handle_next_message() {
-                    Some(Ok(events)) =>
-                        for event in events {
-                            handle_event(&mut instance, event);
-                        },
-                    Some(Err(error)) => {
-                        todo!("Handle this error properly: {}", error)
-                    }
-                    None => break,
-                }
-
-                handled += 1;
-            }
-
-            // We're receiving more remote messages than we can handle, but we don't want to block
-            // the event loop too long, so change our state such that we continue handling remote
-            // messages on the next iteration without parking
-            if handled == MAX_TO_HANDLE {
-                waker_core.wake_self(Events::RemoteMessage as u32);
-            }
-        }
-
-        // If a server is running, handle incoming connections from there
-        if waker_core.check_and_unset(Events::DirectServerConnection as u32) {
-            // We don't need to put this in a loop due to the guarantee provided by `next_incoming`
-            if let ScreenViewHandler::HostDirect(_, Some(ref server)) = instance.sv_handler {
-                match server.next_incoming() {
-                    Some(Ok(stream)) => {
-                        // This stream should be blocking, however on macOS for some reason if the
-                        // listener is non-blocking at the time of we accept a stream, the stream
-                        // with also be non-blocking, so we explicitly set it to blocking
-                        stream
-                            .set_nonblocking(false)
-                            .expect("Failed to set stream to blocking"); // TODO handle this better
-                        instance.handle_direct_connect(waker_core, stream);
-                    }
-                    Some(Err(error)) => {
-                        todo!("Handle this error properly: {}", error)
-                    }
-                    None => {}
-                }
-            }
-        }
-
-        if waker_core.check_and_unset(Events::FrameUpdate as u32) {
-            // We don't need to double-loop here because the channels for frame capturing have a
-            // capacity of 1, so we won't fall behind when processing frames, the capture threads
-            // will just block and wait for us
-            for capture in instance.capture_pool.active_captures() {
-                let mut frame_update = match capture.next_update() {
-                    Some(update) => update,
-                    None => continue,
-                };
-
-                if let Err(_error) = frame_update.result {
-                    todo!("Handle frame update errors properly");
-                }
-
-                let result = forward!(instance.sv_handler, [HostSignal, HostDirect], |stack| stack
-                    .send_frame_update(frame_update.frame_update()));
-
-                result.expect("handle errors from sending frame updates properly");
-
-                capture.update(frame_update.resources);
-            }
-        }
-
-        EventLoopState::Working
-    });
-}
-
-
-fn handle_event(instance: &mut Instance, event: InformEvent) -> Result<(), ()> {
-    match event {
-        InformEvent::SvscInform(event) => match event {
-            SvscInform::VersionBad => instance.node_interface.svsc_version_bad(&instance.channel),
-            SvscInform::LeaseUpdate => {
-                let lease_id = instance.sv_handler.lease_id();
-                instance
-                    .node_interface
-                    .svsc_lease_update(&instance.channel, u32::from_be_bytes(lease_id).to_string())
-            }
-            SvscInform::SessionUpdate => instance
-                .node_interface
-                .svsc_session_update(&instance.channel),
-            SvscInform::SessionEnd => instance.node_interface.svsc_session_end(&instance.channel),
-            SvscInform::LeaseRequestRejected =>
-                instance.node_interface.svsc_session_end(&instance.channel),
-            SvscInform::SessionRequestRejected(status) => instance
-                .node_interface
-                .svsc_error_session_request_rejected(&instance.channel, status),
-            SvscInform::LeaseExtensionRequestRejected => instance
-                .node_interface
-                .svsc_error_lease_extension_request_rejected(&instance.channel),
-        },
-        InformEvent::RvdClientInform(event) => {
-            let event = match rvd_client_native_helper(event, &mut instance.native)
-                .expect("rvd_client_native_helper failed")
-            {
-                None => return Ok(()),
-                Some(event) => event,
-            };
-
-            match event {
-                RvdClientInform::HandshakeComplete => {
-                    instance
-                        .node_interface
-                        .rvd_client_handshake_complete(&instance.channel);
-                }
-                RvdClientInform::FrameData(data) => instance.node_interface.rvd_frame_data(
-                    &instance.channel,
-                    data.display_id,
-                    data.data,
-                ),
-                _ => {}
-            }
-        }
-        InformEvent::RvdHostInform(event) => {
-            let (inform, msg) =
-                rvd_host_native_helper(event, &mut instance.native, &instance.shared_displays)
-                    .expect("rvd_host_native_helper failed");
-            if let Some(inform) = inform {
-                match inform {
-                    RvdHostInform::HandshakeComplete => {
-                        instance
-                            .node_interface
-                            .rvd_host_handshake_complete(&instance.channel);
-                    }
-                    _ => {}
-                }
-            }
-            if let Some(_msg) = msg {
-                // TODO
-            }
-        }
-        InformEvent::WpskkaClientInform(event) => match event {
-            WpskkaClientInform::AuthScheme(auths) => {
-                instance.auth_schemes = auths;
-                match instance.next_auth_scheme() {
-                    Ok(_) => {}
-                    Err(_) => {
-                        instance
-                            .node_interface
-                            .wpskka_client_authentication_failed(&instance.channel);
-                    }
-                };
-            }
-            WpskkaClientInform::PasswordPrompt =>
-                if let Some(password) = &instance.password {
-                    forward!(instance.sv_handler, [ClientSignal, ClientDirect], |stack| {
-                        stack.process_password(password.as_bytes())
-                    });
-                } else {
-                    instance
-                        .node_interface
-                        .wpskka_client_password_prompt(&instance.channel)
-                },
-            WpskkaClientInform::AuthFailed => instance
-                .node_interface
-                .wpskka_client_authentication_failed(&instance.channel),
-            WpskkaClientInform::AuthSuccessful => instance
-                .node_interface
-                .wpskka_client_authentication_successful(&instance.channel),
-        },
-        InformEvent::WpskkaHostInform(event) => match event {
-            WpskkaHostInform::AuthSuccessful => {
-                instance
-                    .node_interface
-                    .wpskka_host_authentication_successful(&instance.channel);
-                forward!(instance.sv_handler, [HostSignal, HostDirect], |stack| {
-                    stack.protocol_version()
-                });
-            }
-            WpskkaHostInform::AuthFailed => {}
-        },
-    }
-    Ok(())
-}

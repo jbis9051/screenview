@@ -1,3 +1,4 @@
+// these are the callbacks available to node used for event handling, rust can emit events to node this way
 // i got a bit macro happy in this file
 use common::messages::svsc::EstablishSessionStatus;
 use neon::{object::Object, prelude::*};

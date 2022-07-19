@@ -1,3 +1,6 @@
+// this is for communicating between the JS interface side of things and the actual node-interop rust codey things
+// Parsing is done on the JS side of things into rust objects then passed to RequestContent for consumption when sent to the event loop
+
 use common::messages::{
     rvd::ButtonsMask,
     svsc::{Cookie, LeaseId},
