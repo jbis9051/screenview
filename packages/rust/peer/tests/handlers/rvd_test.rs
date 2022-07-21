@@ -70,15 +70,26 @@ fn test_rvd_handshake() {
     client
         ._handle(protocol_message, &mut write, &mut events)
         .expect("handler failed");
-    assert_eq!(events.len(), 0);
+    assert_eq!(events.len(), 1);
     assert_eq!(write.len(), 1);
+
+    let event = events.remove(0);
+
+    assert!(matches!(
+        event,
+        InformEvent::RvdClientInform(RvdClientInform::HandshakeComplete)
+    ));
 
     let msg = write.remove(0);
 
     assert!(matches!(&msg, &RvdMessage::ProtocolVersionResponse(_)));
 
     host._handle(msg, &mut events).expect("handler failed");
-    assert_eq!(events.len(), 0);
+    assert_eq!(events.len(), 1);
+    assert!(matches!(
+        events[0],
+        InformEvent::RvdHostInform(RvdHostInform::HandshakeComplete)
+    ));
 }
 
 #[test]

@@ -159,18 +159,17 @@ export default function setupIpcMainListeners(state: GlobalState) {
 
     ipcMain.on(
         RendererToMainIPCEvents.Host_UpdateDesktopList,
-        async (event, frames: Display[]) => {
+        async (event, frames: Display[], controllable: boolean) => {
             const host = findHostInstanceFromBrowserWindowId(
                 state,
                 event.sender.id
             );
 
             if (!host) {
-                return;
                 throw new Error('Logical Error: Could not find host instance');
             }
 
-            await rust.share_displays(host, frames);
+            await rust.share_displays(host, frames, controllable);
         }
     );
 

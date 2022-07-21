@@ -2,13 +2,14 @@ import { app, BrowserWindow } from 'electron';
 import { rust } from '@screenview/node-interop';
 import { macos_accessibility_permission } from '@screenview/node-interop/index.node';
 import GlobalState from './GlobalState';
-import startMainWindow from './mainHelpers/startMainWindow';
-import setupReactions from './mainHelpers/setupReactions';
-import setupIpcMainListeners from './mainHelpers/setupIpcMainListeners';
-import { loadConfig, saveConfig } from './mainHelpers/configHelper';
+import startMainWindow from './helpers/startMainWindow';
+import setupReactions from './helpers/setupReactions';
+import setupIpcMainListeners from './helpers/setupIpcMainListeners';
+import { loadConfig, saveConfig } from './helpers/configHelper';
 import Config from '../common/Config';
 import createHostWindow from './factories/createHostWindow';
 import createMacOSPermissionPromptWindow from './factories/createMacOSPermissionPromptWIndow';
+import createTray from './actions/createTray';
 
 const state = new GlobalState();
 
@@ -38,13 +39,12 @@ app.on('ready', async () => {
             permissionWindow.on('closed', () => {
                 startMainWindow(state);
             });
-        } else {
-            await startMainWindow(state);
+            return;
         }
-    } else {
-        await startMainWindow(state);
     }
-    // await createTray(state);
+
+    await startMainWindow(state);
+    await createTray(state);
 });
 
 app.on('activate', async () => {

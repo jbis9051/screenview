@@ -1,6 +1,6 @@
 import { BrowserWindow, shell } from 'electron';
 import PageType from '../../render/Pages/PageType';
-import startMainWindow from '../mainHelpers/startMainWindow';
+import startMainWindow from '../helpers/startMainWindow';
 
 async function createMacOSPermissionPromptWindow(): Promise<BrowserWindow> {
     const permissionWindow = new BrowserWindow({

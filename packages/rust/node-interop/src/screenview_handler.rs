@@ -98,8 +98,4 @@ impl ScreenViewHandler {
             |stack| stack.handle_next_message()
         )
     }
-
-    pub fn lease_id(&mut self) -> LeaseId {
-        forward!(*self, [HostSignal, ClientSignal], |stack| stack.lease_id())
-    }
 }

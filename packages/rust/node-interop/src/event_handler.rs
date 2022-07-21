@@ -16,7 +16,9 @@ pub fn handle_event(instance: &mut Instance, event: InformEvent) -> Result<(), (
                 .callback_interface
                 .svsc_version_bad(&instance.channel),
             SvscInform::LeaseUpdate => {
-                let lease_id = instance.sv_handler.lease_id();
+                let lease_id = forward!(instance.sv_handler, [HostSignal, ClientSignal], |stack| {
+                    stack.lease_id()
+                });
                 instance
                     .callback_interface
                     .svsc_lease_update(&instance.channel, u32::from_be_bytes(lease_id).to_string())

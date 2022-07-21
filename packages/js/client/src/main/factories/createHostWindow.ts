@@ -2,7 +2,7 @@ import { BrowserWindow, shell } from 'electron';
 import { InstanceConnectionType } from '@screenview/node-interop';
 import PageType from '../../render/Pages/PageType';
 import { HostHeight, HostWidth } from '../../common/contants';
-import setHostMenubarPosition from '../mainHelpers/setHostMenubarPosition';
+import setHostMenubarPosition from '../helpers/setHostMenubarPosition';
 
 async function createHostWindow(
     type: InstanceConnectionType
