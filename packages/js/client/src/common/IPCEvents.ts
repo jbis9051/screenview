@@ -13,7 +13,7 @@ export enum RendererToMainIPCEvents {
     Host_GetDesktopList = 'host-get-desktop-list',
     Host_StopDesktopList = 'stop-get-desktop-list',
     Host_UpdateDesktopList = 'host-desktop-list',
-    Host_Disconnect = 'host-disconnect',
+    Host_DisconnectButton = 'host-disconnect-button',
     Client_PasswordInput = 'client-password-input',
     Client_MouseInput = 'client-mouse-input',
     Client_KeyboardInput = 'client-keyboard-input',

@@ -31,7 +31,7 @@ const Host = observer(() => (
                     <button
                         onClick={() =>
                             ipcRenderer.send(
-                                RendererToMainIPCEvents.Host_Disconnect
+                                RendererToMainIPCEvents.Host_DisconnectButton
                             )
                         }
                         className={styles.stopSharingButton}
