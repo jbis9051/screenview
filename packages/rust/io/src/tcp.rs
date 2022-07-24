@@ -17,7 +17,6 @@ use std::{
     io,
     io::{Read, Write},
     net::{Shutdown, TcpStream, ToSocketAddrs},
-    ptr,
     sync::Arc,
     thread,
 };
@@ -128,7 +127,7 @@ fn read_reliable(stream: Arc<TcpStream>, sender: Sender<TransportResult>, waker:
         let data_parsed = match collect_and_parse_reliable(&*stream, &mut buffer, &mut data_end) {
             Ok(message) => {
                 let message_len = message.len();
-                return_if_err!(sender.send(Ok(TransportResponse::Message(message))));
+                return_if_err!(sender.send(Ok(TransportResponse::ReliableMessage(message))));
 
                 message_len + LENGTH_FIELD_WIDTH
             }

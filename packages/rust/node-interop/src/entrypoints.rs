@@ -113,9 +113,13 @@ pub fn connect(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
 
 pub fn start_server(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
     let handle = cx.argument::<JsBox<InstanceHandle>>(0)?;
-    let addr = cx.argument::<JsString>(1)?.value(&mut cx);
+    let reliable_addr = cx.argument::<JsString>(1)?.value(&mut cx);
+    let unreliable_addr = cx.argument::<JsString>(1)?.value(&mut cx);
 
-    send_request(&mut cx, handle, RequestContent::StartServer { addr })
+    send_request(&mut cx, handle, RequestContent::StartServer {
+        reliable_addr,
+        unreliable_addr,
+    })
 }
 
 pub fn establish_session(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {

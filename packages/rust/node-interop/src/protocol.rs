@@ -29,7 +29,8 @@ pub enum RequestContent {
         connection_type: ConnectionType,
     },
     StartServer {
-        addr: String,
+        reliable_addr: String,
+        unreliable_addr: String,
     },
     EstablishSession {
         lease_id: LeaseId,

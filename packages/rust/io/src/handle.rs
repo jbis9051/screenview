@@ -6,7 +6,7 @@ use std::{
     error::Error as StdError,
     fmt::{self, Debug, Display, Formatter},
     io,
-    net::ToSocketAddrs,
+    net::{SocketAddr, ToSocketAddrs},
 };
 
 pub trait Reliable: Sized {
@@ -28,9 +28,19 @@ pub trait Unreliable: Sized {
         waker: ThreadWaker,
     ) -> Result<Self, io::Error>;
 
+    fn connect<A: ToSocketAddrs>(&self, addr: A) -> Result<(), io::Error>;
+
+    fn state(&self) -> UnreliableState;
+
     fn send(&mut self, message: Vec<u8>, max_len: usize) -> Result<(), SendError>;
 
     fn close(&mut self);
+}
+
+#[derive(PartialEq, Eq)]
+pub enum UnreliableState {
+    Bound,
+    Connected,
 }
 
 impl<R: Reliable> Unreliable for R {
@@ -40,6 +50,14 @@ impl<R: Reliable> Unreliable for R {
         waker: ThreadWaker,
     ) -> Result<Self, io::Error> {
         <R as Reliable>::new(addr, result_sender, waker)
+    }
+
+    fn connect<A: ToSocketAddrs>(&self, _addr: A) -> Result<(), io::Error> {
+        Ok(())
+    }
+
+    fn state(&self) -> UnreliableState {
+        UnreliableState::Connected
     }
 
     fn send(&mut self, message: Vec<u8>, _max_len: usize) -> Result<(), SendError> {
@@ -185,7 +203,7 @@ impl<R, U: Unreliable> IoHandle<R, U> {
     /// # Errors
     ///
     /// This function will return an error if it fails to bind to the given remote address.
-    pub fn connect_unreliable<A: ToSocketAddrs>(
+    pub fn bind_unreliable<A: ToSocketAddrs>(
         &mut self,
         addr: A,
         waker: ThreadWaker,
@@ -196,25 +214,49 @@ impl<R, U: Unreliable> IoHandle<R, U> {
         Ok(())
     }
 
+    pub fn connect_unreliable<A: ToSocketAddrs>(&mut self, addr: A) -> Result<(), io::Error> {
+        self.unreliable
+            .as_ref()
+            .expect("unreliable channel not established")
+            .connect(addr)
+    }
+
+    pub fn bind_and_connect_unreliable<A1: ToSocketAddrs, A2: ToSocketAddrs>(
+        &mut self,
+        bind_addr: A1,
+        connect_addr: A2,
+        waker: ThreadWaker,
+    ) -> Result<(), io::Error> {
+        self.bind_unreliable(bind_addr, waker)?;
+        self.connect_unreliable(connect_addr)
+    }
+
+    pub fn unreliable_state(&self) -> UnreliableState {
+        self.unreliable
+            .as_ref()
+            .expect("unreliable channel not established")
+            .state()
+    }
+
     /// Sends a message through the unreliable channel, returning true if it was successfully sent
     /// to the worker thread, or false otherwise.
     ///
     /// # Panics
     ///
-    /// Panics if called before a successful call to [`connect_unreliable`] is made. If the
+    /// Panics if called before a successful call to [`bind_unreliable`] is made. If the
     /// given `message`, once serialized, is larger than the [`max_unreliable_message_size`], then it will
     /// cause the worker thread writing to the unreliable channel to reject the message.
     ///
-    /// [`connect_unreliable`](crate::io::IoHandle::connect_unreliable)
+    /// [`bind_unreliable`](crate::io::IoHandle::bind_unreliable)
     /// [`max_unreliable_message_size`](crate::io::IoHandle::max_unreliable_message_size)
     pub fn send_unreliable(&mut self, message: Vec<u8>) -> Result<(), SendError> {
         self.unreliable
             .as_mut()
-            .expect("unreliable connection not established")
+            .expect("unreliable channel not established")
             .send(message, self.unreliable_message_size)
     }
 
-    /// Unbinds any existing unreliable connection and joins any associated threads.
+    /// Unbinds any existing unreliable channel and joins any associated threads.
     pub fn disconnect_unreliable(&mut self) {
         if let Some(mut handle) = self.unreliable.take() {
             handle.close()
@@ -232,7 +274,8 @@ impl<R: Reliable, U: Unreliable> IoHandle<R, U> {
 }
 
 pub enum TransportResponse {
-    Message(Vec<u8>),
+    ReliableMessage(Vec<u8>),
+    UnreliableMessage(Vec<u8>, SocketAddr),
     Shutdown(Source),
 }
 

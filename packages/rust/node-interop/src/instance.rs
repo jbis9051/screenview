@@ -89,8 +89,10 @@ impl Instance {
                 ref addr,
                 connection_type,
             } => self.handle_connect(promise, waker_core, addr, connection_type),
-            RequestContent::StartServer { ref addr } =>
-                self.handle_start_server(promise, waker_core, addr),
+            RequestContent::StartServer {
+                ref reliable_addr,
+                ref unreliable_addr,
+            } => self.handle_start_server(promise, waker_core, reliable_addr, unreliable_addr),
             RequestContent::EstablishSession { lease_id } =>
                 self.handle_establish_session(promise, lease_id),
             RequestContent::ProcessPassword { password } =>
@@ -135,7 +137,8 @@ impl Instance {
         let waker = waker_core.make_waker(Events::RemoteMessage as u32);
         let result = match connection_type {
             ConnectionType::Reliable => io_handle.connect_reliable(addr, waker),
-            ConnectionType::Unreliable => io_handle.connect_unreliable(addr, waker),
+            ConnectionType::Unreliable =>
+                io_handle.bind_and_connect_unreliable("0.0.0.0:0", addr, waker),
         };
 
         let result = result.map_err(|error| error.to_string());
@@ -181,10 +184,11 @@ impl Instance {
         &mut self,
         promise: Deferred,
         waker_core: &ThreadWakerCore,
-        addr: &str,
+        reliable_addr: &str,
+        unreliable_addr: &str,
     ) -> Result<(), anyhow::Error> {
-        let server = match &mut self.sv_handler {
-            ScreenViewHandler::HostDirect(_, server) => server,
+        let (io_handle, server) = match &mut self.sv_handler {
+            ScreenViewHandler::HostDirect(stack, server) => (&mut stack.io_handle, server),
             _ => unreachable!(),
         };
 
@@ -199,12 +203,15 @@ impl Instance {
         }
 
         let result = match DirectServer::new(
-            addr,
+            reliable_addr,
             waker_core.make_waker(Events::DirectServerConnection as u32),
         ) {
             Ok(new_server) => {
                 *server = Some(new_server);
-                Ok(())
+                io_handle.bind_unreliable(
+                    unreliable_addr,
+                    waker_core.make_waker(Events::RemoteMessage as u32),
+                )
             }
             Err(error) => Err(error),
         };

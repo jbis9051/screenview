@@ -1,13 +1,22 @@
 use common::messages::{
-    rvd::{AccessMask, DisplayId, RvdMessage},
+    rvd::{AccessMask, DisplayId},
     svsc::{Cookie, LeaseId},
     wpskka::AuthSchemeType,
 };
-use io::{IoHandle, Reliable, SendError, TransportError, TransportResponse, Unreliable};
+use io::{
+    IoHandle,
+    Reliable,
+    SendError,
+    Source,
+    TransportError,
+    TransportResponse,
+    Unreliable,
+    UnreliableState,
+};
 use peer::{
     higher_handler::{HigherError, HigherHandlerClient, HigherHandlerHost, HigherHandlerTrait},
     lower::{LowerError, LowerHandlerSignal, LowerHandlerTrait},
-    rvd::RvdHostError,
+    wpskka::{WpskkaClientError, WpskkaError, WpskkaHostError},
     InformEvent,
 };
 use rtp::packet::Packet;
@@ -25,6 +34,7 @@ pub struct HandlerStack<H, L, R, U> {
     higher: H,
     lower: L,
     pub io_handle: IoHandle<R, U>,
+    unreliable_needs_connect: bool,
 }
 
 impl<H, L, R, U> HandlerStack<H, L, R, U>
@@ -39,16 +49,53 @@ where
             higher,
             lower,
             io_handle,
+            unreliable_needs_connect: true,
         }
     }
 
     pub fn handle_next_message(&mut self) -> Option<Result<Vec<InformEvent>, HandlerError>> {
         let result = self.io_handle.recv()?;
-        Some(match result {
-            Ok(TransportResponse::Message(message)) => self.handle(&message),
-            Ok(TransportResponse::Shutdown(source)) => Ok(vec![]), // TODO InformEvent::TransportShutdown(source)
-            Err(error) => Err(error.into()),
-        })
+        match result {
+            Ok(TransportResponse::ReliableMessage(message)) => Some(self.handle(&message)),
+            Ok(TransportResponse::UnreliableMessage(message, addr)) => {
+                let res = self.handle(&message);
+
+                // If we have not already obtained the remote address to which to send UDP packets,
+                // and we receive a UDP packet which has been successfull authenticated
+                if self.unreliable_needs_connect {
+                    let unreliable_state = self.io_handle.unreliable_state();
+
+                    if unreliable_state == UnreliableState::Connected {
+                        self.unreliable_needs_connect = false;
+                        return Some(res);
+                    }
+
+                    if let Err(HandlerError::Higher(HigherError::Wpskka(wpskka_error))) = &res {
+                        if !matches!(
+                            wpskka_error,
+                            WpskkaError::Host(WpskkaHostError::CipherError(..))
+                                | WpskkaError::Client(WpskkaClientError::CipherError(..))
+                        ) {
+                            let connect_res =
+                                self.io_handle.connect_unreliable(&addr).map_err(|error| {
+                                    HandlerError::Transport(TransportError::Fatal {
+                                        source: Source::WriteReliable,
+                                        error,
+                                    })
+                                });
+                            if let Err(error) = connect_res {
+                                return Some(Err(error));
+                            }
+                            self.unreliable_needs_connect = false;
+                        }
+                    }
+                }
+
+                Some(res)
+            }
+            Ok(TransportResponse::Shutdown(source)) => Some(Ok(vec![])), // TODO InformEvent::TransportShutdown(source)
+            Err(error) => Some(Err(error.into())),
+        }
     }
 
     pub fn handle(&mut self, wire: &[u8]) -> Result<Vec<InformEvent>, HandlerError> {
