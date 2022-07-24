@@ -6,7 +6,6 @@ import {
     VTableEmitter,
     VTableEvent,
 } from '@screenview/node-interop';
-import * as console from 'console';
 
 function waitForEvent(
     emitter: VTableEmitter,
@@ -60,7 +59,7 @@ test('direct connection', async () => {
         vtableHost
     );
 
-    await rust.start_server(host, '127.0.0.1:9051');
+    await rust.start_server(host, '127.0.0.1:9051', '127.0.0.1:9051');
 
     await rust.update_static_password(host, 'password');
 
@@ -71,6 +70,7 @@ test('direct connection', async () => {
     );
 
     await rust.connect(client, ConnectionType.Reliable, '127.0.0.1:9051');
+    await rust.connect(client, ConnectionType.Unreliable, '127.0.0.1:9051');
 
     await waitForEvent(
         vtableClient,

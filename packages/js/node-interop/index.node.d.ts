@@ -43,7 +43,8 @@ export declare function new_instance<
 
 export declare function start_server(
     handle: HostDirectInstance,
-    addr: string
+    reliable_addr: string,
+    unreliable_addr: string
 ): Promise<undefined>;
 
 export declare function connect(
