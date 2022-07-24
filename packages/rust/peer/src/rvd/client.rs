@@ -1,5 +1,6 @@
 use crate::{
     debug,
+    helpers::crypto::{random_bytes, random_bytes_const},
     rvd::{RvdError, RvdHandlerTrait},
     InformEvent,
 };
@@ -14,12 +15,15 @@ use common::{
         MouseLocation,
         ProtocolVersionResponse,
         RvdMessage,
+        UnreliableAuthInter,
     },
 };
 
 #[derive(Copy, Clone, Debug)]
 pub enum ClientState {
-    Handshake,
+    AwaitingProtocolVersion,
+    InUnreliableAuthStep1,
+    InUnreliableAuthStep2([u8; 16]),
     Data,
 }
 
@@ -36,7 +40,7 @@ impl Default for RvdClientHandler {
 impl RvdClientHandler {
     pub fn new() -> Self {
         Self {
-            state: ClientState::Handshake,
+            state: ClientState::AwaitingProtocolVersion,
         }
     }
 }
@@ -49,19 +53,49 @@ impl RvdClientHandler {
         events: &mut Vec<InformEvent>,
     ) -> Result<(), RvdClientError> {
         match self.state {
-            ClientState::Handshake => match msg {
+            ClientState::AwaitingProtocolVersion => match msg {
                 RvdMessage::ProtocolVersion(msg) => {
                     let ok = msg.version == RVD_VERSION;
                     write.push(RvdMessage::ProtocolVersionResponse(
                         ProtocolVersionResponse { ok },
                     ));
                     if ok {
+                        self.state = ClientState::InUnreliableAuthStep1;
+                    } else {
+                        events.push(InformEvent::RvdClientInform(RvdClientInform::VersionBad));
+                    }
+                    Ok(())
+                }
+                _ => Err(RvdClientError::WrongMessageForState(
+                    debug(&msg),
+                    self.state,
+                )),
+            },
+            ClientState::InUnreliableAuthStep1 => match msg {
+                RvdMessage::UnreliableAuthInitial(msg) => {
+                    let challenge = random_bytes_const::<16>();
+                    write.push(RvdMessage::UnreliableAuthInter(UnreliableAuthInter {
+                        response: msg.challenge,
+                        challenge: challenge.clone(),
+                    }));
+                    self.state = ClientState::InUnreliableAuthStep2(challenge);
+                    Ok(())
+                }
+                _ => Err(RvdClientError::WrongMessageForState(
+                    debug(&msg),
+                    self.state,
+                )),
+            },
+            ClientState::InUnreliableAuthStep2(challenge) => match msg {
+                RvdMessage::UnreliableAuthFinal(msg) => {
+                    let ok = msg.response == challenge;
+                    if ok {
                         self.state = ClientState::Data;
                         events.push(InformEvent::RvdClientInform(
                             RvdClientInform::HandshakeComplete,
                         ));
                     } else {
-                        events.push(InformEvent::RvdClientInform(RvdClientInform::VersionBad));
+                        return Err(RvdClientError::UnreliableAuthFailed);
                     }
                     Ok(())
                 }
@@ -135,6 +169,8 @@ pub enum RvdClientError {
     WrongMessageForState(String, ClientState),
     #[error("permission error: cannot {0}")]
     PermissionsError(String),
+    #[error("unreliable auth failed")]
+    UnreliableAuthFailed,
 }
 
 #[derive(Debug)]

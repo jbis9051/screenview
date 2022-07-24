@@ -11,6 +11,9 @@ use common::messages::rvd::{
     PermissionMask,
     ProtocolVersionResponse,
     RvdMessage,
+    UnreliableAuthFinal,
+    UnreliableAuthInitial,
+    UnreliableAuthInter,
 };
 use native::api::{
     BGRAFrame,
@@ -26,14 +29,13 @@ use native::api::{
     WindowId,
 };
 use peer::{
-    rvd::{RvdClientHandler, RvdHostHandler},
+    rvd::{RvdClientHandler, RvdHandlerTrait, RvdHostHandler},
     InformEvent,
 };
 use peer_util::rvd_native_helper::{rvd_client_native_helper, rvd_host_native_helper};
 use std::{collections::HashMap, convert::Infallible};
 
 // TODO consider not involving the RvdHandlers and just testing rvd_{client, host}_native_helper
-
 pub fn handshake(host: Option<&mut RvdHostHandler>, client: Option<&mut RvdClientHandler>) {
     let mut write = Vec::new();
     let mut events = Vec::new();
@@ -42,16 +44,55 @@ pub fn handshake(host: Option<&mut RvdHostHandler>, client: Option<&mut RvdClien
         let protocol_message = RvdHostHandler::protocol_version();
 
         client
-            ._handle(protocol_message, &mut write, &mut events)
+            .handle(protocol_message, &mut write, &mut events)
+            .expect("handler failed");
+        write.clear();
+        client
+            .handle(
+                RvdMessage::UnreliableAuthInitial(UnreliableAuthInitial {
+                    challenge: *b"challengechallen",
+                    zero: [0u8; 16],
+                }),
+                &mut write,
+                &mut events,
+            )
+            .expect("handler failed");
+        let msg = write.remove(0);
+        let challenge = match msg {
+            RvdMessage::UnreliableAuthInter(UnreliableAuthInter { challenge, .. }) => challenge,
+            _ => panic!("wrong message type"),
+        };
+        client
+            .handle(
+                RvdMessage::UnreliableAuthFinal(UnreliableAuthFinal {
+                    response: challenge,
+                }),
+                &mut write,
+                &mut events,
+            )
             .expect("handler failed");
     }
 
     if let Some(host) = host {
         let msg = RvdMessage::ProtocolVersionResponse(ProtocolVersionResponse { ok: true });
-        host._handle(msg, &mut events).expect("handler failed");
+        host.handle(msg, &mut write, &mut events)
+            .expect("handler failed");
+        let msg = write.remove(0);
+        let challange = match msg {
+            RvdMessage::UnreliableAuthInitial(UnreliableAuthInitial { challenge, .. }) => challenge,
+            _ => panic!("wrong message type"),
+        };
+        host.handle(
+            RvdMessage::UnreliableAuthInter(UnreliableAuthInter {
+                challenge: [0u8; 16],
+                response: challange,
+            }),
+            &mut write,
+            &mut events,
+        )
+        .expect("handler failed");
     }
 }
-
 
 #[test]
 fn test_client() {
@@ -75,7 +116,7 @@ fn test_client() {
     assert_ne!(native.clipboard_content, clipboard);
 
     client
-        ._handle(msg, &mut write, &mut events)
+        .handle(msg, &mut write, &mut events)
         .expect("handler failed");
 
     assert_eq!(write.len(), 0);
@@ -97,6 +138,7 @@ fn test_client() {
 
 #[test]
 fn test_host_notification() {
+    let mut write = Vec::new();
     let mut events = Vec::new();
     let mut native = TesterNative::new();
     let mut host = RvdHostHandler::new();
@@ -117,8 +159,10 @@ fn test_host_notification() {
 
     assert_ne!(native.clipboard_content, clipboard);
 
-    host._handle(msg, &mut events).expect("handler failed");
+    host.handle(msg, &mut write, &mut events)
+        .expect("handler failed");
 
+    assert_eq!(write.len(), 0);
     assert_eq!(events.len(), 1);
 
     let event = events.remove(0);
@@ -139,6 +183,7 @@ fn test_host_notification() {
 
 #[test]
 fn test_host_key_input() {
+    let mut write = Vec::new();
     let mut events = Vec::new();
     let mut native = TesterNative::new();
     let mut host = RvdHostHandler::new();
@@ -155,8 +200,10 @@ fn test_host_key_input() {
 
     assert!(!native.down_keys.contains(&40));
 
-    host._handle(msg, &mut events).expect("handler failed");
+    host.handle(msg, &mut write, &mut events)
+        .expect("handler failed");
 
+    assert_eq!(write.len(), 0);
     assert_eq!(events.len(), 1);
 
     let event = events.remove(0);
@@ -179,8 +226,10 @@ fn test_host_key_input() {
         key: 40,
     });
 
-    host._handle(msg, &mut events).expect("handler failed");
+    host.handle(msg, &mut write, &mut events)
+        .expect("handler failed");
 
+    assert_eq!(write.len(), 0);
     assert_eq!(events.len(), 1);
 
     let event = events.remove(0);
@@ -202,6 +251,7 @@ fn test_host_key_input() {
 
 #[test]
 fn test_host_mouse_input() {
+    let mut write = Vec::new();
     let mut events = Vec::new();
     let mut native = TesterNative::new();
     let mut host = RvdHostHandler::new();
@@ -216,12 +266,15 @@ fn test_host_mouse_input() {
 
     map.insert(display_id, NativeId::Monitor(monitor.id));
 
-    host._handle(
+    host.handle(
         RvdMessage::DisplayShareAck(DisplayShareAck { display_id }),
+        &mut write,
         &mut events,
     )
     .expect("handler failed");
 
+    assert_eq!(write.len(), 0);
+    assert_eq!(events.len(), 0);
 
     let msg = RvdMessage::MouseInput(MouseInput {
         display_id,
@@ -234,8 +287,10 @@ fn test_host_mouse_input() {
     assert_eq!(native.pointer_x, 0);
     assert_eq!(native.pointer_y, 0);
 
-    host._handle(msg, &mut events).expect("handler failed");
+    host.handle(msg, &mut write, &mut events)
+        .expect("handler failed");
 
+    assert_eq!(write.len(), 0);
     assert_eq!(events.len(), 1);
 
     let event = events.remove(0);
@@ -259,6 +314,7 @@ fn test_host_mouse_input() {
 
 #[test]
 fn test_host_clipboard_request() {
+    let mut write = Vec::new();
     let mut events = Vec::new();
     let mut native = TesterNative::new();
     let mut host = RvdHostHandler::new();
@@ -277,8 +333,10 @@ fn test_host_clipboard_request() {
         },
     });
 
-    host._handle(msg, &mut events).expect("handler failed");
+    host.handle(msg, &mut write, &mut events)
+        .expect("handler failed");
 
+    assert_eq!(write.len(), 0);
     assert_eq!(events.len(), 1);
 
     let event = events.remove(0);

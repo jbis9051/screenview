@@ -16,7 +16,7 @@ use common::messages::rvd::{
     RvdMessage,
 };
 use peer::{
-    rvd::{RvdClientHandler, RvdClientInform, RvdHostHandler, RvdHostInform},
+    rvd::{RvdClientHandler, RvdClientInform, RvdHandlerTrait, RvdHostHandler, RvdHostInform},
     InformEvent,
 };
 
@@ -35,7 +35,7 @@ fn test_rvd_version_mismatch() {
     });
 
     client
-        ._handle(protocol_message, &mut write, &mut events)
+        .handle(protocol_message, &mut write, &mut events)
         .expect("handler failed");
     assert_eq!(events.len(), 1);
     assert_eq!(write.len(), 1);
@@ -47,7 +47,9 @@ fn test_rvd_version_mismatch() {
     let msg = write.remove(0);
     assert!(matches!(&msg, &RvdMessage::ProtocolVersionResponse(_)));
 
-    host._handle(msg, &mut events).expect("handler failed");
+    host.handle(msg, &mut write, &mut events)
+        .expect("handler failed");
+    assert_eq!(write.len(), 0);
     assert_eq!(events.len(), 1);
     assert!(matches!(
         events[0],
@@ -68,27 +70,59 @@ fn test_rvd_handshake() {
     let protocol_message = RvdHostHandler::protocol_version();
 
     client
-        ._handle(protocol_message, &mut write, &mut events)
+        .handle(protocol_message, &mut write, &mut events)
         .expect("handler failed");
-    assert_eq!(events.len(), 1);
+    assert_eq!(events.len(), 0);
     assert_eq!(write.len(), 1);
-
-    let event = events.remove(0);
-
-    assert!(matches!(
-        event,
-        InformEvent::RvdClientInform(RvdClientInform::HandshakeComplete)
-    ));
 
     let msg = write.remove(0);
 
     assert!(matches!(&msg, &RvdMessage::ProtocolVersionResponse(_)));
 
-    host._handle(msg, &mut events).expect("handler failed");
+    host.handle(msg, &mut write, &mut events)
+        .expect("handler failed");
+    assert_eq!(events.len(), 0);
+    assert_eq!(write.len(), 1);
+
+    let msg = write.remove(0);
+
+    assert!(matches!(&msg, &RvdMessage::UnreliableAuthInitial(_)));
+
+    client
+        .handle(msg, &mut write, &mut events)
+        .expect("handler failed");
+    assert_eq!(events.len(), 0);
+    assert_eq!(write.len(), 1);
+
+
+    let msg = write.remove(0);
+
+    assert!(matches!(&msg, &RvdMessage::UnreliableAuthInter(_)));
+
+    host.handle(msg, &mut write, &mut events)
+        .expect("handler failed");
+
+    assert_eq!(write.len(), 1);
     assert_eq!(events.len(), 1);
+
+    let event = events.remove(0);
     assert!(matches!(
-        events[0],
+        event,
         InformEvent::RvdHostInform(RvdHostInform::HandshakeComplete)
+    ));
+
+    let msg = write.remove(0);
+    assert!(matches!(&msg, &RvdMessage::UnreliableAuthFinal(_)));
+
+    client
+        .handle(msg, &mut write, &mut events)
+        .expect("handler failed");
+    assert_eq!(write.len(), 0);
+    assert_eq!(events.len(), 1);
+    let event = events.remove(0);
+    assert!(matches!(
+        event,
+        InformEvent::RvdClientInform(RvdClientInform::HandshakeComplete)
     ));
 }
 
@@ -109,7 +143,7 @@ fn test_rvd_client() {
     let msg = RvdMessage::DisplayShare(change.clone());
 
     client
-        ._handle(msg, &mut write, &mut events)
+        .handle(msg, &mut write, &mut events)
         .expect("handler failed");
     assert_eq!(write.len(), 1);
     assert_eq!(events.len(), 1);
@@ -131,7 +165,7 @@ fn test_rvd_client() {
     let msg = RvdMessage::MouseLocation(location.clone());
 
     client
-        ._handle(msg, &mut write, &mut events)
+        .handle(msg, &mut write, &mut events)
         .expect("handler failed");
     assert_eq!(write.len(), 0);
     assert_eq!(events.len(), 1);
@@ -156,7 +190,7 @@ fn test_rvd_client() {
     let msg = RvdMessage::ClipboardNotification(notification.clone());
 
     client
-        ._handle(msg, &mut write, &mut events)
+        .handle(msg, &mut write, &mut events)
         .expect("handler failed");
     assert_eq!(write.len(), 0);
     assert_eq!(events.len(), 1);
@@ -171,6 +205,7 @@ fn test_rvd_client() {
 
 #[test]
 fn test_rvd_host() {
+    let mut write = Vec::new();
     let mut events = Vec::new();
 
     let mut host = RvdHostHandler::new();
@@ -185,11 +220,13 @@ fn test_rvd_host() {
 
     assert!(matches!(msg, RvdMessage::DisplayShare(_)));
 
-    host._handle(
+    host.handle(
         RvdMessage::DisplayShareAck(DisplayShareAck { display_id }),
+        &mut write,
         &mut events,
     )
     .expect("handler failed");
+    assert_eq!(write.len(), 0);
     assert_eq!(events.len(), 0);
 
     // MouseInput
@@ -202,8 +239,9 @@ fn test_rvd_host() {
         buttons_state: ButtonsMask::empty(),
     };
 
-    host._handle(RvdMessage::MouseInput(mouse_input), &mut events)
+    host.handle(RvdMessage::MouseInput(mouse_input), &mut write, &mut events)
         .expect("handler failed");
+    assert_eq!(write.len(), 0);
     assert_eq!(events.len(), 1);
 
     let event = events.remove(0);
@@ -225,8 +263,13 @@ fn test_rvd_host() {
         key: 20,
     };
 
-    host._handle(RvdMessage::KeyInput(key_input.clone()), &mut events)
-        .expect("handler failed");
+    host.handle(
+        RvdMessage::KeyInput(key_input.clone()),
+        &mut write,
+        &mut events,
+    )
+    .expect("handler failed");
+    assert_eq!(write.len(), 0);
     assert_eq!(events.len(), 1);
 
     let event = events.remove(0);
@@ -240,17 +283,19 @@ fn test_rvd_host() {
 
     host.set_permissions(PermissionMask::CLIPBOARD_READ);
 
-    host._handle(
+    host.handle(
         RvdMessage::ClipboardRequest(ClipboardRequest {
             info: ClipboardMeta {
                 clipboard_type: ClipboardType::Text,
                 content_request: false,
             },
         }),
+        &mut write,
         &mut events,
     )
     .expect("handler failed");
 
+    assert_eq!(write.len(), 0);
     assert_eq!(events.len(), 1);
 
     let event = events.remove(0);
@@ -274,7 +319,9 @@ fn test_rvd_host() {
     };
     let msg = RvdMessage::ClipboardNotification(notification.clone());
 
-    host._handle(msg, &mut events).expect("handler failed");
+    host.handle(msg, &mut write, &mut events)
+        .expect("handler failed");
+    assert_eq!(write.len(), 0);
     assert_eq!(events.len(), 1);
 
     let event = events.remove(0);

@@ -1,5 +1,6 @@
 use crate::{
     debug,
+    helpers::crypto::random_bytes_const,
     rvd::{
         PermissionError::{
             ClipboardRead,
@@ -26,6 +27,8 @@ use common::{
         PermissionsUpdate,
         ProtocolVersion,
         RvdMessage,
+        UnreliableAuthFinal,
+        UnreliableAuthInitial,
     },
 };
 use std::{
@@ -46,7 +49,8 @@ struct SharedDisplay {
 
 #[derive(Copy, Clone, Debug)]
 pub enum HostState {
-    Handshake,
+    AwaitingProtocolVersion,
+    UnreliableAuth([u8; 16]),
     Ready,
 }
 
@@ -66,7 +70,7 @@ impl Default for RvdHostHandler {
 impl RvdHostHandler {
     pub fn new() -> Self {
         Self {
-            state: HostState::Handshake,
+            state: HostState::AwaitingProtocolVersion,
             permissions: PermissionMask::empty(),
             shared_displays: HashMap::new(),
         }
@@ -168,17 +172,37 @@ impl RvdHostHandler {
     pub fn _handle(
         &mut self,
         msg: RvdMessage,
+        write: &mut Vec<RvdMessage>,
         events: &mut Vec<InformEvent>,
     ) -> Result<(), RvdHostError> {
         match self.state {
-            HostState::Handshake => match msg {
+            HostState::AwaitingProtocolVersion => match msg {
                 RvdMessage::ProtocolVersionResponse(msg) => {
                     if !msg.ok {
                         events.push(InformEvent::RvdHostInform(RvdHostInform::VersionBad));
                         return Ok(());
                     }
-                    self.state = HostState::Ready;
+                    let challenge = random_bytes_const::<16>();
+                    write.push(RvdMessage::UnreliableAuthInitial(UnreliableAuthInitial {
+                        challenge: challenge.clone(),
+                        zero: [0u8; 16],
+                    }));
+                    self.state = HostState::UnreliableAuth(challenge);
+                    Ok(())
+                }
+                _ => Err(RvdHostError::WrongMessageForState(debug(&msg), self.state)),
+            },
+            HostState::UnreliableAuth(challenge) => match msg {
+                RvdMessage::UnreliableAuthInter(msg) => {
+                    if msg.response != challenge {
+                        // TODO timing safe equal?
+                        return Err(RvdHostError::UnreliableAuthFailed);
+                    }
+                    write.push(RvdMessage::UnreliableAuthFinal(UnreliableAuthFinal {
+                        response: msg.challenge,
+                    }));
                     events.push(InformEvent::RvdHostInform(RvdHostInform::HandshakeComplete));
+                    self.state = HostState::Ready;
                     Ok(())
                 }
                 _ => Err(RvdHostError::WrongMessageForState(debug(&msg), self.state)),
@@ -264,10 +288,10 @@ impl RvdHandlerTrait for RvdHostHandler {
     fn handle(
         &mut self,
         msg: RvdMessage,
-        _write: &mut Vec<RvdMessage>,
+        write: &mut Vec<RvdMessage>,
         events: &mut Vec<InformEvent>,
     ) -> Result<(), RvdError> {
-        Ok(self._handle(msg, events)?)
+        Ok(self._handle(msg, write, events)?)
     }
 }
 
@@ -289,6 +313,8 @@ pub enum RvdHostError {
     DisplayNotFound(DisplayId),
     #[error("ran out of DisplayIDs. Are you sharing 256 displays?")]
     RanOutOfDisplayIds,
+    #[error("unreliable auth failed")]
+    UnreliableAuthFailed,
 }
 
 #[derive(Debug)]

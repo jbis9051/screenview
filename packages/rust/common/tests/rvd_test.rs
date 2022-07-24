@@ -22,6 +22,32 @@ fn test_version_response() {
 }
 
 #[test]
+fn test_unreliable_auth_initial() {
+    let bytes = include_bytes!("binary/rvd/unreliable_auth_initial.bin");
+    let message = UnreliableAuthInitial::read(&mut Cursor::new(bytes)).unwrap();
+    assert_eq!(&message.challenge, b"challangechallan");
+    assert_eq!(&message.zero, b"zerozerozerozero");
+    test_write(&message, bytes);
+}
+
+#[test]
+fn test_unreliable_auth_inter() {
+    let bytes = include_bytes!("binary/rvd/unreliable_auth_inter.bin");
+    let message = UnreliableAuthInter::read(&mut Cursor::new(bytes)).unwrap();
+    assert_eq!(&message.response, b"responseresponse");
+    assert_eq!(&message.challenge, b"challengechallen");
+    test_write(&message, bytes);
+}
+
+#[test]
+fn test_unreliable_auth_final() {
+    let bytes = include_bytes!("binary/rvd/unreliable_auth_final.bin");
+    let message = UnreliableAuthFinal::read(&mut Cursor::new(bytes)).unwrap();
+    assert_eq!(&message.response, b"responseresponse");
+    test_write(&message, bytes);
+}
+
+#[test]
 fn test_permissions_update() {
     let bytes = include_bytes!("binary/rvd/permissions_update.bin");
     let message = PermissionsUpdate::read(&mut Cursor::new(bytes)).unwrap();
