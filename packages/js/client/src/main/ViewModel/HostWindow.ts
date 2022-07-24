@@ -30,6 +30,8 @@ export default class HostWindow extends events.EventEmitter {
 
     type: PageType;
 
+    private cleanupCBs: Array<() => void> = [];
+
     constructor(type: InstanceConnectionType) {
         super();
         this.type =
@@ -38,7 +40,8 @@ export default class HostWindow extends events.EventEmitter {
                 : PageType.DirectHost;
         this.window = this.createWindow();
         this.window.on('close', () => {
-            this.emit('close');
+            this.cleanupCBs.forEach((cleanup) => cleanup());
+            this.emit('exit');
         });
         this.setUpListeners();
     }
@@ -115,17 +118,27 @@ export default class HostWindow extends events.EventEmitter {
     }
 
     setUpListeners() {
-        ipcMain.on(
+        const register = (
+            event: RendererToMainIPCEvents,
+            handler: (event: IpcMainEvent, ...any: any[]) => any
+        ) => {
+            ipcMain.on(event, handler);
+            this.cleanupCBs.push(() => {
+                ipcMain.removeListener(event, handler);
+            });
+        };
+
+        register(
             RendererToMainIPCEvents.Host_GetDesktopList,
             this.handleGetDesktopList.bind(this)
         );
 
-        ipcMain.on(
+        register(
             RendererToMainIPCEvents.Host_UpdateDesktopList,
             this.handleUpdateDesktopList.bind(this)
         );
 
-        ipcMain.on(
+        register(
             RendererToMainIPCEvents.Host_DisconnectButton,
             this.handleDisconnectButton.bind(this)
         );
@@ -172,5 +185,10 @@ export default class HostWindow extends events.EventEmitter {
         const windowScreen = this.getScreenFromBrowserWindow();
         const screenWidth = windowScreen.size.width;
         this.window.setPosition((screenWidth - HostWidth) / 2, 0, true);
+    }
+
+    cleanup() {
+        this.window.close();
+        this.cleanupCBs.forEach((cleanup) => cleanup());
     }
 }

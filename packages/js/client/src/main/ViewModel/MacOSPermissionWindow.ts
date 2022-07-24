@@ -1,13 +1,18 @@
 import { ipcMain, shell, BrowserWindow } from 'electron';
 import { rust } from '@screenview/node-interop';
+import events from 'events';
 import PageType from '../../render/Pages/PageType';
 import { RendererToMainIPCEvents } from '../../common/IPCEvents';
 
-export default class MacOSPermissionWindow {
+export default class MacOSPermissionWindow extends events.EventEmitter {
     window: BrowserWindow;
 
     constructor() {
+        super();
         this.window = MacOSPermissionWindow.createWindow();
+        this.window.on('closed', () => {
+            this.emit('closed');
+        });
         MacOSPermissionWindow.registerListeners();
     }
 

@@ -35,17 +35,26 @@ export default class Application<T extends ConfigurationService> {
     }
 
     start() {
+        /* // On macOS 10.15+ we must request permission to access the screen and accessibility API. Both are used for Hosting. Screen access changes requires the app to be restarted.
+        if (
+            process.platform === 'darwin' &&
+            !state.config.promptedForPermissionMacOS
+        ) {
+            const accessibilityPermission =
+                rust.macos_accessibility_permission(false);
+            const screenCapturePermission = rust.macos_screen_capture_permission();
+            if (!accessibilityPermission || !screenCapturePermission) {
+                state.config.promptedForPermissionMacOS = true;
+                await saveConfig(state.config);
+                const permissionWindow = await createMacOSPermissionPromptWindow();
+                permissionWindow.on('closed', () => {
+                    startMainWindow(state);
+                });
+            }
+        } */
         this.mainManager.focus();
-        if (this.config.startAsSignalHost) {
-            this.hostSignalManger = new HostManager(
-                InstanceConnectionType.Signal
-            );
-        }
-        if (this.config.startAsDirectHost) {
-            this.hostDirectManger = new HostManager(
-                InstanceConnectionType.Direct
-            );
-        }
+        console.log('Application started');
+        this.startHosts();
     }
 
     focus() {
@@ -66,5 +75,38 @@ export default class Application<T extends ConfigurationService> {
                 cb(this.config);
             }
         );
+        this.mainManager.on(
+            RendererToMainIPCEvents.Main_ConfigUpdate,
+            async (config) => {
+                this.updateConfig(config);
+                await this.configurationService.save(config);
+            }
+        );
+    }
+
+    private updateConfig(config: Config) {
+        this.config = config;
+        this.startHosts();
+    }
+
+    private startHosts() {
+        if (this.config.startAsSignalHost && !this.hostSignalManger) {
+            this.hostSignalManger = new HostManager(
+                InstanceConnectionType.Signal
+            );
+        } else if (this.hostSignalManger) {
+            this.hostSignalManger.cleanup();
+            this.hostSignalManger = null;
+        }
+        if (this.config.startAsDirectHost && !this.hostDirectManger) {
+            console.log('I GOT TO START DIRECT HOST');
+            this.hostDirectManger = new HostManager(
+                InstanceConnectionType.Direct
+            );
+        } else if (this.hostDirectManger) {
+            console.log('I GOT TO CLEANUP DIRECT HOST');
+            this.hostDirectManger.cleanup();
+            this.hostDirectManger = null;
+        }
     }
 }

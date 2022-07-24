@@ -43,16 +43,8 @@ export default class MainManager extends events.EventEmitter {
                 }
             )
         );
-        ipcMain.on(RendererToMainIPCEvents.Main_ConfigUpdate, (e) =>
-            this.emit(
-                RendererToMainIPCEvents.Main_ConfigUpdate,
-                (config: Config) => {
-                    this.emit(
-                        RendererToMainIPCEvents.Main_ConfigUpdate,
-                        config
-                    );
-                }
-            )
-        );
+        ipcMain.on(RendererToMainIPCEvents.Main_ConfigUpdate, (_, config) => {
+            this.emit(RendererToMainIPCEvents.Main_ConfigUpdate, config);
+        });
     }
 }

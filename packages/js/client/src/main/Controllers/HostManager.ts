@@ -10,4 +10,8 @@ export default class HostManager<T extends InstanceConnectionType> {
     constructor(type: T) {
         this.instance = new HostInstance<T>(type);
     }
+
+    cleanup() {
+        this.window?.cleanup();
+    }
 }
