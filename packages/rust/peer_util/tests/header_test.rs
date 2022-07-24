@@ -9,14 +9,14 @@ use common::messages::{
     Message,
 };
 
-const DIRECT_HEADER_LEN: usize = 15;
-const SIGNAL_HEADER_LEN: usize = 43;
+const DIRECT_HEADER_LEN: usize = 13;
+const SIGNAL_HEADER_LEN: usize = 41;
 
 #[test]
 fn header_test() {
     let rvd = RvdMessage::FrameData(FrameData {
         display_id: 0,
-        data: vec![],
+        data: Data(Cow::Owned(Vec::new())),
     });
     let wpskka = WpskkaMessage::TransportDataMessageUnreliable(TransportDataMessageUnreliable {
         counter: 0,

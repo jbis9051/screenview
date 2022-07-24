@@ -60,7 +60,7 @@ pub fn rvd_host_native_helper<T: NativeApiTemplate>(
     event: RvdHostInform,
     native: &mut T,
     rvd_native_id_map: &HashMap<DisplayId, NativeId>,
-) -> Result<(Option<RvdHostInform>, Option<RvdMessage>), HostError<T>> {
+) -> Result<(Option<RvdHostInform>, Option<RvdMessage<'static>>), HostError<T>> {
     match event {
         RvdHostInform::MouseInput(event) => {
             let native_id = rvd_native_id_map.get(&event.display_id).unwrap(); // TODO

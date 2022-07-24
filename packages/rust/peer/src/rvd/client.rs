@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use crate::{
     debug,
     helpers::crypto::{random_bytes, random_bytes_const},
@@ -6,16 +8,19 @@ use crate::{
 };
 use common::{
     constants::RVD_VERSION,
-    messages::rvd::{
-        ClipboardType,
-        DisplayId,
-        DisplayShare,
-        DisplayShareAck,
-        FrameData,
-        MouseLocation,
-        ProtocolVersionResponse,
-        RvdMessage,
-        UnreliableAuthInter,
+    messages::{
+        rvd::{
+            ClipboardType,
+            DisplayId,
+            DisplayShare,
+            DisplayShareAck,
+            FrameData,
+            MouseLocation,
+            ProtocolVersionResponse,
+            RvdMessage,
+            UnreliableAuthInter,
+        },
+        Data,
     },
 };
 
@@ -48,8 +53,8 @@ impl RvdClientHandler {
 impl RvdClientHandler {
     pub fn _handle(
         &mut self,
-        msg: RvdMessage,
-        write: &mut Vec<RvdMessage>,
+        msg: RvdMessage<'_>,
+        write: &mut Vec<RvdMessage<'_>>,
         events: &mut Vec<InformEvent>,
     ) -> Result<(), RvdClientError> {
         match self.state {
@@ -107,7 +112,10 @@ impl RvdClientHandler {
             ClientState::Data => match msg {
                 RvdMessage::FrameData(msg) => {
                     events.push(InformEvent::RvdClientInform(RvdClientInform::FrameData(
-                        msg,
+                        FrameData {
+                            display_id: msg.display_id,
+                            data: Data(Cow::Owned(msg.data.0.into_owned())),
+                        },
                     )));
                     Ok(())
                 }
@@ -155,8 +163,8 @@ impl RvdClientHandler {
 impl RvdHandlerTrait for RvdClientHandler {
     fn handle(
         &mut self,
-        msg: RvdMessage,
-        write: &mut Vec<RvdMessage>,
+        msg: RvdMessage<'_>,
+        write: &mut Vec<RvdMessage<'_>>,
         events: &mut Vec<InformEvent>,
     ) -> Result<(), RvdError> {
         Ok(self._handle(msg, write, events)?)
@@ -179,7 +187,7 @@ pub enum RvdClientInform {
 
     HandshakeComplete,
 
-    FrameData(FrameData),
+    FrameData(FrameData<'static>),
     MouseHidden(DisplayId),
     MouseLocation(MouseLocation),
     DisplayShare(DisplayShare),

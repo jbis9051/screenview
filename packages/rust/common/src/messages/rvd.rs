@@ -1,4 +1,4 @@
-use super::{Error, Message, MessageComponent};
+use super::{Data, Error, Message, MessageComponent};
 use crate::messages::impl_bitflags_message_component;
 use bitflags::bitflags;
 use byteorder::{ReadBytesExt, WriteBytesExt};
@@ -315,14 +315,15 @@ pub struct ClipboardNotification {
 
 #[derive(MessageComponent, Debug)]
 #[message_id(15)]
-pub struct FrameData {
+#[lifetime('a)]
+pub struct FrameData<'a> {
     pub display_id: u8,
-    #[parse(len_prefixed(2))]
-    pub data: Vec<u8>,
+    pub data: Data<'a>,
 }
 
 #[derive(MessageComponent, Debug)]
-pub enum RvdMessage {
+#[lifetime('a)]
+pub enum RvdMessage<'a> {
     ProtocolVersion(ProtocolVersion),
     ProtocolVersionResponse(ProtocolVersionResponse),
     UnreliableAuthInitial(UnreliableAuthInitial),
@@ -338,9 +339,9 @@ pub enum RvdMessage {
     KeyInput(KeyInput),
     ClipboardRequest(ClipboardRequest),
     ClipboardNotification(ClipboardNotification),
-    FrameData(FrameData),
+    FrameData(FrameData<'a>),
 }
 
-impl Message for RvdMessage {
+impl Message for RvdMessage<'_> {
     const LEN_PREFIX_WIDTH: usize = 0;
 }

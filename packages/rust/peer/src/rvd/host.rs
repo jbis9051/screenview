@@ -15,23 +15,28 @@ use crate::{
 };
 use common::{
     constants::RVD_VERSION,
-    messages::rvd::{
-        AccessMask,
-        ButtonsMask,
-        ClipboardType,
-        DisplayId,
-        DisplayShare,
-        DisplayUnshare,
-        KeyInput,
-        PermissionMask,
-        PermissionsUpdate,
-        ProtocolVersion,
-        RvdMessage,
-        UnreliableAuthFinal,
-        UnreliableAuthInitial,
+    messages::{
+        rvd::{
+            AccessMask,
+            ButtonsMask,
+            ClipboardType,
+            DisplayId,
+            DisplayShare,
+            DisplayUnshare,
+            FrameData,
+            KeyInput,
+            PermissionMask,
+            PermissionsUpdate,
+            ProtocolVersion,
+            RvdMessage,
+            UnreliableAuthFinal,
+            UnreliableAuthInitial,
+        },
+        Data,
     },
 };
 use std::{
+    borrow::Cow,
     collections::HashMap,
     fmt::Debug,
     time::{Duration, Instant},
@@ -76,13 +81,13 @@ impl RvdHostHandler {
         }
     }
 
-    pub fn protocol_version() -> RvdMessage {
+    pub fn protocol_version() -> RvdMessage<'static> {
         RvdMessage::ProtocolVersion(ProtocolVersion {
             version: RVD_VERSION.to_string(),
         })
     }
 
-    pub fn set_permissions(&mut self, permissions: PermissionMask) -> RvdMessage {
+    pub fn set_permissions(&mut self, permissions: PermissionMask) -> RvdMessage<'static> {
         self.permissions = permissions;
         RvdMessage::PermissionsUpdate(PermissionsUpdate {
             permission_mask: permissions,
@@ -102,7 +107,7 @@ impl RvdHostHandler {
         &mut self,
         name: String,
         access: AccessMask,
-    ) -> Result<(DisplayId, RvdMessage), RvdHostError> {
+    ) -> Result<(DisplayId, RvdMessage<'static>), RvdHostError> {
         let display_id = self
             .find_unused_display_id()
             .ok_or(RvdHostError::RanOutOfDisplayIds)?;
@@ -121,7 +126,10 @@ impl RvdHostHandler {
         Ok((display_id, msg))
     }
 
-    pub fn unshare_display(&mut self, display_id: DisplayId) -> Result<RvdMessage, RvdHostError> {
+    pub fn unshare_display(
+        &mut self,
+        display_id: DisplayId,
+    ) -> Result<RvdMessage<'static>, RvdHostError> {
         if self.shared_displays.remove(&display_id).is_none() {
             return Err(RvdHostError::DisplayNotFound(display_id));
         }
@@ -129,7 +137,7 @@ impl RvdHostHandler {
     }
 
     /// This should be called every so often, at minimum probably every second.
-    pub fn check_expired_shares(&mut self) -> Vec<RvdMessage> {
+    pub fn check_expired_shares(&mut self) -> Vec<RvdMessage<'static>> {
         let mut unshares = Vec::new();
         self.shared_displays
             .retain(|&display_id, share| match share.share_time {
@@ -145,34 +153,17 @@ impl RvdHostHandler {
         unshares
     }
 
-    pub fn frame_update<'a>(&mut self, _pkt: &[u8]) -> impl Iterator<Item = RvdMessage> + 'a {
-        /* let display_id = fragments.display_id;
-        let shared_display = self
-            .shared_displays
-            .get_mut(&display_id)
-            .and_then(Option::as_mut)
-            .expect("invalid or stale display id");
-
-        let frame_number = shared_display.frame_number;
-        shared_display.frame_number = frame_number
-            .checked_add(1)
-            .expect("frame number overflowed");
-
-        fragments.map(move |fragment| {
-            RvdMessage::FrameData(FrameData {
-                frame_number,
-                display_id,
-                cell_number: fragment.cell_number,
-                data: fragment.data,
-            })
-        })*/
-        Vec::new().into_iter()
+    pub fn frame_update<'a>(&mut self, display_id: DisplayId, data: &'a [u8]) -> RvdMessage<'a> {
+        RvdMessage::FrameData(FrameData {
+            display_id,
+            data: Data(Cow::Borrowed(data)),
+        })
     }
 
     pub fn _handle(
         &mut self,
-        msg: RvdMessage,
-        write: &mut Vec<RvdMessage>,
+        msg: RvdMessage<'_>,
+        write: &mut Vec<RvdMessage<'_>>,
         events: &mut Vec<InformEvent>,
     ) -> Result<(), RvdHostError> {
         match self.state {
@@ -287,8 +278,8 @@ impl RvdHostHandler {
 impl RvdHandlerTrait for RvdHostHandler {
     fn handle(
         &mut self,
-        msg: RvdMessage,
-        write: &mut Vec<RvdMessage>,
+        msg: RvdMessage<'_>,
+        write: &mut Vec<RvdMessage<'_>>,
         events: &mut Vec<InformEvent>,
     ) -> Result<(), RvdError> {
         Ok(self._handle(msg, write, events)?)

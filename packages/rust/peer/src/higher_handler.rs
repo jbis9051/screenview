@@ -33,13 +33,13 @@ pub(crate) mod sealed {
     use super::*;
 
     pub enum HigherMessage<'a> {
-        Rvd(RvdMessage),
+        Rvd(RvdMessage<'a>),
         Wpskka(WpskkaMessage<'a>),
     }
 }
 
-impl From<RvdMessage> for sealed::HigherMessage<'_> {
-    fn from(msg: RvdMessage) -> Self {
+impl<'a> From<RvdMessage<'a>> for sealed::HigherMessage<'a> {
+    fn from(msg: RvdMessage<'a>) -> Self {
         Self::Rvd(msg)
     }
 }
@@ -68,7 +68,7 @@ impl HigherHandlerHost {
         }
     }
 
-    pub fn protocol_version(&self) -> RvdMessage {
+    pub fn protocol_version(&self) -> RvdMessage<'static> {
         RvdHostHandler::protocol_version()
     }
 
@@ -84,22 +84,25 @@ impl HigherHandlerHost {
         &mut self,
         name: String,
         access: AccessMask,
-    ) -> Result<(DisplayId, RvdMessage), HigherError> {
+    ) -> Result<(DisplayId, RvdMessage<'static>), HigherError> {
         Ok(self
             .rvd
             .share_display(name, access)
             .map_err(RvdError::Host)?)
     }
 
-    pub fn unshare_display(&mut self, display_id: DisplayId) -> Result<RvdMessage, HigherError> {
+    pub fn unshare_display(
+        &mut self,
+        display_id: DisplayId,
+    ) -> Result<RvdMessage<'static>, HigherError> {
         Ok(self
             .rvd
             .unshare_display(display_id)
             .map_err(RvdError::Host)?)
     }
 
-    pub fn frame_update<'a>(&mut self, pkt: &[u8]) -> impl Iterator<Item = RvdMessage> + 'a {
-        self.rvd.frame_update(pkt)
+    pub fn frame_update<'a>(&mut self, display_id: DisplayId, data: &'a [u8]) -> RvdMessage<'a> {
+        self.rvd.frame_update(display_id, data)
     }
 }
 
@@ -126,7 +129,10 @@ impl HigherHandlerClient {
 }
 
 impl<Wpskka: WpskkaHandlerTrait, Rvd: RvdHandlerTrait> HigherHandler<Wpskka, Rvd> {
-    fn send_rvd(&mut self, rvd: RvdMessage) -> Result<ChanneledMessage<HigherOutput>, HigherError> {
+    fn send_rvd(
+        &mut self,
+        rvd: RvdMessage<'_>,
+    ) -> Result<ChanneledMessage<HigherOutput>, HigherError> {
         let data = rvd.to_bytes()?;
 
         match rvd {

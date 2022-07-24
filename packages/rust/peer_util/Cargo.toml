@@ -14,6 +14,7 @@ capture = {path="../capture"}
 event_loop ={path="../event_loop"}
 video_process = {path="../video_process"}
 rtp = { git = "https://github.com/Cassy343/rtp", branch = "code-improvements" }
+webrtc-util = { version = "0.5.3", default-features = false, features = ["marshal"] }
 thiserror = "1.0.31"
 dcv-color-primitives = "0.5.1"
 image = "0.24.2"

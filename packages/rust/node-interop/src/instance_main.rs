@@ -112,7 +112,7 @@ fn instance_main(
             // We don't need to double-loop here because the channels for frame capturing have a
             // capacity of 1, so we won't fall behind when processing frames, the capture threads
             // will just block and wait for us
-            for capture in instance.capture_pool.active_captures() {
+            for (display_id, capture) in instance.capture_pool.active_captures() {
                 let mut frame_update = match capture.next_update() {
                     Some(update) => update,
                     None => continue,
@@ -123,7 +123,7 @@ fn instance_main(
                 }
 
                 let result = forward!(instance.sv_handler, [HostSignal, HostDirect], |stack| stack
-                    .send_frame_update(frame_update.frame_update()));
+                    .send_frame_update(display_id, frame_update.frame_update()));
 
                 result.expect("handle errors from sending frame updates properly");
 

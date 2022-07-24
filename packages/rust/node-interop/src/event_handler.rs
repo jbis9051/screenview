@@ -56,7 +56,7 @@ pub fn handle_event(instance: &mut Instance, event: InformEvent) -> Result<(), (
                 RvdClientInform::FrameData(data) => instance.callback_interface.rvd_frame_data(
                     &instance.channel,
                     data.display_id,
-                    data.data,
+                    data.data.0.into_owned(),
                 ),
                 _ => {}
             }

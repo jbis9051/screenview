@@ -44,7 +44,7 @@ impl ThumbnailCapture {
 
     pub fn handle_thumbnail_updates<F>(&mut self, mut handler: F)
     where F: FnMut(NativeThumbnail) {
-        for capture in self.pool.active_captures() {
+        for (_, capture) in self.pool.active_captures() {
             let mut update = match capture.next_update() {
                 Some(update) => update,
                 None => continue,

@@ -69,6 +69,13 @@ impl<P: ProcessFrame> FrameCapture<P> {
         }
     }
 
+    pub fn captured_display(&self) -> DisplayId {
+        match &self.state {
+            &FrameCaptureState::Active { display_id, .. } => display_id,
+            FrameCaptureState::Inactive { .. } => panic!("Frame capture not active"),
+        }
+    }
+
     pub fn is_capturing(&self, display_id: DisplayId) -> bool {
         match &self.state {
             &FrameCaptureState::Active {

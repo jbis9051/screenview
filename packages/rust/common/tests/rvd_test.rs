@@ -185,6 +185,6 @@ fn frame_data() {
     let bytes = include_bytes!("binary/rvd/frame_data.bin");
     let message: FrameData = FrameData::read(&mut Cursor::new(bytes)).unwrap();
     assert_eq!(message.display_id, 5);
-    assert_eq!(&message.data, b"abc");
+    assert_eq!(message.data.0.as_ref(), b"abc");
     test_write(&message, bytes);
 }

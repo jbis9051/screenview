@@ -1,5 +1,5 @@
 use common::messages::{
-    rvd::{AccessMask, DisplayId},
+    rvd::{AccessMask, DisplayId, RvdMessage},
     svsc::{Cookie, LeaseId},
     wpskka::AuthSchemeType,
 };
@@ -20,6 +20,7 @@ use peer::{
     InformEvent,
 };
 use rtp::packet::Packet;
+use webrtc_util::{Marshal, MarshalSize};
 
 macro_rules! send {
     ($self: ident, $message: expr) => {
@@ -224,12 +225,24 @@ where
 
     pub fn send_frame_update(
         &mut self,
+        display_id: DisplayId,
         fragments: impl Iterator<Item = Packet>,
     ) -> Result<(), HandlerError> {
-        let messages = self.higher.frame_update(&[0]); // TODO
-        for message in messages {
+        let mut buffer = Vec::<u8>::new();
+
+        for packet in fragments {
+            let size = MarshalSize::marshal_size(&packet);
+            if buffer.len() < size {
+                buffer.resize(size, 0);
+            }
+            let written = packet
+                .marshal_to(&mut buffer[..])
+                .expect("Insufficient buffer size");
+            let data = &buffer[.. written];
+            let message = self.higher.frame_update(display_id, data);
             send!(self, message);
         }
+
         Ok(())
     }
 }
