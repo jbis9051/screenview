@@ -378,7 +378,12 @@ impl Instance {
                     Err(_) => continue, // TODO
                     Ok(display_id) => display_id,
                 };
-            self.shared_displays.insert(display_id, native_id);
+            self.shared_displays.insert(display_id, native_id.clone());
+            let capture = match self.capture_pool.get_or_create_inactive() {
+                Ok(capture) => capture,
+                Err(_error) => todo!("tell node that we couldn't create a new capture"),
+            };
+            capture.activate(native_id, display_id);
         }
 
         promise.settle_with(&self.channel, move |mut cx| Ok(cx.undefined()));

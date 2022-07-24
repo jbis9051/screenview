@@ -1,9 +1,11 @@
 use capture::{FrameProcessResult, ProcessFrame, ViewResources};
 use common::messages::rvd::DisplayId;
+use dcv_color_primitives::ErrorKind;
 use native::api::BGRAFrame;
 use rtp::packet::Packet;
 use std::vec::Drain;
 use video_process::{
+    convert::convert_bgra_to_i420,
     rtp::RtpEncoder,
     vp9::{self, VP9Encoder},
 };
@@ -55,11 +57,16 @@ impl ProcessFrame for FrameProcessor {
             return FrameProcessResult::Failure;
         }
 
+        let i420_frame = match convert_bgra_to_i420(frame.width, frame.height, &mut frame.data) {
+            Ok(data) => data,
+            Err(_) => return FrameProcessResult::Failure,
+        };
+
         // unwrap is fine because we ensure the encoder is present with the check above, this
         // branch should be optimized out by the compiler
         let vp9_encoder = self.vp9_encoder.as_mut().unwrap();
 
-        let packets = match vp9_encoder.encode(&frame.data) {
+        let packets = match vp9_encoder.encode(&i420_frame) {
             Ok(packets) => packets,
             // TODO: log more detailed information about the error
             Err(_) => return FrameProcessResult::Failure,

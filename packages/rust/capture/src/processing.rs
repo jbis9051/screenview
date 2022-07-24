@@ -28,3 +28,12 @@ pub enum FrameProcessResult {
     Success,
     Failure,
 }
+
+impl FrameProcessResult {
+    pub fn unwrap(self) {
+        match self {
+            FrameProcessResult::Success => (),
+            FrameProcessResult::Failure => panic!("frame processing failed"),
+        }
+    }
+}
