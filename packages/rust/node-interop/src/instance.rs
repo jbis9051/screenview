@@ -383,7 +383,9 @@ impl Instance {
                 Ok(capture) => capture,
                 Err(_error) => todo!("tell node that we couldn't create a new capture"),
             };
-            capture.activate(native_id, display_id);
+
+            // FIXME: get real MTU value
+            capture.activate(1500, native_id, display_id);
         }
 
         promise.settle_with(&self.channel, move |mut cx| Ok(cx.undefined()));

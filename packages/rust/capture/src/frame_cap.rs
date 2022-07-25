@@ -32,7 +32,12 @@ impl<P: ProcessFrame> FrameCapture<P> {
         })
     }
 
-    pub fn activate(&mut self, display: NativeId, display_id: DisplayId) {
+    pub fn activate(
+        &mut self,
+        processor_args: P::InitArgs,
+        display: NativeId,
+        display_id: DisplayId,
+    ) {
         let (request_sender, request_receiver) = bounded(1);
         let (response_sender, response_receiver) = bounded(1);
 
@@ -45,6 +50,7 @@ impl<P: ProcessFrame> FrameCapture<P> {
 
         let new_handle = match old_state {
             FrameCaptureState::Inactive { native_api, waker } => Self::start_worker_thread(
+                processor_args,
                 native_api,
                 waker,
                 display,
@@ -134,23 +140,27 @@ impl<P: ProcessFrame> FrameCapture<P> {
     }
 
     fn start_worker_thread(
+        processor_args: P::InitArgs,
         native_api: NativeApi,
         waker: ThreadWaker,
         display: NativeId,
         sender: Sender<CaptureReply<P>>,
         receiver: Receiver<WorkerRequest<P>>,
     ) -> JoinHandle<(NativeApi, ThreadWaker)> {
-        thread::spawn(move || Self::capture_frames(native_api, waker, display, sender, receiver))
+        thread::spawn(move || {
+            Self::capture_frames(processor_args, native_api, waker, display, sender, receiver)
+        })
     }
 
     fn capture_frames(
+        processor_args: P::InitArgs,
         mut native_api: NativeApi,
         waker: ThreadWaker,
         display: NativeId,
         sender: Sender<CaptureReply<P>>,
         receiver: Receiver<WorkerRequest<P>>,
     ) -> (NativeApi, ThreadWaker) {
-        let mut frame_processor = P::default();
+        let mut frame_processor = P::new(processor_args);
 
         loop {
             let start = Instant::now();

@@ -1,6 +1,5 @@
 use capture::{FrameProcessResult, ProcessFrame, ViewResources};
 use common::messages::rvd::DisplayId;
-use dcv_color_primitives::ErrorKind;
 use native::api::BGRAFrame;
 use rtp::packet::Packet;
 use std::vec::Drain;
@@ -13,16 +12,6 @@ use video_process::{
 pub struct FrameProcessor {
     vp9_encoder: Option<VP9Encoder>,
     rtp_encoder: RtpEncoder,
-}
-
-impl Default for FrameProcessor {
-    fn default() -> Self {
-        // TODO: get real values for the MTU and SSRC
-        Self {
-            vp9_encoder: None,
-            rtp_encoder: RtpEncoder::new(io::DEFAULT_UNRELIABLE_MESSAGE_SIZE, 0),
-        }
-    }
 }
 
 impl FrameProcessor {
@@ -45,7 +34,17 @@ impl FrameProcessor {
 }
 
 impl ProcessFrame for FrameProcessor {
+    type InitArgs = usize;
     type Resources = Vec<Packet>;
+
+    // MTU
+
+    fn new(args: Self::InitArgs) -> Self {
+        Self {
+            vp9_encoder: None,
+            rtp_encoder: RtpEncoder::new(args, 0),
+        }
+    }
 
     fn process(
         &mut self,
