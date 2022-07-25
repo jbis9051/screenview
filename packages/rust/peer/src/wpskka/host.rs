@@ -450,7 +450,6 @@ impl WpskkaHostHandler {
 
     /// Creates a key_exchange message
     pub fn key_exchange(&mut self) -> Result<WpskkaMessage<'static>, WpskkaHostError> {
-        println!("key_exchange called");
         if !matches!(self.state, State::PreInit) {
             return Err(WpskkaHostError::WrongState(
                 debug(&self.state),
@@ -494,10 +493,8 @@ impl WpskkaHandlerTrait for WpskkaHostHandler {
         write: &mut Vec<WpskkaMessage<'_>>,
         events: &mut Vec<InformEvent>,
     ) -> Result<Option<Vec<u8>>, WpskkaError> {
-        println!("host received: {:?}", msg);
         let ret = self.handle_internal(msg, write, events).map_err(Into::into);
         assert!(!matches!(self.state, State::Modifying));
-        println!("host sent: {:?}", write);
         ret
     }
 

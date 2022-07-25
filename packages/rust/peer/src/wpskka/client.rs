@@ -513,13 +513,11 @@ impl WpskkaHandlerTrait for WpskkaClientHandler {
         write: &mut Vec<WpskkaMessage<'_>>,
         events: &mut Vec<InformEvent>,
     ) -> Result<Option<Vec<u8>>, WpskkaError> {
-        println!("client received: {:?}", msg);
         let ret = self.handle_internal(msg, write, events).map_err(Into::into);
         assert!(
             !matches!(self.state, State::Modifying),
             "state was left in modifying state"
         );
-        println!("client sent: {:?}", write);
         ret
     }
 

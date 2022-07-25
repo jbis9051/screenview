@@ -78,7 +78,6 @@ where
                     if unreliable_state == UnreliableState::Connected {
                         self.unreliable_needs_connect = false;
                     } else {
-                        println!("CONNECTING UNRELIABLE CHANNEL TO {:?}", addr);
                         self.io_handle.connect_unreliable(&addr).map_err(|error| {
                             HandlerError::Transport(TransportError::Fatal {
                                 source: Source::WriteReliable,
