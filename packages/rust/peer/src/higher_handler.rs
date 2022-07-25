@@ -68,10 +68,6 @@ impl HigherHandlerHost {
         }
     }
 
-    pub fn protocol_version(&self) -> RvdMessage<'static> {
-        RvdHostHandler::protocol_version()
-    }
-
     pub fn key_exchange(&mut self) -> Result<WpskkaMessage<'static>, HigherError> {
         Ok(self.wpskka.key_exchange().map_err(WpskkaError::Host)?)
     }
@@ -101,8 +97,8 @@ impl HigherHandlerHost {
             .map_err(RvdError::Host)?)
     }
 
-    pub fn frame_update<'a>(&mut self, display_id: DisplayId, data: &'a [u8]) -> RvdMessage<'a> {
-        self.rvd.frame_update(display_id, data)
+    pub fn frame_update(display_id: DisplayId, data: &[u8]) -> RvdMessage<'_> {
+        RvdHostHandler::frame_update(display_id, data)
     }
 }
 
@@ -112,6 +108,10 @@ impl HigherHandlerClient {
             wpskka: WpskkaClientHandler::new(),
             rvd: RvdClientHandler::new(),
         }
+    }
+
+    pub fn protocol_version(&self) -> RvdMessage<'static> {
+        RvdClientHandler::protocol_version()
     }
 
     pub fn process_password(
@@ -136,7 +136,10 @@ impl<Wpskka: WpskkaHandlerTrait, Rvd: RvdHandlerTrait> HigherHandler<Wpskka, Rvd
         let data = rvd.to_bytes()?;
 
         match rvd {
-            RvdMessage::FrameData(_) => {
+            RvdMessage::FrameData(_)
+            | RvdMessage::UnreliableAuthInitial(_)
+            | RvdMessage::UnreliableAuthInter(_)
+            | RvdMessage::UnreliableAuthFinal(_) => {
                 let cipher = self.wpskka.unreliable_cipher();
                 let wpskka: TransportDataMessageUnreliable<'_> =
                     <Wpskka as WpskkaHandlerTrait>::wrap_unreliable(data, cipher)

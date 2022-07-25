@@ -2,16 +2,19 @@ use crate::{
     debug,
     helpers::crypto::random_bytes_const,
     rvd::{
+        ClientState,
         PermissionError::{
             ClipboardRead,
             ClipboardWrite,
             KeyInput as KeyInputPermission,
             MouseInput,
         },
+        RvdClientError,
         RvdError,
         RvdHandlerTrait,
     },
     InformEvent,
+    RvdClientInform,
 };
 use common::{
     constants::RVD_VERSION,
@@ -24,13 +27,16 @@ use common::{
             DisplayShare,
             DisplayUnshare,
             FrameData,
+            HandshakeComplete,
             KeyInput,
             PermissionMask,
             PermissionsUpdate,
             ProtocolVersion,
+            ProtocolVersionResponse,
             RvdMessage,
             UnreliableAuthFinal,
             UnreliableAuthInitial,
+            UnreliableAuthInter,
         },
         Data,
     },
@@ -54,8 +60,9 @@ struct SharedDisplay {
 
 #[derive(Copy, Clone, Debug)]
 pub enum HostState {
-    AwaitingProtocolVersion,
-    UnreliableAuth([u8; 16]),
+    ProtocolVersion,
+    UnreliableAuthStep1,
+    UnreliableAuthStep2([u8; 16]),
     Ready,
 }
 
@@ -75,16 +82,10 @@ impl Default for RvdHostHandler {
 impl RvdHostHandler {
     pub fn new() -> Self {
         Self {
-            state: HostState::AwaitingProtocolVersion,
+            state: HostState::ProtocolVersion,
             permissions: PermissionMask::empty(),
             shared_displays: HashMap::new(),
         }
-    }
-
-    pub fn protocol_version() -> RvdMessage<'static> {
-        RvdMessage::ProtocolVersion(ProtocolVersion {
-            version: RVD_VERSION.to_string(),
-        })
     }
 
     pub fn set_permissions(&mut self, permissions: PermissionMask) -> RvdMessage<'static> {
@@ -153,7 +154,7 @@ impl RvdHostHandler {
         unshares
     }
 
-    pub fn frame_update<'a>(&mut self, display_id: DisplayId, data: &'a [u8]) -> RvdMessage<'a> {
+    pub fn frame_update(display_id: DisplayId, data: &[u8]) -> RvdMessage<'_> {
         RvdMessage::FrameData(FrameData {
             display_id,
             data: Data(Cow::Borrowed(data)),
@@ -167,33 +168,43 @@ impl RvdHostHandler {
         events: &mut Vec<InformEvent>,
     ) -> Result<(), RvdHostError> {
         match self.state {
-            HostState::AwaitingProtocolVersion => match msg {
-                RvdMessage::ProtocolVersionResponse(msg) => {
-                    if !msg.ok {
+            HostState::ProtocolVersion => match msg {
+                RvdMessage::ProtocolVersion(msg) => {
+                    let ok = msg.version == RVD_VERSION;
+                    write.push(RvdMessage::ProtocolVersionResponse(
+                        ProtocolVersionResponse { ok },
+                    ));
+                    if ok {
+                        self.state = HostState::UnreliableAuthStep1;
+                    } else {
                         events.push(InformEvent::RvdHostInform(RvdHostInform::VersionBad));
-                        return Ok(());
                     }
-                    let challenge = random_bytes_const::<16>();
-                    write.push(RvdMessage::UnreliableAuthInitial(UnreliableAuthInitial {
-                        challenge: challenge.clone(),
-                        zero: [0u8; 16],
-                    }));
-                    self.state = HostState::UnreliableAuth(challenge);
                     Ok(())
                 }
                 _ => Err(RvdHostError::WrongMessageForState(debug(&msg), self.state)),
             },
-            HostState::UnreliableAuth(challenge) => match msg {
-                RvdMessage::UnreliableAuthInter(msg) => {
-                    if msg.response != challenge {
-                        // TODO timing safe equal?
+            HostState::UnreliableAuthStep1 => match msg {
+                RvdMessage::UnreliableAuthInitial(msg) => {
+                    let challenge = random_bytes_const::<16>();
+                    write.push(RvdMessage::UnreliableAuthInter(UnreliableAuthInter {
+                        response: msg.challenge,
+                        challenge: challenge.clone(),
+                    }));
+                    self.state = HostState::UnreliableAuthStep2(challenge);
+                    Ok(())
+                }
+                _ => Err(RvdHostError::WrongMessageForState(debug(&msg), self.state)),
+            },
+            HostState::UnreliableAuthStep2(challenge) => match msg {
+                RvdMessage::UnreliableAuthFinal(msg) => {
+                    let ok = msg.response == challenge;
+                    if ok {
+                        self.state = HostState::Ready;
+                        events.push(InformEvent::RvdHostInform(RvdHostInform::HandshakeComplete));
+                        write.push(RvdMessage::HandshakeComplete(HandshakeComplete {}));
+                    } else {
                         return Err(RvdHostError::UnreliableAuthFailed);
                     }
-                    write.push(RvdMessage::UnreliableAuthFinal(UnreliableAuthFinal {
-                        response: msg.challenge,
-                    }));
-                    events.push(InformEvent::RvdHostInform(RvdHostInform::HandshakeComplete));
-                    self.state = HostState::Ready;
                     Ok(())
                 }
                 _ => Err(RvdHostError::WrongMessageForState(debug(&msg), self.state)),

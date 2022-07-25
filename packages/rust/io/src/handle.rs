@@ -281,7 +281,7 @@ pub enum TransportResponse {
 
 #[derive(Debug)]
 pub enum TransportError {
-    TooLarge(usize),
+    TooLarge(usize, usize),
     Recoverable { source: Source, error: Error },
     Fatal { source: Source, error: io::Error },
 }
@@ -289,10 +289,11 @@ pub enum TransportError {
 impl Display for TransportError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Self::TooLarge(size) => write!(
+            Self::TooLarge(size, max) => write!(
                 f,
-                "attempted to send too large of a message ({} bytes) through unreliable channel",
-                size
+                "attempted to send too large of a message ({} bytes) through unreliable channel \
+                 with a max mtu of {}",
+                size, max
             ),
             Self::Recoverable { source, error } =>
                 write!(f, "recoverable error in {:?}: {}", source, error),

@@ -25,35 +25,35 @@ fn test_rvd_version_mismatch() {
     let mut write = Vec::new();
     let mut events = Vec::new();
 
-    let mut host = RvdHostHandler::new();
-
     let mut client = RvdClientHandler::new();
+
+    let mut host = RvdHostHandler::new();
 
 
     let protocol_message = RvdMessage::ProtocolVersion(ProtocolVersion {
         version: "badversion".to_string(),
     });
 
-    client
-        .handle(protocol_message, &mut write, &mut events)
+    host.handle(protocol_message, &mut write, &mut events)
         .expect("handler failed");
     assert_eq!(events.len(), 1);
     assert_eq!(write.len(), 1);
     let event = events.remove(0);
     assert!(matches!(
         event,
-        InformEvent::RvdClientInform(RvdClientInform::VersionBad)
+        InformEvent::RvdHostInform(RvdHostInform::VersionBad)
     ));
     let msg = write.remove(0);
     assert!(matches!(&msg, &RvdMessage::ProtocolVersionResponse(_)));
 
-    host.handle(msg, &mut write, &mut events)
+    client
+        .handle(msg, &mut write, &mut events)
         .expect("handler failed");
     assert_eq!(write.len(), 0);
     assert_eq!(events.len(), 1);
     assert!(matches!(
         events[0],
-        InformEvent::RvdHostInform(RvdHostInform::VersionBad)
+        InformEvent::RvdClientInform(RvdClientInform::VersionBad)
     ));
 }
 
@@ -67,10 +67,9 @@ fn test_rvd_handshake() {
     let mut client = RvdClientHandler::new();
 
 
-    let protocol_message = RvdHostHandler::protocol_version();
+    let protocol_message = RvdClientHandler::protocol_version();
 
-    client
-        .handle(protocol_message, &mut write, &mut events)
+    host.handle(protocol_message, &mut write, &mut events)
         .expect("handler failed");
     assert_eq!(events.len(), 0);
     assert_eq!(write.len(), 1);
@@ -79,7 +78,8 @@ fn test_rvd_handshake() {
 
     assert!(matches!(&msg, &RvdMessage::ProtocolVersionResponse(_)));
 
-    host.handle(msg, &mut write, &mut events)
+    client
+        .handle(msg, &mut write, &mut events)
         .expect("handler failed");
     assert_eq!(events.len(), 0);
     assert_eq!(write.len(), 1);
@@ -88,8 +88,7 @@ fn test_rvd_handshake() {
 
     assert!(matches!(&msg, &RvdMessage::UnreliableAuthInitial(_)));
 
-    client
-        .handle(msg, &mut write, &mut events)
+    host.handle(msg, &mut write, &mut events)
         .expect("handler failed");
     assert_eq!(events.len(), 0);
     assert_eq!(write.len(), 1);
@@ -99,12 +98,20 @@ fn test_rvd_handshake() {
 
     assert!(matches!(&msg, &RvdMessage::UnreliableAuthInter(_)));
 
-    host.handle(msg, &mut write, &mut events)
+    client
+        .handle(msg, &mut write, &mut events)
         .expect("handler failed");
 
     assert_eq!(write.len(), 1);
-    assert_eq!(events.len(), 1);
+    assert_eq!(events.len(), 0);
 
+    let msg = write.remove(0);
+    assert!(matches!(&msg, &RvdMessage::UnreliableAuthFinal(_)));
+
+    host.handle(msg, &mut write, &mut events)
+        .expect("handler failed");
+    assert_eq!(write.len(), 1);
+    assert_eq!(events.len(), 1);
     let event = events.remove(0);
     assert!(matches!(
         event,
@@ -112,7 +119,8 @@ fn test_rvd_handshake() {
     ));
 
     let msg = write.remove(0);
-    assert!(matches!(&msg, &RvdMessage::UnreliableAuthFinal(_)));
+
+    assert!(matches!(&msg, &RvdMessage::HandshakeComplete(_)));
 
     client
         .handle(msg, &mut write, &mut events)

@@ -3,8 +3,9 @@ use std::borrow::Cow;
 use crate::{
     debug,
     helpers::crypto::{random_bytes, random_bytes_const},
-    rvd::{RvdError, RvdHandlerTrait},
+    rvd::{HostState, RvdError, RvdHandlerTrait, RvdHostError},
     InformEvent,
+    RvdHostInform,
 };
 use common::{
     constants::RVD_VERSION,
@@ -16,8 +17,11 @@ use common::{
             DisplayShareAck,
             FrameData,
             MouseLocation,
+            ProtocolVersion,
             ProtocolVersionResponse,
             RvdMessage,
+            UnreliableAuthFinal,
+            UnreliableAuthInitial,
             UnreliableAuthInter,
         },
         Data,
@@ -26,10 +30,11 @@ use common::{
 
 #[derive(Copy, Clone, Debug)]
 pub enum ClientState {
-    AwaitingProtocolVersion,
-    InUnreliableAuthStep1,
-    InUnreliableAuthStep2([u8; 16]),
-    Data,
+    ProtocolVersion,
+    UnreliableAuth([u8; 16], bool), // bool indicates whether handshake complete was received,
+    // due to the edge case that the HandshakeComplete is received before UnreliableAuthFinal
+    HandshakeComplete,
+    Ready,
 }
 
 pub struct RvdClientHandler {
@@ -45,12 +50,16 @@ impl Default for RvdClientHandler {
 impl RvdClientHandler {
     pub fn new() -> Self {
         Self {
-            state: ClientState::AwaitingProtocolVersion,
+            state: ClientState::ProtocolVersion,
         }
     }
-}
 
-impl RvdClientHandler {
+    pub fn protocol_version() -> RvdMessage<'static> {
+        RvdMessage::ProtocolVersion(ProtocolVersion {
+            version: RVD_VERSION.to_string(),
+        })
+    }
+
     pub fn _handle(
         &mut self,
         msg: RvdMessage<'_>,
@@ -58,32 +67,18 @@ impl RvdClientHandler {
         events: &mut Vec<InformEvent>,
     ) -> Result<(), RvdClientError> {
         match self.state {
-            ClientState::AwaitingProtocolVersion => match msg {
-                RvdMessage::ProtocolVersion(msg) => {
-                    let ok = msg.version == RVD_VERSION;
-                    write.push(RvdMessage::ProtocolVersionResponse(
-                        ProtocolVersionResponse { ok },
-                    ));
-                    if ok {
-                        self.state = ClientState::InUnreliableAuthStep1;
-                    } else {
+            ClientState::ProtocolVersion => match msg {
+                RvdMessage::ProtocolVersionResponse(msg) => {
+                    if !msg.ok {
                         events.push(InformEvent::RvdClientInform(RvdClientInform::VersionBad));
+                        return Ok(());
                     }
-                    Ok(())
-                }
-                _ => Err(RvdClientError::WrongMessageForState(
-                    debug(&msg),
-                    self.state,
-                )),
-            },
-            ClientState::InUnreliableAuthStep1 => match msg {
-                RvdMessage::UnreliableAuthInitial(msg) => {
                     let challenge = random_bytes_const::<16>();
-                    write.push(RvdMessage::UnreliableAuthInter(UnreliableAuthInter {
-                        response: msg.challenge,
+                    write.push(RvdMessage::UnreliableAuthInitial(UnreliableAuthInitial {
                         challenge: challenge.clone(),
+                        zero: [0u8; 16],
                     }));
-                    self.state = ClientState::InUnreliableAuthStep2(challenge);
+                    self.state = ClientState::UnreliableAuth(challenge, false);
                     Ok(())
                 }
                 _ => Err(RvdClientError::WrongMessageForState(
@@ -91,17 +86,27 @@ impl RvdClientHandler {
                     self.state,
                 )),
             },
-            ClientState::InUnreliableAuthStep2(challenge) => match msg {
-                RvdMessage::UnreliableAuthFinal(msg) => {
-                    let ok = msg.response == challenge;
-                    if ok {
-                        self.state = ClientState::Data;
+            ClientState::UnreliableAuth(challenge, complete) => match msg {
+                RvdMessage::UnreliableAuthInter(msg) => {
+                    if msg.response != challenge {
+                        // TODO timing safe equal?
+                        return Err(RvdClientError::UnreliableAuthFailed);
+                    }
+                    write.push(RvdMessage::UnreliableAuthFinal(UnreliableAuthFinal {
+                        response: msg.challenge,
+                    }));
+                    if complete {
                         events.push(InformEvent::RvdClientInform(
                             RvdClientInform::HandshakeComplete,
                         ));
+                        self.state = ClientState::Ready
                     } else {
-                        return Err(RvdClientError::UnreliableAuthFailed);
+                        self.state = ClientState::HandshakeComplete;
                     }
+                    Ok(())
+                }
+                RvdMessage::HandshakeComplete(_) => {
+                    self.state = ClientState::UnreliableAuth(challenge, true);
                     Ok(())
                 }
                 _ => Err(RvdClientError::WrongMessageForState(
@@ -109,7 +114,20 @@ impl RvdClientHandler {
                     self.state,
                 )),
             },
-            ClientState::Data => match msg {
+            ClientState::HandshakeComplete => match msg {
+                RvdMessage::HandshakeComplete { .. } => {
+                    events.push(InformEvent::RvdClientInform(
+                        RvdClientInform::HandshakeComplete,
+                    ));
+                    self.state = ClientState::Ready;
+                    Ok(())
+                }
+                _ => Err(RvdClientError::WrongMessageForState(
+                    debug(&msg),
+                    self.state,
+                )),
+            },
+            ClientState::Ready => match msg {
                 RvdMessage::FrameData(msg) => {
                     events.push(InformEvent::RvdClientInform(RvdClientInform::FrameData(
                         FrameData {
@@ -126,6 +144,12 @@ impl RvdClientHandler {
                     events.push(InformEvent::RvdClientInform(RvdClientInform::DisplayShare(
                         msg,
                     )));
+                    Ok(())
+                }
+                RvdMessage::DisplayUnshare(msg) => {
+                    events.push(InformEvent::RvdClientInform(
+                        RvdClientInform::DisplayUnshare(msg.display_id),
+                    ));
                     Ok(())
                 }
                 RvdMessage::MouseHidden(msg) => {
@@ -191,5 +215,6 @@ pub enum RvdClientInform {
     MouseHidden(DisplayId),
     MouseLocation(MouseLocation),
     DisplayShare(DisplayShare),
+    DisplayUnshare(DisplayId),
     ClipboardNotification(Vec<u8>, ClipboardType), // for now we only care when receive a clipboard notification with content
 }

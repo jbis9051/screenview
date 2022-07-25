@@ -42,6 +42,10 @@ pub struct UnreliableAuthFinal {
     pub response: [u8; 16],
 }
 
+#[derive(MessageComponent, Debug)]
+#[message_id(5)]
+pub struct HandshakeComplete {}
+
 bitflags! {
     pub struct PermissionMask: u8 {
         const CLIPBOARD_READ = 0b1;
@@ -52,7 +56,7 @@ bitflags! {
 impl_bitflags_message_component!(PermissionMask);
 
 #[derive(MessageComponent, Debug)]
-#[message_id(5)]
+#[message_id(6)]
 pub struct PermissionsUpdate {
     pub permission_mask: PermissionMask,
 }
@@ -60,7 +64,7 @@ pub struct PermissionsUpdate {
 pub type DisplayId = u8;
 
 #[derive(MessageComponent, Debug, Clone, PartialEq, Eq)]
-#[message_id(6)]
+#[message_id(7)]
 pub struct DisplayShare {
     pub display_id: DisplayId, // Note: this is not the same as the native id of a monitor or window
     pub access: AccessMask,
@@ -78,21 +82,21 @@ bitflags! {
 impl_bitflags_message_component!(AccessMask);
 
 #[derive(MessageComponent, Debug)]
-#[message_id(7)]
+#[message_id(8)]
 pub struct DisplayShareAck {
     pub display_id: DisplayId,
 }
 
 
 #[derive(MessageComponent, Debug)]
-#[message_id(8)]
+#[message_id(9)]
 pub struct DisplayUnshare {
     pub display_id: DisplayId,
 }
 
 
 #[derive(MessageComponent, Debug, Clone, PartialEq, Eq)]
-#[message_id(9)]
+#[message_id(10)]
 pub struct MouseLocation {
     pub display_id: DisplayId,
     pub x_location: u16,
@@ -100,13 +104,13 @@ pub struct MouseLocation {
 }
 
 #[derive(MessageComponent, Debug)]
-#[message_id(10)]
+#[message_id(11)]
 pub struct MouseHidden {
     pub display_id: DisplayId,
 }
 
 #[derive(MessageComponent, Debug)]
-#[message_id(11)]
+#[message_id(12)]
 pub struct MouseInput {
     pub display_id: DisplayId,
     pub x_location: u16,
@@ -145,7 +149,7 @@ impl ButtonsMask {
 impl_bitflags_message_component!(ButtonsMask);
 
 #[derive(MessageComponent, Debug, PartialEq, Eq, Clone)]
-#[message_id(12)]
+#[message_id(13)]
 pub struct KeyInput {
     pub down: bool,
     pub key: u32, // keysym
@@ -299,13 +303,13 @@ impl MessageComponent<'_> for ClipboardMeta {
 }
 
 #[derive(MessageComponent, Debug)]
-#[message_id(13)]
+#[message_id(14)]
 pub struct ClipboardRequest {
     pub info: ClipboardMeta,
 }
 
 #[derive(MessageComponent, Debug, Clone)]
-#[message_id(14)]
+#[message_id(15)]
 pub struct ClipboardNotification {
     pub info: ClipboardMeta,
     pub type_exists: bool,
@@ -314,7 +318,7 @@ pub struct ClipboardNotification {
 }
 
 #[derive(MessageComponent, Debug)]
-#[message_id(15)]
+#[message_id(16)]
 #[lifetime('a)]
 pub struct FrameData<'a> {
     pub display_id: u8,
@@ -329,6 +333,7 @@ pub enum RvdMessage<'a> {
     UnreliableAuthInitial(UnreliableAuthInitial),
     UnreliableAuthInter(UnreliableAuthInter),
     UnreliableAuthFinal(UnreliableAuthFinal),
+    HandshakeComplete(HandshakeComplete),
     PermissionsUpdate(PermissionsUpdate),
     DisplayShare(DisplayShare),
     DisplayShareAck(DisplayShareAck),

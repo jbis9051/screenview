@@ -2,6 +2,7 @@ use common::messages::{
     rvd::{AccessMask, DisplayId, RvdMessage},
     svsc::{Cookie, LeaseId},
     wpskka::AuthSchemeType,
+    ChanneledMessage,
 };
 use io::{
     IoHandle,
@@ -10,6 +11,7 @@ use io::{
     Source,
     TransportError,
     TransportResponse,
+    TransportResult,
     Unreliable,
     UnreliableState,
 };
@@ -56,50 +58,54 @@ where
 
     pub fn handle_next_message(&mut self) -> Option<Result<Vec<InformEvent>, HandlerError>> {
         let result = self.io_handle.recv()?;
-        match result {
-            Ok(TransportResponse::ReliableMessage(message)) => Some(self.handle(&message)),
+        Some(self.handle_next_message_internal(result))
+    }
+
+    fn handle_next_message_internal(
+        &mut self,
+        result: TransportResult,
+    ) -> Result<Vec<InformEvent>, HandlerError> {
+        let (to_wire, informs) = match result {
+            Ok(TransportResponse::ReliableMessage(message)) => self.handle(&message)?,
             Ok(TransportResponse::UnreliableMessage(message, addr)) => {
-                let res = self.handle(&message);
+                let res = self.handle(&message)?;
 
                 // If we have not already obtained the remote address to which to send UDP packets,
-                // and we receive a UDP packet which has been successfull authenticated
+                // and we receive a UDP packet which has been successfully authenticated
                 if self.unreliable_needs_connect {
                     let unreliable_state = self.io_handle.unreliable_state();
 
                     if unreliable_state == UnreliableState::Connected {
                         self.unreliable_needs_connect = false;
-                        return Some(res);
-                    }
-
-                    if let Err(HandlerError::Higher(HigherError::Wpskka(wpskka_error))) = &res {
-                        if !matches!(
-                            wpskka_error,
-                            WpskkaError::Host(WpskkaHostError::CipherError(..))
-                                | WpskkaError::Client(WpskkaClientError::CipherError(..))
-                        ) {
-                            let connect_res =
-                                self.io_handle.connect_unreliable(&addr).map_err(|error| {
-                                    HandlerError::Transport(TransportError::Fatal {
-                                        source: Source::WriteReliable,
-                                        error,
-                                    })
-                                });
-                            if let Err(error) = connect_res {
-                                return Some(Err(error));
-                            }
-                            self.unreliable_needs_connect = false;
-                        }
+                    } else {
+                        println!("CONNECTING UNRELIABLE CHANNEL TO {:?}", addr);
+                        self.io_handle.connect_unreliable(&addr).map_err(|error| {
+                            HandlerError::Transport(TransportError::Fatal {
+                                source: Source::WriteReliable,
+                                error,
+                            })
+                        })?;
+                        self.unreliable_needs_connect = false;
                     }
                 }
 
-                Some(res)
+                res
             }
-            Ok(TransportResponse::Shutdown(source)) => Some(Ok(vec![])), // TODO InformEvent::TransportShutdown(source)
-            Err(error) => Some(Err(error.into())),
+            Ok(TransportResponse::Shutdown(source)) => (vec![], vec![]), // TODO InformEvent::TransportShutdown(source)
+            Err(error) => return Err(error.into()),
+        };
+
+        for wire_msg in to_wire {
+            self.io_handle.send(wire_msg)?;
         }
+
+        Ok(informs)
     }
 
-    pub fn handle(&mut self, wire: &[u8]) -> Result<Vec<InformEvent>, HandlerError> {
+    pub fn handle(
+        &mut self,
+        wire: &[u8],
+    ) -> Result<(Vec<ChanneledMessage<Vec<u8>>>, Vec<InformEvent>), HandlerError> {
         // in lower: wire(wpskaa | sel) --> wpskka
         // in higher: wpskka --> wpskaa
         // out lower: wpskak --> wire(wpskaa | sel)
@@ -132,11 +138,7 @@ where
             to_wire.push(self.lower.send(wpskka_output)?);
         }
 
-        for wire_msg in to_wire {
-            self.io_handle.send(wire_msg)?;
-        }
-
-        Ok(inform_events)
+        Ok((to_wire, inform_events))
     }
 }
 
@@ -168,6 +170,12 @@ where
     R: Reliable,
     U: Unreliable,
 {
+    pub fn protocol_version(&mut self) -> Result<(), HandlerError> {
+        let msg = self.higher.protocol_version();
+        send!(self, msg);
+        Ok(())
+    }
+
     pub fn process_password(&mut self, password: &[u8]) -> Result<(), HandlerError> {
         let message = self.higher.process_password(password)?;
         let higher_output = self.higher.send(message)?;
@@ -189,12 +197,6 @@ where
     R: Reliable,
     U: Unreliable,
 {
-    pub fn protocol_version(&mut self) -> Result<(), HandlerError> {
-        let msg = self.higher.protocol_version();
-        send!(self, msg);
-        Ok(())
-    }
-
     pub fn key_exchange(&mut self) -> Result<(), HandlerError> {
         let message = self.higher.key_exchange()?;
         let higher_output = self.higher.send(message)?;
@@ -239,7 +241,7 @@ where
                 .marshal_to(&mut buffer[..])
                 .expect("Insufficient buffer size");
             let data = &buffer[.. written];
-            let message = self.higher.frame_update(display_id, data);
+            let message = HigherHandlerHost::frame_update(display_id, data);
             send!(self, message);
         }
 

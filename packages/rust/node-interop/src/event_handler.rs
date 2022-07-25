@@ -104,19 +104,19 @@ pub fn handle_event(instance: &mut Instance, event: InformEvent) -> Result<(), (
             WpskkaClientInform::AuthFailed => instance
                 .callback_interface
                 .wpskka_client_authentication_failed(&instance.channel),
-            WpskkaClientInform::AuthSuccessful => instance
-                .callback_interface
-                .wpskka_client_authentication_successful(&instance.channel),
-        },
-        InformEvent::WpskkaHostInform(event) => match event {
-            WpskkaHostInform::AuthSuccessful => {
-                instance
-                    .callback_interface
-                    .wpskka_host_authentication_successful(&instance.channel);
-                forward!(instance.sv_handler, [HostSignal, HostDirect], |stack| {
+            WpskkaClientInform::AuthSuccessful => {
+                forward!(instance.sv_handler, [ClientSignal, ClientDirect], |stack| {
                     stack.protocol_version()
                 });
+                instance
+                    .callback_interface
+                    .wpskka_client_authentication_successful(&instance.channel)
             }
+        },
+        InformEvent::WpskkaHostInform(event) => match event {
+            WpskkaHostInform::AuthSuccessful => instance
+                .callback_interface
+                .wpskka_host_authentication_successful(&instance.channel),
             WpskkaHostInform::AuthFailed => {}
         },
     }

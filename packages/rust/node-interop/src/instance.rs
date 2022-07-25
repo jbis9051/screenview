@@ -39,6 +39,7 @@ use peer::{
     InformEvent,
 };
 use peer_util::{
+    frame_data_mtu::frame_data_mtu,
     frame_processor::FrameProcessor,
     rvd_native_helper::{rvd_client_native_helper, rvd_host_native_helper},
 };
@@ -384,8 +385,12 @@ impl Instance {
                 Err(_error) => todo!("tell node that we couldn't create a new capture"),
             };
 
-            // FIXME: get real MTU value
-            capture.activate(1500, native_id, display_id);
+            let computed_mtu = frame_data_mtu(
+                io::DEFAULT_UNRELIABLE_MESSAGE_SIZE,
+                matches!(self.sv_handler, ScreenViewHandler::HostSignal(..)),
+            );
+
+            capture.activate(computed_mtu, native_id, display_id);
         }
 
         promise.settle_with(&self.channel, move |mut cx| Ok(cx.undefined()));

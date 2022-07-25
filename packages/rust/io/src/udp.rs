@@ -156,8 +156,8 @@ fn write_unreliable(
     waker: &ThreadWaker,
 ) {
     while let Ok((message, max_len)) = receiver.recv() {
-        if message.len() + LENGTH_FIELD_WIDTH > max_len {
-            return_if_err!(sender.send(Err(TransportError::TooLarge(message.len()))));
+        if message.len() > max_len {
+            return_if_err!(sender.send(Err(TransportError::TooLarge(message.len(), max_len))));
             waker.wake();
             continue;
         }

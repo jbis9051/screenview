@@ -119,4 +119,6 @@ test('direct connection', async () => {
 
     expect(id).toBe(0);
     expect(data.byteLength).toBeGreaterThan(0);
+
+    await rust.share_displays(host, [], false);
 });
