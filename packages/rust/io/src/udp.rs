@@ -4,6 +4,7 @@ use crate::{
     return_if_err,
     TransportError,
     TransportResponse,
+    UnreliableState,
     LENGTH_FIELD_WIDTH,
 };
 use crossbeam_channel::{unbounded, Receiver, Sender};
@@ -12,16 +13,21 @@ use std::{
     io::{self, ErrorKind},
     net::{ToSocketAddrs, UdpSocket},
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicU8, Ordering},
         Arc,
     },
     thread,
     time::Duration,
 };
 
+const BOUND: u8 = 0;
+const CONNECTED: u8 = 1;
+const SHUTDOWN: u8 = 2;
+
 pub struct UdpHandle {
     write: Sender<(Vec<u8>, usize)>,
-    shutdown: Arc<AtomicBool>,
+    socket: Arc<UdpSocket>,
+    state: Arc<AtomicU8>,
     _handles: Box<(JoinOnDrop<()>, JoinOnDrop<()>)>,
 }
 
@@ -34,29 +40,49 @@ impl Unreliable for UdpHandle {
         let socket = Arc::new(UdpSocket::bind(addr)?);
         socket.set_read_timeout(Some(Duration::from_millis(UDP_TIMEOUT)))?;
         let (write_tx, write_rx) = unbounded();
-        let shutdown = Arc::new(AtomicBool::new(true));
+        let state = Arc::new(AtomicU8::new(BOUND));
 
         let read_handle = thread::spawn({
             let socket = Arc::clone(&socket);
             let result_sender = result_sender.clone();
-            let shutdown = Arc::clone(&shutdown);
+            let state = Arc::clone(&state);
             let waker = waker.clone();
             move || {
-                read_unreliable(socket, result_sender, &*shutdown, &waker);
+                read_unreliable(socket, result_sender, &*state, &waker);
                 waker.wake();
             }
         });
 
-        let write_handle = thread::spawn(move || {
-            write_unreliable(socket, result_sender, write_rx, &waker);
-            waker.wake();
+        let write_handle = thread::spawn({
+            let socket = Arc::clone(&socket);
+            move || {
+                write_unreliable(socket, result_sender, write_rx, &waker);
+                waker.wake();
+            }
         });
 
         Ok(Self {
             write: write_tx,
-            shutdown,
+            socket,
+            state,
             _handles: Box::new((JoinOnDrop::new(read_handle), JoinOnDrop::new(write_handle))),
         })
+    }
+
+    fn connect<A: ToSocketAddrs>(&self, addr: A) -> Result<(), io::Error> {
+        let res = self.socket.connect(addr);
+        if res.is_ok() {
+            self.state.store(CONNECTED, Ordering::Relaxed);
+        }
+        res
+    }
+
+    fn state(&self) -> UnreliableState {
+        match self.state.load(Ordering::Relaxed) {
+            BOUND => UnreliableState::Bound,
+            CONNECTED => UnreliableState::Connected,
+            _ => unreachable!(),
+        }
     }
 
     fn send(&mut self, message: Vec<u8>, max_len: usize) -> Result<(), SendError> {
@@ -66,7 +92,7 @@ impl Unreliable for UdpHandle {
     }
 
     fn close(&mut self) {
-        self.shutdown.store(false, Ordering::Relaxed);
+        self.state.store(SHUTDOWN, Ordering::Relaxed);
     }
 }
 
@@ -79,13 +105,13 @@ impl Drop for UdpHandle {
 fn read_unreliable(
     socket: Arc<UdpSocket>,
     sender: Sender<TransportResult>,
-    shutdown: &AtomicBool,
+    shutdown: &AtomicU8,
     waker: &ThreadWaker,
 ) {
     let mut buffer = vec![0u8; UDP_READ_SIZE];
 
-    while shutdown.load(Ordering::Relaxed) {
-        let read = match socket.recv(&mut buffer[..]) {
+    while shutdown.load(Ordering::Relaxed) != SHUTDOWN {
+        let (read, addr) = match socket.recv_from(&mut buffer[..]) {
             Ok(read) => read,
             Err(error)
                 if error.kind() == ErrorKind::WouldBlock || error.kind() == ErrorKind::TimedOut =>
@@ -115,8 +141,9 @@ fn read_unreliable(
             continue;
         }
 
-        return_if_err!(sender.send(Ok(TransportResponse::Message(
-            buffer[LENGTH_FIELD_WIDTH .. read].to_vec()
+        return_if_err!(sender.send(Ok(TransportResponse::UnreliableMessage(
+            buffer[LENGTH_FIELD_WIDTH .. read].to_vec(),
+            addr
         ))));
         waker.wake();
     }
@@ -129,8 +156,8 @@ fn write_unreliable(
     waker: &ThreadWaker,
 ) {
     while let Ok((message, max_len)) = receiver.recv() {
-        if message.len() + LENGTH_FIELD_WIDTH > max_len {
-            return_if_err!(sender.send(Err(TransportError::TooLarge(message.len()))));
+        if message.len() > max_len {
+            return_if_err!(sender.send(Err(TransportError::TooLarge(message.len(), max_len))));
             waker.wake();
             continue;
         }

@@ -1,162 +1,66 @@
+// an instance represents an instance of a rust interop
+// this can be of type Client or Host and Direct or Signal
+
 use crate::{
+    callback_interface::NodeInterface,
     forward,
-    handler::ScreenViewHandler,
-    node_interface::NodeInterface,
+    instance_main::Events,
     protocol::{ConnectionType, Message, RequestContent},
+    screenview_handler::ScreenViewHandler,
     throw,
 };
 use capture::CapturePool;
 use common::messages::{
-    rvd::ButtonsMask,
+    rvd::{AccessMask, ButtonsMask, DisplayId},
     svsc::{Cookie, LeaseId},
+    wpskka::AuthSchemeType,
 };
 use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
 use event_loop::{
     event_loop::{event_loop, EventLoopState, ThreadWaker, ThreadWakerCore},
     oneshot,
+    oneshot::channel,
     JoinOnDrop,
 };
 use io::{DirectServer, TcpHandle};
-use native::{api::NativeId, NativeApi, NativeApiError};
+use native::{
+    api::{NativeApiTemplate, NativeId},
+    NativeApi,
+    NativeApiError,
+};
 use neon::{
     prelude::{Channel, Context, Finalize, JsResult, JsUndefined, TaskContext, Value},
     types::Deferred,
 };
-use peer::rvd::ShareDisplayResult;
-use peer_util::frame_processor::FrameProcessor;
+use peer::{
+    rvd::{RvdClientInform, RvdHostInform},
+    svsc_handler::SvscInform,
+    wpskka::{WpskkaClientInform, WpskkaHostInform},
+    InformEvent,
+};
+use peer_util::{
+    frame_data_mtu::frame_data_mtu,
+    frame_processor::FrameProcessor,
+    rvd_native_helper::{rvd_client_native_helper, rvd_host_native_helper},
+};
 use std::{
+    collections::HashMap,
     net::TcpStream,
     thread::{self, JoinHandle},
 };
 
-#[repr(u32)]
-enum Events {
-    RemoteMessage,
-    InteropMessage,
-    DirectServerConnection,
-    FrameUpdate,
-}
-
-pub struct InstanceHandle {
-    sender: Sender<Message>,
-    waker: ThreadWaker,
-    _thread_handle: JoinOnDrop<()>,
-}
-
-impl InstanceHandle {
-    fn new(sender: Sender<Message>, waker: ThreadWaker, thread_handle: JoinHandle<()>) -> Self {
-        Self {
-            sender,
-            waker,
-            _thread_handle: JoinOnDrop::new(thread_handle),
-        }
-    }
-
-    pub fn send(&self, message: Message) -> bool {
-        let res = self.sender.send(message).is_ok();
-        self.waker.wake();
-        res
-    }
-}
-
-impl Drop for InstanceHandle {
-    fn drop(&mut self) {
-        let _ = self.sender.send(Message::Shutdown);
-        self.waker.wake();
-        // thread_handle is dropped last
-    }
-}
-
-impl Finalize for InstanceHandle {}
-
-// an instance represents an instance of a rust interop
-// this can be of type Client or Host and Direct or Signal
-
 pub struct Instance {
-    native: NativeApi,
-    sv_handler: ScreenViewHandler,
-    node_interface: NodeInterface,
-    capture_pool: CapturePool<FrameProcessor>,
-    channel: Channel,
+    pub(crate) native: NativeApi,
+    pub(crate) sv_handler: ScreenViewHandler,
+    pub(crate) callback_interface: NodeInterface,
+    pub(crate) capture_pool: CapturePool<FrameProcessor>,
+    pub(crate) channel: Channel,
+    pub(crate) shared_displays: HashMap<DisplayId, NativeId>,
+    pub(crate) auth_schemes: Vec<AuthSchemeType>,
+    pub(crate) password: Option<String>,
 }
 
 impl Instance {
-    fn new_with<F>(
-        channel: Channel,
-        new_sv_handler: F,
-        node_interface: NodeInterface,
-    ) -> Result<InstanceHandle, NativeApiError>
-    where
-        F: FnOnce() -> ScreenViewHandler,
-    {
-        let (waker_tx, waker_rx) = oneshot::channel();
-        let (message_tx, message_rx) = unbounded();
-        let native = NativeApi::new()?;
-        let sv_handler = new_sv_handler();
-
-        let thread_handle = start_instance_main(
-            move |waker_core| {
-                let instance = Self {
-                    native,
-                    sv_handler,
-                    node_interface,
-                    capture_pool: CapturePool::new(
-                        waker_core.make_waker(Events::FrameUpdate as u32),
-                    ),
-                    channel,
-                };
-
-                waker_tx
-                    .send(waker_core.make_waker(Events::InteropMessage as u32))
-                    .unwrap();
-                instance
-            },
-            message_rx,
-        );
-
-        Ok(InstanceHandle::new(
-            message_tx,
-            waker_rx.recv().unwrap(),
-            thread_handle,
-        ))
-    }
-
-    pub fn new_host_signal(
-        channel: Channel,
-        node_interface: NodeInterface,
-    ) -> Result<InstanceHandle, NativeApiError> {
-        Self::new_with(channel, ScreenViewHandler::new_host_signal, node_interface)
-    }
-
-    pub fn new_host_direct(
-        channel: Channel,
-        node_interface: NodeInterface,
-    ) -> Result<InstanceHandle, NativeApiError> {
-        Self::new_with(channel, ScreenViewHandler::new_host_direct, node_interface)
-    }
-
-    pub fn new_client_signal(
-        channel: Channel,
-        node_interface: NodeInterface,
-    ) -> Result<InstanceHandle, NativeApiError> {
-        Self::new_with(
-            channel,
-            ScreenViewHandler::new_client_signal,
-            node_interface,
-        )
-    }
-
-    pub fn new_client_direct(
-        channel: Channel,
-        node_interface: NodeInterface,
-    ) -> Result<InstanceHandle, NativeApiError> {
-        Self::new_with(
-            channel,
-            ScreenViewHandler::new_client_direct,
-            node_interface,
-        )
-    }
-
     fn settle_with_result<E, F, V>(&self, promise: Deferred, result: Result<(), E>, ret: F)
     where
         E: ToString,
@@ -175,7 +79,7 @@ impl Instance {
         Ok(cx.undefined())
     }
 
-    fn handle_node_request(
+    pub(crate) fn handle_node_request(
         &mut self,
         content: RequestContent,
         promise: Deferred,
@@ -186,8 +90,10 @@ impl Instance {
                 ref addr,
                 connection_type,
             } => self.handle_connect(promise, waker_core, addr, connection_type),
-            RequestContent::StartServer { ref addr } =>
-                self.handle_start_server(promise, waker_core, addr),
+            RequestContent::StartServer {
+                ref reliable_addr,
+                ref unreliable_addr,
+            } => self.handle_start_server(promise, waker_core, reliable_addr, unreliable_addr),
             RequestContent::EstablishSession { lease_id } =>
                 self.handle_establish_session(promise, lease_id),
             RequestContent::ProcessPassword { password } =>
@@ -213,8 +119,10 @@ impl Instance {
                 self.handle_set_controllable(promise, is_controllable),
             RequestContent::SetClipboardReadable { is_readable } =>
                 self.handle_set_clipboard_readable(promise, is_readable),
-            RequestContent::ShareDisplays { ref displays } =>
-                self.handle_share_displays(promise, displays),
+            RequestContent::ShareDisplays {
+                displays,
+                controllable,
+            } => self.handle_share_displays(promise, displays, controllable),
         }
     }
 
@@ -230,7 +138,8 @@ impl Instance {
         let waker = waker_core.make_waker(Events::RemoteMessage as u32);
         let result = match connection_type {
             ConnectionType::Reliable => io_handle.connect_reliable(addr, waker),
-            ConnectionType::Unreliable => io_handle.connect_unreliable(addr, waker),
+            ConnectionType::Unreliable =>
+                io_handle.bind_and_connect_unreliable("0.0.0.0:0", addr, waker),
         };
 
         let result = result.map_err(|error| error.to_string());
@@ -246,29 +155,41 @@ impl Instance {
         Ok(())
     }
 
-    fn handle_direct_connect(&mut self, waker_core: &ThreadWakerCore, stream: TcpStream) {
+    pub(crate) fn handle_direct_connect(
+        &mut self,
+        waker_core: &ThreadWakerCore,
+        stream: TcpStream,
+    ) -> Result<(), anyhow::Error> {
         let io_handle = self.sv_handler.io_handle();
 
         // Terminate the connection
         if io_handle.is_reliable_connected() {
             drop(stream);
-            return;
+            return Ok(());
         }
 
         let waker = waker_core.make_waker(Events::RemoteMessage as u32);
         io_handle.connect_reliable_with(move |result_sender| {
             TcpHandle::new_from(stream, result_sender, waker)
         });
+
+        forward!(self.sv_handler, [HostDirect], |stack| {
+            stack.key_exchange()
+        })
+        .expect("unable to produce key exchange"); // TODO error handling
+
+        Ok(())
     }
 
     fn handle_start_server(
         &mut self,
         promise: Deferred,
         waker_core: &ThreadWakerCore,
-        addr: &str,
+        reliable_addr: &str,
+        unreliable_addr: &str,
     ) -> Result<(), anyhow::Error> {
-        let server = match &mut self.sv_handler {
-            ScreenViewHandler::HostDirect(_, server) => server,
+        let (io_handle, server) = match &mut self.sv_handler {
+            ScreenViewHandler::HostDirect(stack, server) => (&mut stack.io_handle, server),
             _ => unreachable!(),
         };
 
@@ -283,12 +204,15 @@ impl Instance {
         }
 
         let result = match DirectServer::new(
-            addr,
+            reliable_addr,
             waker_core.make_waker(Events::DirectServerConnection as u32),
         ) {
             Ok(new_server) => {
                 *server = Some(new_server);
-                Ok(())
+                io_handle.bind_unreliable(
+                    unreliable_addr,
+                    waker_core.make_waker(Events::RemoteMessage as u32),
+                )
             }
             Err(error) => Err(error),
         };
@@ -397,184 +321,97 @@ impl Instance {
     fn handle_share_displays(
         &mut self,
         promise: Deferred,
-        displays: &[NativeId],
+        displays: Vec<NativeId>,
+        controllable: bool,
     ) -> Result<(), anyhow::Error> {
-        /*
-                 - Step 1: figure out which displays are not currently captured and need to be activated
-                 - Step 2: request monitor and window info from native which we will attempt to map onto
-                   the captured displays later
-                 - Step 3: find inactive frame captures which can be re-activated with a new display
-                 - Step 4: add new captures if necessary
-                 - Step 5: activate captures and record monitor/window info for a display change update
-                 - Step 6: report displays that couldn't be found and send display change message
+        // Get stuff to unsshare
+        let to_unshare: Vec<_> = self
+            .shared_displays
+            .iter()
+            .filter(|(_, native)| !displays.iter().any(|native1| native1 == *native))
+            .map(|(display_id, _)| *display_id)
+            .collect();
 
+        // Unshare them
+        for display_id in to_unshare {
+            self.shared_displays.remove(&display_id);
+            forward!(self.sv_handler, [HostSignal, HostDirect], |stack| stack
+                .unshare_display(display_id));
+        }
 
-                let display_info = match DisplayInfoStore::new(&mut self.native) {
-                    Ok(store) => store,
-                    Err(error) => {
-                        self.settle_with_result(promise, Err(error), Self::undefined);
-                        return Ok(());
-                    }
-                };
-
-                let mut display_ids = Vec::with_capacity(displays.len());
-
-                for &display in displays {
-                    let rvd_display = match display_info.gen_display_info(display) {
-                        Some(rvd_display) => rvd_display,
-                        None => todo!("tell node that we couldn't find this display"),
-                    };
-
-                    let id = forward!(self.sv_handler, [HostSignal, HostDirect], |stack| stack
-                        .share_display(rvd_display));
-                    match id {
-                        ShareDisplayResult::NewlyShared(display_id) =>
-                            display_ids.push((display, display_id)),
-                        ShareDisplayResult::AlreadySharing(_) => {} // Ignore
-                        ShareDisplayResult::IdLimitReached =>
-                            todo!("tell node that we ran out of display IDs"),
-                    }
-                }
-
-                let new_displays = display_ids
+        // Get stuff to share
+        let to_share: Vec<NativeId> = displays
+            .into_iter()
+            .filter(|native| {
+                !self
+                    .shared_displays
                     .iter()
-                    .copied()
-                    .filter(|&(_, display_id)| !self.capture_pool.is_capturing(display_id))
-                    .collect::<Vec<_>>();
-                let num_new_displays = new_displays.len();
+                    .any(|(_, native_id)| native_id == native)
+            })
+            .collect::<Vec<_>>();
 
-                if num_new_displays == 0 {
-                    return Ok(());
-                }
+        // Get meta info
+        let windows = self.native.windows()?;
+        let monitors = self.native.monitors()?;
 
-                for (display, display_id) in new_displays {
-                    let capture = match self.capture_pool.get_or_create_inactive() {
-                        Ok(capture) => capture,
-                        Err(_error) => todo!("tell node that we couldn't create a new capture"),
-                    };
+        // Share them, skip errors
+        for native_id in to_share {
+            let name = match match native_id {
+                NativeId::Monitor(m) => monitors
+                    .iter()
+                    .find(|m1| m1.id == m)
+                    .map(|m| m.name.clone()),
+                NativeId::Window(w) => windows.iter().find(|w1| w1.id == w).map(|w| w.name.clone()),
+            } {
+                None => continue, // TODO If we can't find it then just skip I guess
+                Some(n) => n,
+            };
+            let display_id =
+                match forward!(self.sv_handler, [HostSignal, HostDirect], |stack| stack
+                    .share_display(
+                        name,
+                        if controllable {
+                            AccessMask::CONTROLLABLE
+                        } else {
+                            AccessMask::empty()
+                        }
+                    )) {
+                    Err(_) => continue, // TODO
+                    Ok(display_id) => display_id,
+                };
+            self.shared_displays.insert(display_id, native_id.clone());
+            let capture = match self.capture_pool.get_or_create_inactive() {
+                Ok(capture) => capture,
+                Err(_error) => todo!("tell node that we couldn't create a new capture"),
+            };
 
-                    capture.activate(display, display_id);
-                }
+            let computed_mtu = frame_data_mtu(
+                io::DEFAULT_UNRELIABLE_MESSAGE_SIZE,
+                matches!(self.sv_handler, ScreenViewHandler::HostSignal(..)),
+            );
 
-                let result = forward!(self.sv_handler, [HostSignal, HostDirect], |stack| stack
-                    .send_display_update());
-                self.settle_with_result(promise, result, Self::undefined);
-        */
+            capture.activate(computed_mtu, native_id, display_id);
+        }
+
+        promise.settle_with(&self.channel, move |mut cx| Ok(cx.undefined()));
         Ok(())
+    }
+
+    pub(crate) fn next_auth_scheme(&mut self) -> Result<(), ()> {
+        for scheme in [
+            AuthSchemeType::None,
+            AuthSchemeType::SrpDynamic,
+            AuthSchemeType::SrpStatic,
+        ] {
+            if self.auth_schemes.contains(&scheme) {
+                self.auth_schemes.retain(|&x| x != scheme);
+                forward!(self.sv_handler, [ClientSignal, ClientDirect], |stack| stack
+                    .try_auth(scheme));
+                return Ok(());
+            }
+        }
+        Err(())
     }
 }
 
 impl Finalize for Instance {}
-
-fn start_instance_main<F>(make_instance: F, message_receiver: Receiver<Message>) -> JoinHandle<()>
-where F: FnOnce(&ThreadWakerCore) -> Instance + Send + 'static {
-    thread::spawn(move || {
-        let waker_core = ThreadWakerCore::new_current_thread();
-        let instance = make_instance(&waker_core);
-        instance_main(waker_core, instance, message_receiver)
-    })
-}
-
-fn instance_main(
-    waker_core: ThreadWakerCore,
-    mut instance: Instance,
-    message_receiver: Receiver<Message>,
-) {
-    // TODO: do things with ThreadWaker and atomics so we know which channels to check
-
-    event_loop(waker_core, move |waker_core| {
-        // Handle incoming messages from node
-        if waker_core.check_and_unset(Events::InteropMessage as u32) {
-            // Infinite loop to clear the channel since node isn't a malicious party
-            loop {
-                match message_receiver.try_recv() {
-                    Ok(Message::Request { content, promise }) => {
-                        match instance.handle_node_request(content, promise, waker_core) {
-                            Ok(()) => { /* yay */ }
-                            Err(error) =>
-                                panic!("Internal error while handling node request: {}", error),
-                        }
-                    }
-                    Ok(Message::Shutdown) => return EventLoopState::Complete,
-                    Err(TryRecvError::Empty) => break,
-                    Err(TryRecvError::Disconnected) => return EventLoopState::Complete,
-                }
-            }
-        }
-
-        // Handle messages from remote party
-        if waker_core.check_and_unset(Events::RemoteMessage as u32) {
-            const MAX_TO_HANDLE: usize = 8;
-            let mut handled = 0;
-
-            while handled < MAX_TO_HANDLE {
-                match instance.sv_handler.handle_next_message() {
-                    Some(Ok(events)) =>
-                        for _event in events {
-                            todo!("Handle event")
-                        },
-                    Some(Err(error)) => {
-                        todo!("Handle this error properly: {}", error)
-                    }
-                    None => break,
-                }
-
-                handled += 1;
-            }
-
-            // We're receiving more remote messages than we can handle, but we don't want to block
-            // the event loop too long, so change our state such that we continue handling remote
-            // messages on the next iteration without parking
-            if handled == MAX_TO_HANDLE {
-                waker_core.wake_self(Events::RemoteMessage as u32);
-            }
-        }
-
-        // If a server is running, handle incoming connections from there
-        if waker_core.check_and_unset(Events::DirectServerConnection as u32) {
-            // We don't need to put this in a loop due to the guarantee provided by `next_incoming`
-            if let ScreenViewHandler::HostDirect(_, Some(ref server)) = instance.sv_handler {
-                match server.next_incoming() {
-                    Some(Ok(stream)) => {
-                        // This stream should be blocking, however on macOS for some reason if the
-                        // listener is non-blocking at the time of we accept a stream, the stream
-                        // with also be non-blocking, so we explicitly set it to blocking
-                        stream
-                            .set_nonblocking(false)
-                            .expect("Failed to set stream to blocking"); // TODO handle this better
-                        instance.handle_direct_connect(waker_core, stream);
-                    }
-                    Some(Err(error)) => {
-                        todo!("Handle this error properly: {}", error)
-                    }
-                    None => {}
-                }
-            }
-        }
-
-        if waker_core.check_and_unset(Events::FrameUpdate as u32) {
-            // We don't need to double-loop here because the channels for frame capturing have a
-            // capacity of 1, so we won't fall behind when processing frames, the capture threads
-            // will just block and wait for us
-            for capture in instance.capture_pool.active_captures() {
-                let mut frame_update = match capture.next_update() {
-                    Some(update) => update,
-                    None => continue,
-                };
-
-                if let Err(_error) = frame_update.result {
-                    todo!("Handle frame update errors properly");
-                }
-
-                let result = forward!(instance.sv_handler, [HostSignal, HostDirect], |stack| stack
-                    .send_frame_update(frame_update.frame_update()));
-
-                result.expect("handle errors from sending frame updates properly");
-
-                capture.update(frame_update.resources);
-            }
-        }
-
-        EventLoopState::Working
-    });
-}

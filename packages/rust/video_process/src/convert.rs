@@ -92,7 +92,6 @@ pub fn convert_bgra_to_i420(
 
     let sizes: &mut [usize] = &mut [0usize; 3];
     get_buffers_size(new_width, new_height, &DST_FORMAT, None, sizes)?;
-    println!("{} x {} = {:?}", width, height, sizes);
 
     let mut y_data = vec![0u8; sizes[0]]; // 4
     let mut u_data = vec![0u8; sizes[1]]; // 2

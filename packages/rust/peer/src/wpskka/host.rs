@@ -102,7 +102,6 @@ impl WpskkaHostHandler {
         write: &mut Vec<WpskkaMessage<'_>>,
         events: &mut Vec<InformEvent>,
     ) -> Result<Option<Vec<u8>>, WpskkaHostError> {
-        // TODO if these return an error the state might be left in State::Modifying
         match msg {
             WpskkaMessage::KeyExchange(msg) => self.handle_key_exchange(write, msg),
             WpskkaMessage::TryAuth(msg) => self.handle_try_auth(write, events, msg),
@@ -450,7 +449,7 @@ impl WpskkaHostHandler {
     }
 
     /// Creates a key_exchange message
-    pub fn key_exchange(&mut self) -> Result<WpskkaMessage<'_>, WpskkaHostError> {
+    pub fn key_exchange(&mut self) -> Result<WpskkaMessage<'static>, WpskkaHostError> {
         if !matches!(self.state, State::PreInit) {
             return Err(WpskkaHostError::WrongState(
                 debug(&self.state),
@@ -520,9 +519,9 @@ impl WpskkaHandlerTrait for WpskkaHostHandler {
 
 #[derive(Debug, thiserror::Error)]
 pub enum WpskkaHostError {
-    #[error("invalid message {0} for state {0}")]
+    #[error("invalid message {0} for state {1}")]
     WrongMessageForState(String, String),
-    #[error("invalid state for function call: got {0} but expected {0}")]
+    #[error("invalid state for function call: got {0} but expected {1}")]
     WrongState(String, String),
 
     #[error("unsupported auth scheme type")]
@@ -536,6 +535,7 @@ pub enum WpskkaHostError {
     CipherError(#[from] CipherError),
 }
 
+#[derive(Debug)]
 pub enum WpskkaHostInform {
     AuthSuccessful,
     AuthFailed,

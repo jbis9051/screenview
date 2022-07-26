@@ -22,6 +22,32 @@ fn test_version_response() {
 }
 
 #[test]
+fn test_unreliable_auth_initial() {
+    let bytes = include_bytes!("binary/rvd/unreliable_auth_initial.bin");
+    let message = UnreliableAuthInitial::read(&mut Cursor::new(bytes)).unwrap();
+    assert_eq!(&message.challenge, b"challangechallan");
+    assert_eq!(&message.zero, b"zerozerozerozero");
+    test_write(&message, bytes);
+}
+
+#[test]
+fn test_unreliable_auth_inter() {
+    let bytes = include_bytes!("binary/rvd/unreliable_auth_inter.bin");
+    let message = UnreliableAuthInter::read(&mut Cursor::new(bytes)).unwrap();
+    assert_eq!(&message.response, b"responseresponse");
+    assert_eq!(&message.challenge, b"challengechallen");
+    test_write(&message, bytes);
+}
+
+#[test]
+fn test_unreliable_auth_final() {
+    let bytes = include_bytes!("binary/rvd/unreliable_auth_final.bin");
+    let message = UnreliableAuthFinal::read(&mut Cursor::new(bytes)).unwrap();
+    assert_eq!(&message.response, b"responseresponse");
+    test_write(&message, bytes);
+}
+
+#[test]
 fn test_permissions_update() {
     let bytes = include_bytes!("binary/rvd/permissions_update.bin");
     let message = PermissionsUpdate::read(&mut Cursor::new(bytes)).unwrap();
@@ -158,9 +184,7 @@ fn clipboard_notification_custom_content() {
 fn frame_data() {
     let bytes = include_bytes!("binary/rvd/frame_data.bin");
     let message: FrameData = FrameData::read(&mut Cursor::new(bytes)).unwrap();
-    assert_eq!(message.frame_number, 16);
     assert_eq!(message.display_id, 5);
-    assert_eq!(message.cell_number, 6);
-    assert_eq!(&message.data, b"abc");
+    assert_eq!(message.data.0.as_ref(), b"abc");
     test_write(&message, bytes);
 }

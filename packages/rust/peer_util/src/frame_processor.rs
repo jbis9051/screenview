@@ -4,6 +4,7 @@ use native::api::BGRAFrame;
 use rtp::packet::Packet;
 use std::vec::Drain;
 use video_process::{
+    convert::convert_bgra_to_i420,
     rtp::RtpEncoder,
     vp9::{self, VP9Encoder},
 };
@@ -11,16 +12,6 @@ use video_process::{
 pub struct FrameProcessor {
     vp9_encoder: Option<VP9Encoder>,
     rtp_encoder: RtpEncoder,
-}
-
-impl Default for FrameProcessor {
-    fn default() -> Self {
-        // TODO: get real values for the MTU and SSRC
-        Self {
-            vp9_encoder: None,
-            rtp_encoder: RtpEncoder::new(io::DEFAULT_UNRELIABLE_MESSAGE_SIZE, 0),
-        }
-    }
 }
 
 impl FrameProcessor {
@@ -43,7 +34,17 @@ impl FrameProcessor {
 }
 
 impl ProcessFrame for FrameProcessor {
+    type InitArgs = usize;
     type Resources = Vec<Packet>;
+
+    // MTU
+
+    fn new(args: Self::InitArgs) -> Self {
+        Self {
+            vp9_encoder: None,
+            rtp_encoder: RtpEncoder::new(args, 0),
+        }
+    }
 
     fn process(
         &mut self,
@@ -55,11 +56,16 @@ impl ProcessFrame for FrameProcessor {
             return FrameProcessResult::Failure;
         }
 
+        let i420_frame = match convert_bgra_to_i420(frame.width, frame.height, &mut frame.data) {
+            Ok(data) => data,
+            Err(_) => return FrameProcessResult::Failure,
+        };
+
         // unwrap is fine because we ensure the encoder is present with the check above, this
         // branch should be optimized out by the compiler
         let vp9_encoder = self.vp9_encoder.as_mut().unwrap();
 
-        let packets = match vp9_encoder.encode(&frame.data) {
+        let packets = match vp9_encoder.encode(&i420_frame) {
             Ok(packets) => packets,
             // TODO: log more detailed information about the error
             Err(_) => return FrameProcessResult::Failure,

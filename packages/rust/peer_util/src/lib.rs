@@ -1,4 +1,5 @@
 pub mod clipboard_type_map;
+pub mod frame_data_mtu;
 pub mod frame_processor;
 pub mod handler_stack;
 pub mod native_thumbnails;

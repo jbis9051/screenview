@@ -38,7 +38,12 @@ impl<P: ProcessFrame> CapturePool<P> {
         ret
     }
 
-    pub fn active_captures(&mut self) -> impl Iterator<Item = &'_ mut FrameCapture<P>> {
-        self.captures.iter_mut().take(self.next_inactive)
+    pub fn active_captures(
+        &mut self,
+    ) -> impl Iterator<Item = (DisplayId, &'_ mut FrameCapture<P>)> {
+        self.captures
+            .iter_mut()
+            .take(self.next_inactive)
+            .map(|capture| (capture.captured_display(), capture))
     }
 }

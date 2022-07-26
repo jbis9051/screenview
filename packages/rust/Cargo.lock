@@ -1150,6 +1150,7 @@ dependencies = [
  "rtp",
  "thiserror",
  "video_process",
+ "webrtc-util",
 ]
 
 [[package]]

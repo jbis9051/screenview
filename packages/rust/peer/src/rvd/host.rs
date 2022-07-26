@@ -1,34 +1,48 @@
 use crate::{
     debug,
+    helpers::crypto::random_bytes_const,
     rvd::{
+        ClientState,
         PermissionError::{
             ClipboardRead,
             ClipboardWrite,
             KeyInput as KeyInputPermission,
             MouseInput,
         },
+        RvdClientError,
         RvdError,
         RvdHandlerTrait,
     },
     InformEvent,
+    RvdClientInform,
 };
 use common::{
     constants::RVD_VERSION,
-    messages::rvd::{
-        AccessMask,
-        ButtonsMask,
-        ClipboardType,
-        DisplayId,
-        DisplayShare,
-        DisplayUnshare,
-        KeyInput,
-        PermissionMask,
-        PermissionsUpdate,
-        ProtocolVersion,
-        RvdMessage,
+    messages::{
+        rvd::{
+            AccessMask,
+            ButtonsMask,
+            ClipboardType,
+            DisplayId,
+            DisplayShare,
+            DisplayUnshare,
+            FrameData,
+            HandshakeComplete,
+            KeyInput,
+            PermissionMask,
+            PermissionsUpdate,
+            ProtocolVersion,
+            ProtocolVersionResponse,
+            RvdMessage,
+            UnreliableAuthFinal,
+            UnreliableAuthInitial,
+            UnreliableAuthInter,
+        },
+        Data,
     },
 };
 use std::{
+    borrow::Cow,
     collections::HashMap,
     fmt::Debug,
     time::{Duration, Instant},
@@ -46,7 +60,9 @@ struct SharedDisplay {
 
 #[derive(Copy, Clone, Debug)]
 pub enum HostState {
-    Handshake,
+    ProtocolVersion,
+    UnreliableAuthStep1,
+    UnreliableAuthStep2([u8; 16]),
     Ready,
 }
 
@@ -66,19 +82,13 @@ impl Default for RvdHostHandler {
 impl RvdHostHandler {
     pub fn new() -> Self {
         Self {
-            state: HostState::Handshake,
+            state: HostState::ProtocolVersion,
             permissions: PermissionMask::empty(),
             shared_displays: HashMap::new(),
         }
     }
 
-    pub fn protocol_version() -> RvdMessage {
-        RvdMessage::ProtocolVersion(ProtocolVersion {
-            version: RVD_VERSION.to_string(),
-        })
-    }
-
-    pub fn set_permissions(&mut self, permissions: PermissionMask) -> RvdMessage {
+    pub fn set_permissions(&mut self, permissions: PermissionMask) -> RvdMessage<'static> {
         self.permissions = permissions;
         RvdMessage::PermissionsUpdate(PermissionsUpdate {
             permission_mask: permissions,
@@ -98,7 +108,7 @@ impl RvdHostHandler {
         &mut self,
         name: String,
         access: AccessMask,
-    ) -> Result<(DisplayId, RvdMessage), RvdHostError> {
+    ) -> Result<(DisplayId, RvdMessage<'static>), RvdHostError> {
         let display_id = self
             .find_unused_display_id()
             .ok_or(RvdHostError::RanOutOfDisplayIds)?;
@@ -117,7 +127,10 @@ impl RvdHostHandler {
         Ok((display_id, msg))
     }
 
-    pub fn unshare_display(&mut self, display_id: DisplayId) -> Result<RvdMessage, RvdHostError> {
+    pub fn unshare_display(
+        &mut self,
+        display_id: DisplayId,
+    ) -> Result<RvdMessage<'static>, RvdHostError> {
         if self.shared_displays.remove(&display_id).is_none() {
             return Err(RvdHostError::DisplayNotFound(display_id));
         }
@@ -125,7 +138,7 @@ impl RvdHostHandler {
     }
 
     /// This should be called every so often, at minimum probably every second.
-    pub fn check_expired_shares(&mut self) -> Vec<RvdMessage> {
+    pub fn check_expired_shares(&mut self) -> Vec<RvdMessage<'static>> {
         let mut unshares = Vec::new();
         self.shared_displays
             .retain(|&display_id, share| match share.share_time {
@@ -141,43 +154,57 @@ impl RvdHostHandler {
         unshares
     }
 
-    pub fn frame_update<'a>(&mut self, _pkt: &[u8]) -> impl Iterator<Item = RvdMessage> + 'a {
-        /* let display_id = fragments.display_id;
-        let shared_display = self
-            .shared_displays
-            .get_mut(&display_id)
-            .and_then(Option::as_mut)
-            .expect("invalid or stale display id");
-
-        let frame_number = shared_display.frame_number;
-        shared_display.frame_number = frame_number
-            .checked_add(1)
-            .expect("frame number overflowed");
-
-        fragments.map(move |fragment| {
-            RvdMessage::FrameData(FrameData {
-                frame_number,
-                display_id,
-                cell_number: fragment.cell_number,
-                data: fragment.data,
-            })
-        })*/
-        Vec::new().into_iter()
+    pub fn frame_update(display_id: DisplayId, data: &[u8]) -> RvdMessage<'_> {
+        RvdMessage::FrameData(FrameData {
+            display_id,
+            data: Data(Cow::Borrowed(data)),
+        })
     }
 
     pub fn _handle(
         &mut self,
-        msg: RvdMessage,
+        msg: RvdMessage<'_>,
+        write: &mut Vec<RvdMessage<'_>>,
         events: &mut Vec<InformEvent>,
     ) -> Result<(), RvdHostError> {
         match self.state {
-            HostState::Handshake => match msg {
-                RvdMessage::ProtocolVersionResponse(msg) => {
-                    if !msg.ok {
+            HostState::ProtocolVersion => match msg {
+                RvdMessage::ProtocolVersion(msg) => {
+                    let ok = msg.version == RVD_VERSION;
+                    write.push(RvdMessage::ProtocolVersionResponse(
+                        ProtocolVersionResponse { ok },
+                    ));
+                    if ok {
+                        self.state = HostState::UnreliableAuthStep1;
+                    } else {
                         events.push(InformEvent::RvdHostInform(RvdHostInform::VersionBad));
-                        return Ok(());
                     }
-                    self.state = HostState::Ready;
+                    Ok(())
+                }
+                _ => Err(RvdHostError::WrongMessageForState(debug(&msg), self.state)),
+            },
+            HostState::UnreliableAuthStep1 => match msg {
+                RvdMessage::UnreliableAuthInitial(msg) => {
+                    let challenge = random_bytes_const::<16>();
+                    write.push(RvdMessage::UnreliableAuthInter(UnreliableAuthInter {
+                        response: msg.challenge,
+                        challenge: challenge.clone(),
+                    }));
+                    self.state = HostState::UnreliableAuthStep2(challenge);
+                    Ok(())
+                }
+                _ => Err(RvdHostError::WrongMessageForState(debug(&msg), self.state)),
+            },
+            HostState::UnreliableAuthStep2(challenge) => match msg {
+                RvdMessage::UnreliableAuthFinal(msg) => {
+                    let ok = msg.response == challenge;
+                    if ok {
+                        self.state = HostState::Ready;
+                        events.push(InformEvent::RvdHostInform(RvdHostInform::HandshakeComplete));
+                        write.push(RvdMessage::HandshakeComplete(HandshakeComplete {}));
+                    } else {
+                        return Err(RvdHostError::UnreliableAuthFailed);
+                    }
                     Ok(())
                 }
                 _ => Err(RvdHostError::WrongMessageForState(debug(&msg), self.state)),
@@ -262,11 +289,11 @@ impl RvdHostHandler {
 impl RvdHandlerTrait for RvdHostHandler {
     fn handle(
         &mut self,
-        msg: RvdMessage,
-        _write: &mut Vec<RvdMessage>,
+        msg: RvdMessage<'_>,
+        write: &mut Vec<RvdMessage<'_>>,
         events: &mut Vec<InformEvent>,
     ) -> Result<(), RvdError> {
-        Ok(self._handle(msg, events)?)
+        Ok(self._handle(msg, write, events)?)
     }
 }
 
@@ -288,8 +315,11 @@ pub enum RvdHostError {
     DisplayNotFound(DisplayId),
     #[error("ran out of DisplayIDs. Are you sharing 256 displays?")]
     RanOutOfDisplayIds,
+    #[error("unreliable auth failed")]
+    UnreliableAuthFailed,
 }
 
+#[derive(Debug)]
 pub struct MouseInputEvent {
     pub display_id: DisplayId,
     pub x_location: u16,
@@ -298,18 +328,15 @@ pub struct MouseInputEvent {
     pub button_state: ButtonsMask,
 }
 
+#[derive(Debug)]
 pub enum RvdHostInform {
     VersionBad,
+
+    HandshakeComplete,
 
     MouseInput(MouseInputEvent),
     KeyboardInput(KeyInput),
 
     ClipboardRequest(bool, ClipboardType),
     ClipboardNotification(Vec<u8>, ClipboardType),
-}
-
-pub enum ShareDisplayResult {
-    NewlyShared(DisplayId),
-    AlreadySharing(DisplayId),
-    IdLimitReached,
 }

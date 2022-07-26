@@ -11,8 +11,8 @@ use common::messages::rvd::{ClipboardMeta, ClipboardNotification, ClipboardType,
 pub trait RvdHandlerTrait {
     fn handle(
         &mut self,
-        msg: RvdMessage,
-        write: &mut Vec<RvdMessage>,
+        msg: RvdMessage<'_>,
+        write: &mut Vec<RvdMessage<'_>>,
         events: &mut Vec<InformEvent>,
     ) -> Result<(), RvdError>;
 
@@ -20,7 +20,7 @@ pub trait RvdHandlerTrait {
         data: Option<Vec<u8>>, // on input Option refers to whether the content exists
         is_content: bool,
         clipboard_type: ClipboardType,
-    ) -> RvdMessage {
+    ) -> RvdMessage<'static> {
         RvdMessage::ClipboardNotification(ClipboardNotification {
             info: ClipboardMeta {
                 clipboard_type,

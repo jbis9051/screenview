@@ -36,7 +36,7 @@ impl ThumbnailCapture {
 
         for (index, capture) in captures.iter().enumerate() {
             pool.get_or_create_inactive()?
-                .activate(capture.display.clone(), index as u8);
+                .activate((), capture.display.clone(), index as u8);
         }
 
         Ok(Self { pool, captures })
@@ -44,7 +44,7 @@ impl ThumbnailCapture {
 
     pub fn handle_thumbnail_updates<F>(&mut self, mut handler: F)
     where F: FnMut(NativeThumbnail) {
-        for capture in self.pool.active_captures() {
+        for (_, capture) in self.pool.active_captures() {
             let mut update = match capture.next_update() {
                 Some(update) => update,
                 None => continue,
@@ -70,7 +70,12 @@ impl ThumbnailCapture {
 struct ProcessThumbnail;
 
 impl ProcessFrame for ProcessThumbnail {
+    type InitArgs = ();
     type Resources = Vec<u8>;
+
+    fn new(_args: Self::InitArgs) -> Self {
+        Self
+    }
 
     fn process(
         &mut self,

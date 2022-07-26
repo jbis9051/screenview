@@ -538,11 +538,11 @@ impl WpskkaHandlerTrait for WpskkaClientHandler {
 
 #[derive(Debug, thiserror::Error)]
 pub enum WpskkaClientError {
-    #[error("invalid message {0} for state {0}")]
+    #[error("invalid message {0} for state {1}")]
     WrongMessageForState(String, String),
-    #[error("invalid state for function call: got {0} but expected {0}")]
+    #[error("invalid state for function call: got {0} but expected {1}")]
     WrongState(String, String),
-    #[error("invalid auth scheme for function call: got {0} but expected {0}")]
+    #[error("invalid auth scheme for function call: got {0} but expected {1}")]
     WrongAuthScheme(&'static str, &'static str),
 
     #[error("unsupported auth scheme type")]
@@ -556,6 +556,7 @@ pub enum WpskkaClientError {
     CipherError(#[from] CipherError),
 }
 
+#[derive(Debug)]
 pub enum WpskkaClientInform {
     AuthScheme(Vec<AuthSchemeType>), // List of available auth schemes
     PasswordPrompt,                  // UI needs to prompt for a password

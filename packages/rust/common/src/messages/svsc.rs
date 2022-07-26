@@ -53,7 +53,7 @@ impl MessageComponent<'_> for ExpirationTime {
 
 #[derive(Debug, MessageComponent, PartialEq, Eq, Clone)]
 pub struct LeaseResponseData {
-    pub id: u32,
+    pub id: LeaseId,
     pub cookie: Cookie,
     pub expiration: ExpirationTime,
 }

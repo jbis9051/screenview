@@ -1,3 +1,4 @@
+use common::messages::svsc::LeaseId;
 use io::{DirectServer, IoHandle, TcpHandle, UdpHandle};
 use peer::{
     higher_handler::HigherHandler,
@@ -20,21 +21,11 @@ where F: FnOnce(T) -> U {
 }
 
 #[macro_export]
-macro_rules! __forward_pat {
-    (HostDirect, $stack:ident) => {
-        $crate::handler::ScreenViewHandler::HostDirect($stack, _)
-    };
-    ($variant:ident, $stack:ident) => {
-        $crate::handler::ScreenViewHandler::$variant($stack)
-    };
-}
-
-#[macro_export]
 macro_rules! __forward_internal {
     ($stack:ident, $handler:expr, [ $( $variant:ident ),* ], $op:expr) => {
         match &mut $handler {
             $(
-                $crate::__forward_pat!($variant, $stack)  => $crate::handler::call_unary($stack, $op),
+               $crate::screenview_handler::ScreenViewHandler::$variant($stack, ..) => $crate::screenview_handler::call_unary($stack, $op),
             )*
             #[allow(unreachable_patterns)]
             _ => unreachable!()

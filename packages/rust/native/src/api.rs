@@ -1,6 +1,6 @@
 use std::fmt::{Debug, Display, Formatter};
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub enum NativeId {
     Monitor(MonitorId),
     Window(WindowId),

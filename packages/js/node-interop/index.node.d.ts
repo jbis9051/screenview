@@ -41,9 +41,12 @@ export declare function new_instance<
     U extends InstanceConnectionType
 >(peer_type: T, instance_type: U, vtable: VTable): JSBox<Instance<T, U>>;
 
+export declare function close_instance(instance: AnyInstance): void;
+
 export declare function start_server(
     handle: HostDirectInstance,
-    addr: string
+    reliable_addr: string,
+    unreliable_addr: string
 ): Promise<undefined>;
 
 export declare function connect(
@@ -96,9 +99,11 @@ export declare function set_clipboard_readable(
     is_readable: boolean
 ): Promise<undefined>;
 
+// Calls to this function replace all current displays with the given ones
 export declare function share_displays(
     handle: HostInstance,
-    displays: Display[]
+    displays: Display[],
+    controllable: boolean
 ): Promise<undefined>;
 
 export declare function thumbnails(
@@ -152,14 +157,17 @@ export interface VTable {
 
     svsc_error_session_request_rejected(status: EstablishSessionStatus): void;
 
-    svsc_error_lease_extention_request_rejected(): void;
+    svsc_error_lease_extension_request_rejected(): void;
 
     /* wpskka - client */
     wpskka_client_password_prompt(): void;
 
     wpskka_client_authentication_successful(): void;
 
-    wpskka_client_out_of_authentication_schemes(): void;
+    wpskka_client_authentication_failed(): void;
+
+    /* wpskka - host */
+    wpskka_host_authentication_successful(): void;
 
     /* rvd - client */
     rvd_display_update(
@@ -167,5 +175,10 @@ export interface VTable {
         displays: DisplayInformation[]
     ): void;
 
+    rvd_client_handshake_complete(): void;
+
     rvd_frame_data(display_id: number, data: ArrayBuffer);
+
+    /* rvd - host */
+    rvd_host_handshake_complete(): void;
 }

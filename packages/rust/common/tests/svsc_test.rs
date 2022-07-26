@@ -43,11 +43,7 @@ fn test_lease_response_accepted() {
     let bytes = include_bytes!("binary/svsc/lease_response_accepted.bin");
     let message: LeaseResponse = LeaseResponse::read(&mut Cursor::new(bytes)).unwrap();
     assert!(message.response_data.is_some());
-    assert_eq!(
-        &message.response_data.as_ref().unwrap().id,
-        &b"idid".as_slice().read_u32::<LittleEndian>().unwrap(),
-        "id"
-    );
+    assert_eq!(&message.response_data.as_ref().unwrap().id, b"idid", "id");
     assert_eq!(
         &message.response_data.as_ref().unwrap().cookie,
         b"cookiecookiecookiecookie",

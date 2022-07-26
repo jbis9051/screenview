@@ -6,7 +6,7 @@ use crate::{
 };
 use common::messages::{
     rvd::{AccessMask, DisplayId, RvdMessage},
-    wpskka::{TransportDataMessageUnreliable, WpskkaMessage},
+    wpskka::{AuthSchemeType, TransportDataMessageUnreliable, WpskkaMessage},
     ChanneledMessage,
     Error as MessageComponentError,
     Message,
@@ -33,13 +33,13 @@ pub(crate) mod sealed {
     use super::*;
 
     pub enum HigherMessage<'a> {
-        Rvd(RvdMessage),
+        Rvd(RvdMessage<'a>),
         Wpskka(WpskkaMessage<'a>),
     }
 }
 
-impl From<RvdMessage> for sealed::HigherMessage<'_> {
-    fn from(msg: RvdMessage) -> Self {
+impl<'a> From<RvdMessage<'a>> for sealed::HigherMessage<'a> {
+    fn from(msg: RvdMessage<'a>) -> Self {
         Self::Rvd(msg)
     }
 }
@@ -68,6 +68,10 @@ impl HigherHandlerHost {
         }
     }
 
+    pub fn key_exchange(&mut self) -> Result<WpskkaMessage<'static>, HigherError> {
+        Ok(self.wpskka.key_exchange().map_err(WpskkaError::Host)?)
+    }
+
     pub fn set_static_password(&mut self, static_password: Option<Vec<u8>>) {
         self.wpskka.set_static_password(static_password)
     }
@@ -76,12 +80,25 @@ impl HigherHandlerHost {
         &mut self,
         name: String,
         access: AccessMask,
-    ) -> Result<(DisplayId, RvdMessage), RvdHostError> {
-        self.rvd.share_display(name, access)
+    ) -> Result<(DisplayId, RvdMessage<'static>), HigherError> {
+        Ok(self
+            .rvd
+            .share_display(name, access)
+            .map_err(RvdError::Host)?)
     }
 
-    pub fn frame_update<'a>(&mut self, pkt: &[u8]) -> impl Iterator<Item = RvdMessage> + 'a {
-        self.rvd.frame_update(pkt)
+    pub fn unshare_display(
+        &mut self,
+        display_id: DisplayId,
+    ) -> Result<RvdMessage<'static>, HigherError> {
+        Ok(self
+            .rvd
+            .unshare_display(display_id)
+            .map_err(RvdError::Host)?)
+    }
+
+    pub fn frame_update(display_id: DisplayId, data: &[u8]) -> RvdMessage<'_> {
+        RvdHostHandler::frame_update(display_id, data)
     }
 }
 
@@ -93,6 +110,10 @@ impl HigherHandlerClient {
         }
     }
 
+    pub fn protocol_version(&self) -> RvdMessage<'static> {
+        RvdClientHandler::protocol_version()
+    }
+
     pub fn process_password(
         &mut self,
         password: &[u8],
@@ -101,14 +122,24 @@ impl HigherHandlerClient {
             .process_password(password)
             .map_err(|error| HigherError::Wpskka(WpskkaError::Client(error)))
     }
+
+    pub fn try_auth(&mut self, scheme: AuthSchemeType) -> WpskkaMessage<'static> {
+        self.wpskka.try_auth(scheme)
+    }
 }
 
 impl<Wpskka: WpskkaHandlerTrait, Rvd: RvdHandlerTrait> HigherHandler<Wpskka, Rvd> {
-    fn send_rvd(&mut self, rvd: RvdMessage) -> Result<ChanneledMessage<HigherOutput>, HigherError> {
+    fn send_rvd(
+        &mut self,
+        rvd: RvdMessage<'_>,
+    ) -> Result<ChanneledMessage<HigherOutput>, HigherError> {
         let data = rvd.to_bytes()?;
 
         match rvd {
-            RvdMessage::FrameData(_) => {
+            RvdMessage::FrameData(_)
+            | RvdMessage::UnreliableAuthInitial(_)
+            | RvdMessage::UnreliableAuthInter(_)
+            | RvdMessage::UnreliableAuthFinal(_) => {
                 let cipher = self.wpskka.unreliable_cipher();
                 let wpskka: TransportDataMessageUnreliable<'_> =
                     <Wpskka as WpskkaHandlerTrait>::wrap_unreliable(data, cipher)

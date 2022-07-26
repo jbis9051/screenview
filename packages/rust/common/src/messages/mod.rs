@@ -35,7 +35,7 @@ pub enum ScreenViewMessage<'a> {
     SelMessage(SelMessage<'a>),
     SvscMessage(SvscMessage<'a>),
     WpskkaMessage(WpskkaMessage<'a>),
-    RvdMessage(RvdMessage),
+    RvdMessage(RvdMessage<'a>),
 }
 
 impl<'a> From<SelMessage<'a>> for ScreenViewMessage<'a> {
@@ -56,8 +56,8 @@ impl<'a> From<WpskkaMessage<'a>> for ScreenViewMessage<'a> {
     }
 }
 
-impl From<RvdMessage> for ScreenViewMessage<'_> {
-    fn from(msg: RvdMessage) -> Self {
+impl<'a> From<RvdMessage<'a>> for ScreenViewMessage<'a> {
+    fn from(msg: RvdMessage<'a>) -> Self {
         Self::RvdMessage(msg)
     }
 }

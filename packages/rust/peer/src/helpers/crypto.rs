@@ -20,6 +20,13 @@ pub fn random_bytes(bytes: usize) -> Vec<u8> {
     vec
 }
 
+pub fn random_bytes_const<const BYTES: usize>() -> [u8; BYTES] {
+    let mut arr = [0u8; BYTES];
+    let rng = SystemRandom::new();
+    rng.fill(&mut arr).unwrap();
+    arr
+}
+
 pub fn random_srp_private_value() -> Vec<u8> {
     random_bytes((SRP_PARAM.n.bits() / 8) as usize)
 }

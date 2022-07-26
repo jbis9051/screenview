@@ -21,14 +21,14 @@ All RVD messages' first byte contain a number to indicate the message type. \\
 \subsection{Handshake}
 
 \subsubsection{ProtocolVersion - TCP}
-Handshaking begins by the Host sending the client a ProtocolVersion message. This lets the Client know the
+Handshaking begins by the Client sending the Host a ProtocolVersion message. This lets the Host know the
 version supported by the Host.\\
 
 The ProtocolVersion message consists of 11 bytes interpreted as a string of ASCII characters in the format
 "RVD xxx.yyy" where xxx and yyy are the major and minor version numbers, padded with zeros.
 
 \begin{center}
-    Host \textrightarrow\ Client\\
+    Client \textrightarrow\ Host\\
     \begin{tabular}{|c|c|c|}
         \hline
         \textbf{Bytes} & \textbf{Name} & \textbf{Value}           \\
@@ -40,13 +40,13 @@ The ProtocolVersion message consists of 11 bytes interpreted as a string of ASCI
     \end{tabular}
 \end{center}
 
-The Client replies back either \texttt{0} to indicate the version is not acceptable and that the handshake has
+The Host replies back either \texttt{0} to indicate the version is not acceptable and that the handshake has
 failed or \texttt{1} if the version is acceptable to the Client and the handshake has succeeded.
 If 0 is sent, all communication MUST cease and an error SHOULD be displayed to user.
-A SessionEnd message should be sent by the Client.
+A SessionEnd message should be sent by the Host.
 
 \begin{center}
-    Client \textrightarrow\ Host\\
+    Host \textrightarrow\ Client\\
     \begin{tabular}{|c|c|c|}
         \hline
         \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
@@ -54,6 +54,88 @@ A SessionEnd message should be sent by the Client.
         1              & type          & 1              \\
         \hline
         1              & ok            & 0 or 1         \\
+        \hline
+    \end{tabular}
+\end{center}
+
+\subsubsection{Unreliable Authentication - UDP}
+
+To prevent UDP amplification attacks, the Host and Client MUST each authenticate each others addresses before sending
+unreliable messages.
+
+For simplicity and better abstraction, even if an unreliable transport is not being used for the transport or a
+signal server is used, this section of the protocol MUST be performed.
+
+If unreliable transport is not used, this MUST be performed over the reliable transport.\\
+
+\textbf{UnreliableAuthInitial}
+\begin{center}
+    Client \textrightarrow\ Host\\
+    \begin{tabular}{|c|c|c|}
+        \hline
+        \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
+        \hline
+        1              & type          & 2              \\
+        \hline
+        16             & challenge     &                \\
+        \hline
+        16             & zero          & 0              \\
+        \hline
+    \end{tabular}
+\end{center}
+
+
+challenge is a random 128 bit value
+
+zero is 128 bits padding with the value 0\\
+
+\textbf{UnreliableAuthInter}
+\begin{center}
+    Host \textrightarrow\ Client\\
+    \begin{tabular}{|c|c|c|}
+        \hline
+        \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
+        \hline
+        1              & type          & 3              \\
+        \hline
+        16             & response     &                \\
+        \hline
+        16             & challenge          & 0              \\
+        \hline
+    \end{tabular}
+\end{center}
+
+response is the 128 bit value received from the Client in the UnreliableAuthInitial message
+
+challenge is a random 128 bit value\\
+
+\textbf{UnreliableAuthFinal}
+\begin{center}
+    Client \textrightarrow\ Host\\
+    \begin{tabular}{|c|c|c|}
+        \hline
+        \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
+        \hline
+        1              & type          & 4              \\
+        \hline
+        16             & response     &                \\
+        \hline
+    \end{tabular}
+\end{center}
+
+response is the 128 bit value received from the Host in the UnreliableAuthInitial message
+
+\subsubsection{HandshakeComplete - TCP}
+
+Finally, the Host sends a HandshakeComplete message to indicate it is ready to receive messages.
+
+\begin{center}
+    Host \textrightarrow\ Client\\
+    \begin{tabular}{|c|c|c|}
+        \hline
+        \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
+        \hline
+        1              & type          & 5              \\
         \hline
     \end{tabular}
 \end{center}
@@ -72,7 +154,7 @@ The default permissions are all false.
         \hline
         \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
         \hline
-        1              & type          & 2              \\
+        1              & type          & 6              \\
         \hline
         1              & permissions   & see below      \\
         \hline
@@ -116,7 +198,7 @@ If the Client receives a DisplayUnshare message with a display-id that it does n
         \hline
         \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
         \hline
-        1              & type          & 3              \\
+        1              & type          & 7              \\
         \hline
         1              & display-id    & 0-255          \\
         \hline
@@ -154,7 +236,7 @@ It indicates to the Host, that the Client is ready to receive FrameData.
         \hline
         \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
         \hline
-        1              & type          & 4              \\
+        1              & type          & 8              \\
         \hline
         1              & display-id    & 0-255          \\
         \hline
@@ -173,7 +255,7 @@ reshared via the DisplayShare message.
         \hline
         \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
         \hline
-        1              & type          & 5              \\
+        1              & type          & 9              \\
         \hline
         1              & display-id    & 0-255          \\
         \hline
@@ -200,7 +282,7 @@ When a \emph{MouseHidden} message is received, the pointer for the Display is ma
         \hline
         \textbf{Bytes} & \textbf{Name} & \textbf{Value} & \textbf{Description}      \\
         \hline
-        1              & type          & 6              &                           \\
+        1              & type          & 10              &                           \\
         \hline
         1              & display-id    & 0-255          &                           \\
         \hline
@@ -219,7 +301,7 @@ When a \emph{MouseHidden} message is received, the pointer for the Display is ma
         \hline
         \textbf{Bytes} & \textbf{Name} & \textbf{Value} & \textbf{Description} \\
         \hline
-        1              & type          & 7              &                      \\
+        1              & type          & 11              &                      \\
         \hline
         1              & display-id    & 0-255          &                      \\
         \hline
@@ -240,7 +322,7 @@ used.
         \hline
         \textbf{Bytes} & \textbf{Name}     & \textbf{Value} & \textbf{Description}      \\
         \hline
-        1              & type              & 8              &                           \\
+        1              & type              & 12              &                           \\
         \hline
         1              & display-id        & 0-255          &                           \\
         \hline
@@ -276,7 +358,7 @@ The \emph{KeyInput} event sends key presses or releases.
         \hline
         \textbf{Bytes} & \textbf{Name} & \textbf{Value} & \textbf{Description}                                 \\
         \hline
-        1              & type          & 9              &                                                      \\
+        1              & type          & 13              &                                                      \\
         \hline
         1              & down-flag     & 0 or 1         & indicates whether the key is now pressed or released \\
         \hline
@@ -299,7 +381,7 @@ Used to check if a clipboard type exists on the Host.
         \hline
         \textbf{Bytes}   & \textbf{Name}    & \textbf{Value} \\
         \hline
-        1                & type             & 10              \\
+        1                & type             & 14             \\
         \hline
         1                & clipboard-type   &                \\
         \hline
@@ -348,7 +430,7 @@ Notifies a Peer of a clipboard update. The receiving Peer should update their cl
         \hline
         \textbf{Bytes}        & \textbf{Name}    & \textbf{Value}   \\
         \hline
-        1                     & type             & 11               \\
+        1                     & type             & 15               \\
         \hline
         1                     & clipboard-type   &                  \\
         \hline
@@ -393,7 +475,7 @@ The \emph{FrameData} message contains a single RTP-VP9 or RTCP packet
         \hline
         \textbf{Bytes} & \textbf{Name} & \textbf{Value} \\
         \hline
-        1              & type          & 12             \\
+        1              & type          & 16             \\
         \hline
         1              & display-id    & 0-255          \\
         \hline
