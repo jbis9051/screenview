@@ -11,18 +11,14 @@ use common::messages::{
     rvd::ButtonsMask,
     svsc::{Cookie, LeaseId},
 };
+use io::Unreliable;
 use native::{
     api::{NativeApiTemplate, NativeId},
     NativeApi,
 };
 use neon::{prelude::*, types::buffer::TypedArray};
 use num_traits::FromPrimitive;
-use std::{
-    any::type_name,
-    convert::TryFrom,
-    num::FpCategory,
-    sync::{LockResult, Mutex},
-};
+use std::{any::type_name, cell::RefCell, convert::TryFrom, num::FpCategory, sync::Mutex};
 
 #[macro_export]
 macro_rules! throw {
@@ -63,20 +59,10 @@ where T: FromPrimitive {
 // This function is infallible but returns a result for convenience
 pub fn send_request<'a>(
     cx: &mut FunctionContext<'a>,
-    handle: Handle<'_, InstanceWrapper>,
+    mut handle: Handle<'_, InstanceWrapper>,
     content: RequestContent,
 ) -> JsResult<'a, JsPromise> {
-    let instance = match handle.lock() {
-        Ok(instance) => instance,
-        Err(err) =>
-            return throw!(
-                *cx,
-                format!(
-                    "Failed to lock instance handle. This is a bug in the Rust code. Error: {:?}",
-                    err
-                )
-            ),
-    };
+    let instance = handle.borrow();
 
     let instance = match *instance {
         None =>
@@ -98,7 +84,7 @@ pub fn send_request<'a>(
 }
 
 
-type InstanceWrapper = JsBox<Mutex<Option<InstanceHandle>>>;
+type InstanceWrapper = JsBox<RefCell<Option<InstanceHandle>>>;
 
 
 pub fn new_instance(mut cx: FunctionContext<'_>) -> JsResult<'_, InstanceWrapper> {
@@ -121,7 +107,7 @@ pub fn new_instance(mut cx: FunctionContext<'_>) -> JsResult<'_, InstanceWrapper
             },
     };
     match handle {
-        Ok(handle) => Ok(cx.boxed(Mutex::new(Some(handle)))),
+        Ok(handle) => Ok(cx.boxed(RefCell::new(Some(handle)))),
         Err(error) => throw!(cx, error),
     }
 }
@@ -129,17 +115,7 @@ pub fn new_instance(mut cx: FunctionContext<'_>) -> JsResult<'_, InstanceWrapper
 pub fn close_instance(mut cx: FunctionContext<'_>) -> JsResult<'_, JsUndefined> {
     let handle = cx.argument::<InstanceWrapper>(0)?;
 
-    let mut instance = match handle.lock() {
-        Ok(instance) => instance,
-        Err(err) =>
-            return throw!(
-                cx,
-                format!(
-                    "Failed to lock instance handle. This is a bug in the Rust code. Error: {:?}",
-                    err
-                )
-            ),
-    };
+    let mut instance = handle.borrow_mut();
 
     // drops instance
 
