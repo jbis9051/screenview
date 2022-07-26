@@ -90,21 +90,23 @@ export default class Application<T extends ConfigurationService> {
     }
 
     private startHosts() {
-        if (this.config.startAsSignalHost && !this.hostSignalManger) {
-            this.hostSignalManger = new HostManager(
-                InstanceConnectionType.Signal
-            );
+        if (this.config.startAsSignalHost) {
+            if (!this.hostSignalManger) {
+                this.hostSignalManger = new HostManager(
+                    InstanceConnectionType.Signal
+                );
+            }
         } else if (this.hostSignalManger) {
             this.hostSignalManger.cleanup();
             this.hostSignalManger = null;
         }
-        if (this.config.startAsDirectHost && !this.hostDirectManger) {
-            console.log('I GOT TO START DIRECT HOST');
-            this.hostDirectManger = new HostManager(
-                InstanceConnectionType.Direct
-            );
+        if (this.config.startAsDirectHost) {
+            if (!this.hostDirectManger) {
+                this.hostDirectManger = new HostManager(
+                    InstanceConnectionType.Direct
+                );
+            }
         } else if (this.hostDirectManger) {
-            console.log('I GOT TO CLEANUP DIRECT HOST');
             this.hostDirectManger.cleanup();
             this.hostDirectManger = null;
         }

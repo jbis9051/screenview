@@ -28,4 +28,8 @@ export default class HostInstance<
     getVtable() {
         return this.vtable;
     }
+
+    cleanup() {
+        rust.close_instance(this.instance as any);
+    }
 }

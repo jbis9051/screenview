@@ -27,6 +27,7 @@ fn main(mut cx: ModuleContext<'_>) -> NeonResult<()> {
     // changes to the function signatures require an update in index.node.d.ts
     export! {
         new_instance,
+        close_instance,
         start_server,
         connect,
         establish_session,

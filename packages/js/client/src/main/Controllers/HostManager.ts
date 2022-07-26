@@ -12,6 +12,7 @@ export default class HostManager<T extends InstanceConnectionType> {
     }
 
     cleanup() {
+        this.instance.cleanup();
         this.window?.cleanup();
     }
 }

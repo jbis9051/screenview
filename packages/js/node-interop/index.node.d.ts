@@ -41,6 +41,8 @@ export declare function new_instance<
     U extends InstanceConnectionType
 >(peer_type: T, instance_type: U, vtable: VTable): JSBox<Instance<T, U>>;
 
+export declare function close_instance(instance: AnyInstance): void;
+
 export declare function start_server(
     handle: HostDirectInstance,
     reliable_addr: string,

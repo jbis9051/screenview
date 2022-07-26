@@ -17,7 +17,12 @@ use native::{
 };
 use neon::{prelude::*, types::buffer::TypedArray};
 use num_traits::FromPrimitive;
-use std::{any::type_name, convert::TryFrom, num::FpCategory};
+use std::{
+    any::type_name,
+    convert::TryFrom,
+    num::FpCategory,
+    sync::{LockResult, Mutex},
+};
 
 #[macro_export]
 macro_rules! throw {
@@ -58,19 +63,45 @@ where T: FromPrimitive {
 // This function is infallible but returns a result for convenience
 pub fn send_request<'a>(
     cx: &mut FunctionContext<'a>,
-    handle: Handle<'_, JsBox<InstanceHandle>>,
+    handle: Handle<'_, InstanceWrapper>,
     content: RequestContent,
 ) -> JsResult<'a, JsPromise> {
+    let instance = match handle.lock() {
+        Ok(instance) => instance,
+        Err(err) =>
+            return throw!(
+                *cx,
+                format!(
+                    "Failed to lock instance handle. This is a bug in the Rust code. Error: {:?}",
+                    err
+                )
+            ),
+    };
+
+    let instance = match *instance {
+        None =>
+            return throw!(
+                *cx,
+                "This instance has been destroyed (.close_instance() was called on it)."
+            ),
+        Some(ref instance) => instance,
+    };
+
+
     let (deferred, promise) = cx.promise();
 
-    if handle.send(Message::request(content, deferred)) {
+    if instance.send(Message::request(content, deferred)) {
         Ok(promise)
     } else {
         panic!("Failed to send node request to handler: broken pipe");
     }
 }
 
-pub fn new_instance(mut cx: FunctionContext<'_>) -> JsResult<'_, JsBox<InstanceHandle>> {
+
+type InstanceWrapper = JsBox<Mutex<Option<InstanceHandle>>>;
+
+
+pub fn new_instance(mut cx: FunctionContext<'_>) -> JsResult<'_, InstanceWrapper> {
     let peer_type = cx.argument::<JsString>(0)?.value(&mut cx);
     let instance_type = cx.argument::<JsString>(1)?.value(&mut cx);
     let channel = cx.channel();
@@ -90,13 +121,35 @@ pub fn new_instance(mut cx: FunctionContext<'_>) -> JsResult<'_, JsBox<InstanceH
             },
     };
     match handle {
-        Ok(handle) => Ok(cx.boxed(handle)),
+        Ok(handle) => Ok(cx.boxed(Mutex::new(Some(handle)))),
         Err(error) => throw!(cx, error),
     }
 }
 
+pub fn close_instance(mut cx: FunctionContext<'_>) -> JsResult<'_, JsUndefined> {
+    let handle = cx.argument::<InstanceWrapper>(0)?;
+
+    let mut instance = match handle.lock() {
+        Ok(instance) => instance,
+        Err(err) =>
+            return throw!(
+                cx,
+                format!(
+                    "Failed to lock instance handle. This is a bug in the Rust code. Error: {:?}",
+                    err
+                )
+            ),
+    };
+
+    // drops instance
+
+    *instance = None;
+
+    Ok(cx.undefined())
+}
+
 pub fn connect(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
-    let handle = cx.argument::<JsBox<InstanceHandle>>(0)?;
+    let handle = cx.argument::<InstanceWrapper>(0)?;
     let connection_type = integer_arg::<u8>(&mut cx, 1)?;
 
     let connection_type = match ConnectionType::try_from(connection_type as u8) {
@@ -112,7 +165,7 @@ pub fn connect(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
 }
 
 pub fn start_server(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
-    let handle = cx.argument::<JsBox<InstanceHandle>>(0)?;
+    let handle = cx.argument::<InstanceWrapper>(0)?;
     let reliable_addr = cx.argument::<JsString>(1)?.value(&mut cx);
     let unreliable_addr = cx.argument::<JsString>(1)?.value(&mut cx);
 
@@ -123,7 +176,7 @@ pub fn start_server(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
 }
 
 pub fn establish_session(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
-    let handle = cx.argument::<JsBox<InstanceHandle>>(0)?;
+    let handle = cx.argument::<InstanceWrapper>(0)?;
     let lease_id: LeaseId = match cx
         .argument::<JsString>(1)?
         .value(&mut cx)
@@ -140,7 +193,7 @@ pub fn establish_session(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise>
 }
 
 pub fn process_password(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
-    let handle = cx.argument::<JsBox<InstanceHandle>>(0)?;
+    let handle = cx.argument::<InstanceWrapper>(0)?;
     let password = cx.argument::<JsString>(1)?.value(&mut cx);
 
     send_request(&mut cx, handle, RequestContent::ProcessPassword {
@@ -149,7 +202,7 @@ pub fn process_password(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> 
 }
 
 pub fn mouse_input(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
-    let handle = cx.argument::<JsBox<InstanceHandle>>(0)?;
+    let handle = cx.argument::<InstanceWrapper>(0)?;
     let x_position = cx.argument::<JsNumber>(1)?.value(&mut cx) as i32;
     let y_position = cx.argument::<JsNumber>(2)?.value(&mut cx) as i32;
 
@@ -172,7 +225,7 @@ pub fn mouse_input(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
 }
 
 pub fn keyboard_input(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
-    let handle = cx.argument::<JsBox<InstanceHandle>>(0)?;
+    let handle = cx.argument::<InstanceWrapper>(0)?;
     let keycode = integer_arg::<u32>(&mut cx, 1)?;
     let down = cx.argument::<JsBoolean>(2)?.value(&mut cx);
 
@@ -183,7 +236,7 @@ pub fn keyboard_input(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
 }
 
 pub fn lease_request(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
-    let handle = cx.argument::<JsBox<InstanceHandle>>(0)?;
+    let handle = cx.argument::<InstanceWrapper>(0)?;
     let cookie: Option<Cookie> = match cx
         .argument::<JsValue>(1)?
         .downcast::<JsArrayBuffer, _>(&mut cx)
@@ -199,7 +252,7 @@ pub fn lease_request(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
 }
 
 pub fn update_static_password(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
-    let handle = cx.argument::<JsBox<InstanceHandle>>(0)?;
+    let handle = cx.argument::<InstanceWrapper>(0)?;
     let password = cx
         .argument::<JsValue>(1)?
         .downcast::<JsString, _>(&mut cx)
@@ -212,7 +265,7 @@ pub fn update_static_password(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPro
 }
 
 pub fn set_controllable(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
-    let handle = cx.argument::<JsBox<InstanceHandle>>(0)?;
+    let handle = cx.argument::<InstanceWrapper>(0)?;
     let is_controllable = cx.argument::<JsBoolean>(1)?.value(&mut cx);
 
     send_request(&mut cx, handle, RequestContent::SetControllable {
@@ -221,7 +274,7 @@ pub fn set_controllable(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> 
 }
 
 pub fn set_clipboard_readable(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
-    let handle = cx.argument::<JsBox<InstanceHandle>>(0)?;
+    let handle = cx.argument::<InstanceWrapper>(0)?;
     let is_readable = cx.argument::<JsBoolean>(1)?.value(&mut cx);
 
     send_request(&mut cx, handle, RequestContent::SetClipboardReadable {
@@ -230,7 +283,7 @@ pub fn set_clipboard_readable(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPro
 }
 
 pub fn share_displays(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
-    let handle = cx.argument::<JsBox<InstanceHandle>>(0)?;
+    let handle = cx.argument::<InstanceWrapper>(0)?;
     let js_displays = cx.argument::<JsArray>(1)?;
     let controllable = cx.argument::<JsBoolean>(2)?.value(&mut cx);
 
