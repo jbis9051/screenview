@@ -5,6 +5,7 @@ import Config from '../common/Config';
 import ClientManager from './Controllers/ClientManager';
 import MainManager from './Controllers/MainManager';
 import { RendererToMainIPCEvents } from '../common/IPCEvents';
+import IpcListenerService from './Services/IpcListenerService';
 
 export default class Application<T extends ConfigurationService> {
     configurationService: T;
@@ -20,6 +21,8 @@ export default class Application<T extends ConfigurationService> {
     clientMangers: ClientManager<
         InstanceConnectionType.Direct | InstanceConnectionType.Signal
     >[] = [];
+
+    listenerService = new IpcListenerService();
 
     private constructor(configService: T, config: Config) {
         this.configurationService = configService;
@@ -53,7 +56,6 @@ export default class Application<T extends ConfigurationService> {
             }
         } */
         this.mainManager.focus();
-        console.log('Application started');
         this.startHosts();
     }
 
@@ -61,28 +63,7 @@ export default class Application<T extends ConfigurationService> {
         this.mainManager.focus();
     }
 
-    private setupListeners() {
-        this.mainManager.on(
-            RendererToMainIPCEvents.Main_EstablishSession,
-            (id) => {
-                const client = ClientManager.new(id);
-                this.clientMangers.push(client);
-            }
-        );
-        this.mainManager.on(
-            RendererToMainIPCEvents.Main_ConfigRequest,
-            (cb) => {
-                cb(this.config);
-            }
-        );
-        this.mainManager.on(
-            RendererToMainIPCEvents.Main_ConfigUpdate,
-            async (config) => {
-                this.updateConfig(config);
-                await this.configurationService.save(config);
-            }
-        );
-    }
+    private setupListeners() {}
 
     private updateConfig(config: Config) {
         this.config = config;
@@ -103,7 +84,8 @@ export default class Application<T extends ConfigurationService> {
         if (this.config.startAsDirectHost) {
             if (!this.hostDirectManger) {
                 this.hostDirectManger = new HostManager(
-                    InstanceConnectionType.Direct
+                    InstanceConnectionType.Direct,
+                    this.config.directHostPort
                 );
             }
         } else if (this.hostDirectManger) {

@@ -1,20 +1,12 @@
-import { shell, ipcMain, IpcMainEvent, BrowserWindow } from 'electron';
-import events from 'events';
+import { shell, BrowserWindow } from 'electron';
 import PageType from '../../render/Pages/PageType';
-import { RendererToMainIPCEvents } from '../../common/IPCEvents';
 
-export default class ClientWindow extends events.EventEmitter {
+export default class ClientWindow {
     window: BrowserWindow;
 
-    private cleanup: Array<() => void> = [];
-
-    constructor() {
-        super();
+    constructor(onClose: () => void) {
         this.window = ClientWindow.createWindow();
-        this.setupListeners();
-        this.window.on('closed', () => {
-            this.cleanup.forEach((cleanup) => cleanup());
-        });
+        this.window.on('closed', onClose);
     }
 
     private static createWindow() {
@@ -41,23 +33,5 @@ export default class ClientWindow extends events.EventEmitter {
                 .catch(console.error);
         }
         return clientWindow;
-    }
-
-    private setupListeners() {
-        const forward = [
-            RendererToMainIPCEvents.Client_PasswordInput,
-            RendererToMainIPCEvents.Client_MouseInput,
-            RendererToMainIPCEvents.Client_KeyboardInput,
-        ];
-        forward.forEach((event) => {
-            const cb = (e: IpcMainEvent, ...args: any[]) => {
-                if (e.sender.id !== this.window.id) {
-                    return;
-                }
-                this.emit(event, ...args);
-            };
-            ipcMain.on(event, cb);
-            this.cleanup.push(() => ipcMain.removeListener(event, cb));
-        });
     }
 }

@@ -1,4 +1,3 @@
-import events from 'events';
 import {
     ipcMain,
     IpcMainEvent,
@@ -10,7 +9,6 @@ import {
 import {
     Display,
     InstanceConnectionType,
-    InstancePeerType,
     rust,
 } from '@screenview/node-interop';
 import {
@@ -24,25 +22,31 @@ import {
     MainToRendererIPCEvents,
     RendererToMainIPCEvents,
 } from '../../common/IPCEvents';
+import IpcListenerService from '../Services/IpcListenerService';
 
-export default class HostWindow extends events.EventEmitter {
+export default class HostWindow {
     window: BrowserWindow;
 
     type: PageType;
 
-    private cleanupCBs: Array<() => void> = [];
+    private cleanup: Array<() => void> = [];
 
-    constructor(type: InstanceConnectionType) {
-        super();
+    private listenerService: IpcListenerService;
+
+    constructor(
+        type: InstanceConnectionType,
+        onClose: () => void,
+        listenerService: IpcListenerService
+    ) {
         this.type =
             type === InstanceConnectionType.Signal
                 ? PageType.SignalHost
                 : PageType.DirectHost;
         this.window = this.createWindow();
         this.window.on('close', () => {
-            this.cleanupCBs.forEach((cleanup) => cleanup());
-            this.emit('exit');
+            onClose();
         });
+        this.listenerService = listenerService;
         this.setUpListeners();
     }
 
@@ -95,52 +99,13 @@ export default class HostWindow extends events.EventEmitter {
         ipcMain.on(RendererToMainIPCEvents.Host_StopDesktopList, stopHandle);
     }
 
-    async handleUpdateDesktopList(
-        event: IpcMainEvent,
-        displays: Display[],
-        controllable: boolean
-    ) {
-        if (this.window.id !== event.sender.id) {
-            return;
-        }
-        this.emit(
-            RendererToMainIPCEvents.Host_UpdateDesktopList,
-            displays,
-            controllable
-        );
-    }
-
-    handleDisconnectButton(event: IpcMainEvent) {
-        if (this.window.id !== event.sender.id) {
-            return;
-        }
-        this.emit(RendererToMainIPCEvents.Host_DisconnectButton);
-    }
-
     setUpListeners() {
-        const register = (
-            event: RendererToMainIPCEvents,
-            handler: (event: IpcMainEvent, ...any: any[]) => any
-        ) => {
-            ipcMain.on(event, handler);
-            this.cleanupCBs.push(() => {
-                ipcMain.removeListener(event, handler);
-            });
-        };
-
-        register(
-            RendererToMainIPCEvents.Host_GetDesktopList,
-            this.handleGetDesktopList.bind(this)
-        );
-
-        register(
-            RendererToMainIPCEvents.Host_UpdateDesktopList,
-            this.handleUpdateDesktopList.bind(this)
-        );
-
-        register(
-            RendererToMainIPCEvents.Host_DisconnectButton,
-            this.handleDisconnectButton.bind(this)
+        this.cleanup.push(
+            this.listenerService.listen(
+                RendererToMainIPCEvents.Host_GetDesktopList,
+                this.handleGetDesktopList.bind(this),
+                this.window.id
+            )
         );
     }
 
@@ -187,8 +152,8 @@ export default class HostWindow extends events.EventEmitter {
         this.window.setPosition((screenWidth - HostWidth) / 2, 0, true);
     }
 
-    cleanup() {
+    onDestroy() {
         this.window.close();
-        this.cleanupCBs.forEach((cleanup) => cleanup());
+        this.cleanup.forEach((cleanup) => cleanup());
     }
 }

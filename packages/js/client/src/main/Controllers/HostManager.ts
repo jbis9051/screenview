@@ -7,12 +7,12 @@ export default class HostManager<T extends InstanceConnectionType> {
 
     instance: HostInstance<T>;
 
-    constructor(type: T) {
-        this.instance = new HostInstance<T>(type);
+    constructor(type: T, hostPort?: string) {
+        this.instance = new HostInstance<T>(type, hostPort);
     }
 
     cleanup() {
-        this.instance.cleanup();
-        this.window?.cleanup();
+        this.instance.onDestroy();
+        this.window?.onDestroy();
     }
 }
