@@ -28,8 +28,9 @@ export default class HostInstance<T extends InstanceConnectionType> {
                 `127.0.0.1:${hostPort}`,
                 `127.0.0.1:${hostPort}`
             );
+            rust.dangerously_set_no_auth(this.instance as any, true);
         }
-        throw new Error('Not implemented');
+        // throw new Error('Not implemented');
     }
 
     onDestroy() {

@@ -4,8 +4,12 @@ import ConfigurationService from './Services/ConfigurationService';
 import Config from '../common/Config';
 import ClientManager from './Controllers/ClientManager';
 import MainManager from './Controllers/MainManager';
-import { RendererToMainIPCEvents } from '../common/IPCEvents';
+import {
+    MainToRendererIPCEvents,
+    RendererToMainIPCEvents,
+} from '../common/IPCEvents';
 import IpcListenerService from './Services/IpcListenerService';
+import Main from '../render/Pages/Main';
 
 export default class Application<T extends ConfigurationService> {
     configurationService: T;
@@ -63,7 +67,34 @@ export default class Application<T extends ConfigurationService> {
         this.mainManager.focus();
     }
 
-    private setupListeners() {}
+    private setupListeners() {
+        this.listenerService.listen(
+            RendererToMainIPCEvents.Main_ConfigRequest,
+            (event) => {
+                event.reply(
+                    MainToRendererIPCEvents.Main_ConfigResponse,
+                    this.config
+                );
+            }
+        );
+
+        this.listenerService.listen(
+            RendererToMainIPCEvents.Main_EstablishSession,
+            async (_, id) => {
+                const manager = await ClientManager.new(
+                    id,
+                    this.listenerService,
+                    () => {
+                        manager.onDestroy();
+                        this.clientMangers = this.clientMangers.filter(
+                            (m) => m !== manager
+                        );
+                    }
+                );
+                this.clientMangers.push(manager);
+            }
+        );
+    }
 
     private updateConfig(config: Config) {
         this.config = config;

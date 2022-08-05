@@ -50,7 +50,7 @@ module.exports = {
             },
             {
                 test: /\.node$/,
-                loader: 'node-loader',
+                loader: 'null-loader',
             },
         ],
     },

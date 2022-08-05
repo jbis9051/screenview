@@ -1,7 +1,10 @@
-import { InstanceConnectionType } from '@screenview/node-interop';
+import { InstanceConnectionType, VTableEvent } from '@screenview/node-interop';
 import ClientInstance from './ClientInstance';
 import ClientWindow from '../ViewModel/ClientWindow';
-import { RendererToMainIPCEvents } from '../../common/IPCEvents';
+import {
+    MainToRendererIPCEvents,
+    RendererToMainIPCEvents,
+} from '../../common/IPCEvents';
 import IpcListenerService from '../Services/IpcListenerService';
 
 export default class ClientManager<T extends InstanceConnectionType> {
@@ -15,28 +18,28 @@ export default class ClientManager<T extends InstanceConnectionType> {
 
     private constructor(
         type: T,
-        id: string,
+        instance: ClientInstance<T>,
         private listenerService: IpcListenerService,
         private onClose: () => void
     ) {
         this.type = type;
-        this.instance = new ClientInstance<T>(type, id);
+        this.instance = instance;
         this.window = new ClientWindow(onClose);
+        this.cleanup.push(() => {
+            this.window.onDestroy();
+            this.instance.onDestroy();
+        });
         this.setupListeners();
     }
 
-    static new(
+    static async new(
         id: string,
         listenerService: IpcListenerService,
         onClose: () => void
-    ): ClientManager<any> {
-        // TODO detect signal
-        return new ClientManager<InstanceConnectionType.Direct>(
-            InstanceConnectionType.Direct,
-            id,
-            listenerService,
-            onClose
-        );
+    ): Promise<ClientManager<any>> {
+        const type = InstanceConnectionType.Direct;
+        const instance = await ClientInstance.new(type, id);
+        return new ClientManager(type, instance, listenerService, onClose);
     }
 
     private setupListeners() {
@@ -72,9 +75,22 @@ export default class ClientManager<T extends InstanceConnectionType> {
                 this.window.window.id
             )
         );
+
+        const eventsToForward = [
+            VTableEvent.WpsskaClientAuthenticationSuccessful,
+        ];
+        eventsToForward.forEach((event) => {
+            this.instance.vtable.on(event, (...args) => {
+                this.window.window.webContents.send(
+                    MainToRendererIPCEvents.Client_VTableEvent,
+                    event,
+                    ...args
+                );
+            });
+        });
     }
 
-    private onDestroy() {
+    onDestroy() {
         this.cleanup.forEach((fn) => fn());
     }
 }

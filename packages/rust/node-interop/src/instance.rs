@@ -115,6 +115,8 @@ impl Instance {
             RequestContent::LeaseRequest { cookie } => self.handle_lease_request(promise, cookie),
             RequestContent::UpdateStaticPassword { password } =>
                 self.handle_update_static_password(promise, password),
+            RequestContent::SetNoneScheme { allow_none } =>
+                self.handle_set_none_scheme(promise, allow_none),
             RequestContent::SetControllable { is_controllable } =>
                 self.handle_set_controllable(promise, is_controllable),
             RequestContent::SetClipboardReadable { is_readable } =>
@@ -290,6 +292,17 @@ impl Instance {
     ) -> Result<(), anyhow::Error> {
         forward!(self.sv_handler, [HostSignal, HostDirect], |stack| stack
             .set_static_password(password));
+        promise.settle_with(&self.channel, move |mut cx| Ok(cx.undefined()));
+        Ok(())
+    }
+
+    fn handle_set_none_scheme(
+        &mut self,
+        promise: Deferred,
+        allow_none: bool,
+    ) -> Result<(), anyhow::Error> {
+        forward!(self.sv_handler, [HostSignal, HostDirect], |stack| stack
+            .set_none_scheme(allow_none));
         promise.settle_with(&self.channel, move |mut cx| Ok(cx.undefined()));
         Ok(())
     }

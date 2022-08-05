@@ -34,4 +34,8 @@ export default class ClientWindow {
         }
         return clientWindow;
     }
+
+    onDestroy() {
+        this.window.close();
+    }
 }

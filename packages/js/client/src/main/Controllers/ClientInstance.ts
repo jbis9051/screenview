@@ -1,10 +1,12 @@
 import {
     ButtonMask,
+    ConnectionType,
     InstanceConnectionType,
     InstancePeerType,
     rust,
     VTableEmitter,
 } from '@screenview/node-interop';
+import * as stream from 'stream';
 
 export default class ClientInstance<T extends InstanceConnectionType> {
     instance: rust.JSBox<rust.Instance<InstancePeerType.Client, T>>;
@@ -13,13 +15,34 @@ export default class ClientInstance<T extends InstanceConnectionType> {
 
     vtable = new VTableEmitter();
 
-    constructor(type: T, id: string) {
+    private constructor(type: T, id: string) {
         this.type = type;
         this.instance = rust.new_instance(
             InstancePeerType.Client,
             type,
             this.vtable
         );
+    }
+
+    static async new(type: InstanceConnectionType, id: string) {
+        const instance = new ClientInstance(type, id);
+        await instance.connect(id);
+        return instance;
+    }
+
+    async connect(id: string) {
+        if (this.type === InstanceConnectionType.Direct) {
+            await rust.connect(
+                this.instance as any,
+                ConnectionType.Reliable,
+                id
+            );
+            await rust.connect(
+                this.instance as any,
+                ConnectionType.Unreliable,
+                id
+            );
+        }
     }
 
     processPassword(password: string) {
@@ -43,5 +66,9 @@ export default class ClientInstance<T extends InstanceConnectionType> {
 
     keyInput(keyCode: number, down: boolean) {
         rust.keyboard_input(this.instance as any, keyCode, down);
+    }
+
+    onDestroy() {
+        rust.close_instance(this.instance as any);
     }
 }

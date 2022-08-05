@@ -54,6 +54,9 @@ pub enum RequestContent {
     UpdateStaticPassword {
         password: Option<Vec<u8>>,
     },
+    SetNoneScheme {
+        allow_none: bool,
+    },
     SetControllable {
         is_controllable: bool,
     },

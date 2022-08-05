@@ -2,8 +2,7 @@ export enum MainToRendererIPCEvents {
     Main_SessionId = 'session-id',
     Host_DesktopList = 'desktop-list',
     Main_ConfigResponse = 'config',
-    Client_ConnectingFailed = 'client-status-failed',
-    Client_RvdDisplayUpdate = 'rvd-display-update',
+    Client_VTableEvent = 'client-vtable-event',
 }
 
 export enum RendererToMainIPCEvents {

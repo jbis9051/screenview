@@ -105,6 +105,7 @@ pub fn handle_event(instance: &mut Instance, event: InformEvent) -> Result<(), (
                 .callback_interface
                 .wpskka_client_authentication_failed(&instance.channel),
             WpskkaClientInform::AuthSuccessful => {
+                println!("wpskka_client_authentication_successful");
                 forward!(instance.sv_handler, [ClientSignal, ClientDirect], |stack| {
                     stack.protocol_version()
                 });

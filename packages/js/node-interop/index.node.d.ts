@@ -88,6 +88,11 @@ export declare function update_static_password(
     password: string | null
 ): Promise<undefined>;
 
+export declare function dangerously_set_no_auth(
+    handle: HostInstance,
+    allow_none: boolean
+): Promise<undefined>;
+
 // export  declare function preview_displays<T extends InstanceType.Host>(handle: JSBox<Instance<T>>): Promise<{ monitors: [], windows: []}>;
 export declare function set_controllable(
     handle: HostInstance,

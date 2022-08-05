@@ -76,6 +76,10 @@ impl HigherHandlerHost {
         self.wpskka.set_static_password(static_password)
     }
 
+    pub fn set_none_scheme(&mut self, allow_none: bool) {
+        self.wpskka.set_none_scheme(allow_none)
+    }
+
     pub fn share_display(
         &mut self,
         name: String,

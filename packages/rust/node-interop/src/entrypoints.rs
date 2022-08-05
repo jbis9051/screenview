@@ -125,6 +125,7 @@ pub fn close_instance(mut cx: FunctionContext<'_>) -> JsResult<'_, JsUndefined> 
 }
 
 pub fn connect(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
+    println!("connect");
     let handle = cx.argument::<InstanceWrapper>(0)?;
     let connection_type = integer_arg::<u8>(&mut cx, 1)?;
 
@@ -141,6 +142,7 @@ pub fn connect(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
 }
 
 pub fn start_server(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
+    println!("start_server");
     let handle = cx.argument::<InstanceWrapper>(0)?;
     let reliable_addr = cx.argument::<JsString>(1)?.value(&mut cx);
     let unreliable_addr = cx.argument::<JsString>(1)?.value(&mut cx);
@@ -237,6 +239,14 @@ pub fn update_static_password(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPro
 
     send_request(&mut cx, handle, RequestContent::UpdateStaticPassword {
         password,
+    })
+}
+
+pub fn dangerously_set_no_auth(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
+    let handle = cx.argument::<InstanceWrapper>(0)?;
+    let allow_none = cx.argument::<JsBoolean>(1)?.value(&mut cx);
+    send_request(&mut cx, handle, RequestContent::SetNoneScheme {
+        allow_none,
     })
 }
 
