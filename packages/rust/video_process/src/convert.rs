@@ -1,14 +1,9 @@
 use dcv_color_primitives as dcp;
-use dcv_color_primitives::{
-    convert_image,
-    get_buffers_size,
-    ColorSpace,
-    ErrorKind,
-    ImageFormat,
-    PixelFormat,
-};
+use dcv_color_primitives::{convert_image, get_buffers_size, ColorSpace, ImageFormat, PixelFormat};
 use fast_image_resize as fr;
 use std::num::NonZeroU32;
+
+pub use dcv_color_primitives::ErrorKind;
 
 static SRC_FORMAT: ImageFormat = ImageFormat {
     pixel_format: PixelFormat::Bgra,
@@ -111,4 +106,114 @@ pub fn convert_bgra_to_i420(
     panic!("odd sized resolutions not supported");
 
     Ok(vec![])
+}
+
+
+pub fn rgb_to_bgra(width: u32, height: u32, data: &[u8]) -> Result<Vec<u8>, ErrorKind> {
+    dcp::initialize();
+
+
+    let src_format = ImageFormat {
+        pixel_format: PixelFormat::Rgb,
+        color_space: ColorSpace::Rgb,
+        num_planes: 1,
+    };
+
+    let dst_format = ImageFormat {
+        pixel_format: PixelFormat::Bgra,
+        color_space: ColorSpace::Rgb,
+        num_planes: 1,
+    };
+
+    let sizes: &mut [usize] = &mut [0usize; 1];
+    get_buffers_size(width, height, &dst_format, None, sizes)?;
+
+    let mut bgra = vec![0u8; sizes[0]];
+
+    convert_image(
+        width,
+        height,
+        &src_format,
+        None,
+        &[data],
+        &dst_format,
+        None,
+        &mut [&mut bgra],
+    )?;
+
+    Ok(bgra)
+}
+
+
+pub fn bgra_to_rgb(width: u32, height: u32, data: &[u8]) -> Result<Vec<u8>, ErrorKind> {
+    dcp::initialize();
+
+
+    let src_format = ImageFormat {
+        pixel_format: PixelFormat::Bgra,
+        color_space: ColorSpace::Rgb,
+        num_planes: 1,
+    };
+
+    let dst_format = ImageFormat {
+        pixel_format: PixelFormat::Rgb,
+        color_space: ColorSpace::Rgb,
+        num_planes: 1,
+    };
+
+    let sizes: &mut [usize] = &mut [0usize; 1];
+    get_buffers_size(width, height, &dst_format, None, sizes)?;
+
+    let mut bgra = vec![0u8; sizes[0]];
+
+    convert_image(
+        width,
+        height,
+        &src_format,
+        None,
+        &[data],
+        &dst_format,
+        None,
+        &mut [&mut bgra],
+    )?;
+
+    Ok(bgra)
+}
+
+pub fn i420_to_bgra(width: u32, height: u32, data: &[u8]) -> Result<Vec<u8>, ErrorKind> {
+    dcp::initialize();
+
+    let src_format = ImageFormat {
+        pixel_format: PixelFormat::I420,
+        color_space: ColorSpace::Bt601,
+        num_planes: 3,
+    };
+
+    let dst_format = ImageFormat {
+        pixel_format: PixelFormat::Bgra,
+        color_space: ColorSpace::Rgb,
+        num_planes: 1,
+    };
+
+    let src_sizes: &mut [usize] = &mut [0usize; 3];
+    get_buffers_size(width, height, &src_format, None, src_sizes)?;
+    let (y_data, uv_data) = data.split_at(src_sizes[0]);
+    let (u_data, v_data) = uv_data.split_at(src_sizes[1]);
+
+    let sizes: &mut [usize] = &mut [0usize; 1];
+    get_buffers_size(width, height, &dst_format, None, sizes)?;
+    let mut dst_data = vec![0u8; sizes[0]];
+
+    convert_image(
+        width,
+        height,
+        &src_format,
+        None,
+        &[y_data, u_data, v_data],
+        &dst_format,
+        None,
+        &mut [&mut dst_data],
+    )?;
+
+    Ok(dst_data)
 }

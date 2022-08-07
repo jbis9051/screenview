@@ -1,11 +1,13 @@
 #![allow(dead_code)]
 
 use crate::rtp::Vp9PacketWrapperBecauseTheRtpCrateIsIdiotic;
+use bytes::Bytes;
 use cfg_if::cfg_if;
 use num_cpus;
 use std::{
     cmp::{max, min},
     mem::MaybeUninit,
+    ops::{Deref, DerefMut},
     os::raw::c_uint,
 };
 use vpx_sys::{
@@ -284,6 +286,8 @@ pub enum Error {
     VpxAlloc,
     #[error("unsupported image format")]
     DecoderUnsupportedFormat,
+    #[error("Resolution is None and it is not a keyframe :(")]
+    KeyFrameNotSent,
 }
 
 impl From<vpx_codec_err_t> for Error {
@@ -309,38 +313,91 @@ fn vpx_img_plane_height(img: &vpx_image_t, plane: usize) -> u32 {
     }
 }
 
-pub struct Vp9Decoder {
-    width: usize,
-    height: usize,
+struct DecoderWrapper(vpx_codec_ctx_t);
 
-    buffer: Vec<u8>,
-    decoder: vpx_codec_ctx_t,
+impl DecoderWrapper {
+    fn new() -> Self {
+        Self(unsafe { std::mem::zeroed() })
+    }
+}
+
+impl Deref for DecoderWrapper {
+    type Target = vpx_codec_ctx_t;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for DecoderWrapper {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl Drop for DecoderWrapper {
+    fn drop(&mut self) {
+        unsafe {
+            vpx_codec_destroy(&mut self.0);
+        }
+    }
+}
+
+pub struct Vp9Decoder {
+    // None indicates the decoder is semi-uninitialized.
+    // This is the case when the decoder is first created.
+    // You can still call decode() but the first frame must be a keyframe
+    // which will allow us to set the resolution. Once the resolution is set, this will be Some(width, height)
+    // Further calls to decode will check that the resolution is the same as the previous call
+    // If the resolution is different the decoder will be reinitlized.
+    resolution: Option<(u16, u16)>,
+    decoder: DecoderWrapper,
+    number_of_cores: usize,
 }
 
 impl Vp9Decoder {
-    pub fn new(width: usize, height: usize) -> Result<Self, Error> {
+    pub fn new() -> Result<Self, Error> {
         let number_of_cores = num_cpus::get();
-        let mut cfg: vpx_codec_dec_cfg_t = unsafe { std::mem::zeroed() };
-        // We want to use multithreading when decoding high resolution videos. But
-        // not too many in order to avoid overhead when many stream are decoded
-        // concurrently.
-        // Set 2 thread as target for 1280x720 pixel count, and then scale up
-        // linearly from there - but cap at physical core count.
-        // For common resolutions this results in:
-        // 1 for 360p
-        // 2 for 720p
-        // 4 for 1080p
-        // 8 for 1440p
-        // 18 for 4K
-        let num_threads = max(1, 2 * ((width as u32 * height as u32) / (1280u32 * 720u32)));
-        cfg.threads = min(number_of_cores as c_uint, num_threads as c_uint);
+        let decoder = Self::init_decoder(number_of_cores, None)?;
 
+        Ok(Self {
+            resolution: None,
+            decoder,
+            number_of_cores,
+        })
+    }
+
+    fn init_decoder(
+        number_of_cores: usize,
+        resolution: Option<(u16, u16)>,
+    ) -> Result<DecoderWrapper, Error> {
+        let mut cfg: vpx_codec_dec_cfg_t = unsafe { std::mem::zeroed() };
+        if let Some(resolution) = resolution {
+            let (width, height) = resolution;
+            // We want to use multithreading when decoding high resolution videos. But
+            // not too many in order to avoid overhead when many stream are decoded
+            // concurrently.
+            // Set 2 thread as target for 1280x720 pixel count, and then scale up
+            // linearly from there - but cap at physical core count.
+            // For common resolutions this results in:
+            // 1 for 360p
+            // 2 for 720p
+            // 4 for 1080p
+            // 8 for 1440p
+            // 18 for 4K
+            let num_threads = max(1, 2 * ((width as u32 * height as u32) / (1280u32 * 720u32)));
+            cfg.threads = min(number_of_cores as c_uint, num_threads as c_uint);
+        } else {
+            // No config provided - don't know resolution to decode yet.
+            // Set thread count to one in the meantime.
+            cfg.threads = 1;
+        }
         let flags: vpx_codec_flags_t = 0;
 
-        let mut decoder: vpx_codec_ctx_t = unsafe { std::mem::zeroed() };
+        let mut decoder = DecoderWrapper::new();
 
         vp9_call_unsafe!(vpx_codec_dec_init_ver(
-            &mut decoder,
+            &mut *decoder,
             vpx_codec_vp9_dx(),
             &cfg,
             flags,
@@ -348,30 +405,20 @@ impl Vp9Decoder {
         ));
 
         vp9_call_unsafe!(vpx_codec_control_(
-            &mut decoder,
+            &mut *decoder,
             VP9D_SET_LOOP_FILTER_OPT as _,
             1
         ));
 
-        let buffer = vec![0u8; (width * height * 4) as usize];
-
-        Ok(Self {
-            width,
-            height,
-            buffer,
-            decoder,
-        })
+        Ok(decoder)
     }
 
-    pub fn width(&self) -> usize {
-        self.width
-    }
-
-    pub fn height(&self) -> usize {
-        self.height
-    }
-
-    pub fn decode(&mut self, data: &[u8]) -> Result<Vec<Vec<u8>>, Error> {
+    fn decode_inner(
+        &mut self,
+        data: &Bytes,
+        width: u16,
+        height: u16,
+    ) -> Result<Vec<Vec<u8>>, Error> {
         let mut buffer = data.as_ptr();
         if data.is_empty() {
             buffer = std::ptr::null(); // Triggers full frame concealment.
@@ -380,7 +427,7 @@ impl Vp9Decoder {
         // During decode libvpx may get and release buffers from |frame_buffer_pool_|.
         // In practice libvpx keeps a few (~3-4) buffers alive at a time.
         vp9_call_unsafe!(vpx_codec_decode(
-            &mut self.decoder,
+            &mut *self.decoder,
             buffer,
             data.len() as _,
             std::ptr::null_mut(),
@@ -390,7 +437,7 @@ impl Vp9Decoder {
         let mut vec = Vec::new();
         let mut iter: vpx_codec_iter_t = std::ptr::null();
         loop {
-            let img = unsafe { vpx_codec_get_frame(&mut self.decoder, &mut iter) };
+            let img = unsafe { vpx_codec_get_frame(&mut *self.decoder, &mut iter) };
             if img.is_null() {
                 break;
             }
@@ -400,8 +447,7 @@ impl Vp9Decoder {
                 return Err(Error::DecoderUnsupportedFormat);
             }
 
-            let mut out =
-                Vec::with_capacity((self.width as usize * self.height as usize * 3) as usize);
+            let mut out = Vec::with_capacity((width as usize * height as usize * 3) as usize);
             let mut ptr = out.as_mut_ptr();
 
             for plane in 0 .. 3 {
@@ -423,65 +469,56 @@ impl Vp9Decoder {
                 }
             }
 
-            unsafe { out.set_len((self.width * self.height * 3) as usize) };
+            unsafe { out.set_len((width as usize * height as usize * 3) as usize) };
             vec.push(out);
         }
 
         Ok(vec)
     }
-}
-
-pub struct Vp9DecoderWrapper {
-    decoder: Option<Vp9Decoder>,
-}
-
-impl Default for Vp9DecoderWrapper {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Vp9DecoderWrapper {
-    pub fn new() -> Self {
-        Self { decoder: None }
-    }
-
-    fn init_decoder(&mut self, width: usize, height: usize) -> Result<(), Error> {
-        let decoder = Vp9Decoder::new(width, height)?;
-        self.decoder = Some(decoder);
-        Ok(())
-    }
 
     pub fn decode(
         &mut self,
-        data: Vp9PacketWrapperBecauseTheRtpCrateIsIdiotic,
-    ) -> Result<Vec<Vec<u8>>, Error> {
-        let decoder = match &mut self.decoder {
-            None => {
-                if !data.1.y {
-                    // We need to initialize the decoder with the correct width and height
-                    // y indicates resolution data is present
-                    // so we must skip this packet if the decoder hasn't been initialized yet and we don't have width and height data
-                    return Ok(Vec::new());
-                }
-                self.init_decoder(data.1.width[0] as _, data.1.height[0] as _)?;
-                self.decoder.as_mut().unwrap()
-            }
-            Some(d) =>
-                if !data.1.y {
-                    d
-                } else if data.1.width[0] != d.width() as u16
-                    || data.1.height[0] != d.height() as u16
-                {
-                    // Resolution has changed, tear down and re-init a new decoder in
-                    // order to get correct sizing.
-                    self.init_decoder(data.1.width[0] as _, data.1.height[0] as _)?;
-                    self.decoder.as_mut().unwrap()
+        pkt: Option<&Vp9PacketWrapperBecauseTheRtpCrateIsIdiotic>,
+    ) -> Result<(Vec<Vec<u8>>, u16, u16), Error> {
+        let pkt = match pkt {
+            None =>
+                return if let Some((width, height)) = self.resolution {
+                    Ok((
+                        self.decode_inner(&Bytes::new(), width, height)?,
+                        width,
+                        height,
+                    ))
                 } else {
-                    d
+                    Ok((Vec::new(), 0, 0))
                 },
+            Some(pkt) => pkt,
+        };
+        let header = &pkt.1;
+
+        let (width, height) = {
+            if header.p {
+                // p indicates this is a key frame or kVideoFrameKey in libwebrtc
+                match self.resolution {
+                    Some((width, height))
+                        if width == header.width[0] && height == header.height[0] =>
+                        (width, height),
+                    _ => {
+                        // We don't have a resolution or the resolution has changed - reinitialize the decoder
+                        let resolution = (header.width[0], header.height[0]);
+                        self.resolution = Some(resolution);
+                        self.decoder = Self::init_decoder(self.number_of_cores, self.resolution)?;
+                        resolution
+                    }
+                }
+            } else if let Some(resolution) = self.resolution {
+                resolution
+            } else {
+                return Err(Error::KeyFrameNotSent);
+            }
         };
 
-        decoder.decode(&data.0)
+        let data = &pkt.0;
+        let vec = self.decode_inner(data, width, height)?;
+        Ok((vec, width, height))
     }
 }
