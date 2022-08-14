@@ -9,14 +9,15 @@ use dcv_color_primitives::{
     PixelFormat,
 };
 use image::{GenericImageView, RgbImage};
-use rtp::codecs::vp9::Vp9Packet;
+use rtp::{codecs::vp9::Vp9Packet, packet::Packet};
+use std::borrow::Borrow;
 use video_process::{
     convert::{bgra_to_i420, bgra_to_rgb, i420_to_bgra, rgb_to_bgra},
     rtp::{RtpDecoder, RtpEncoder},
     vp9::{VP9Encoder, Vp9Decoder},
 };
 use webrtc_media::audio::Sample;
-use webrtc_util::Marshal;
+use webrtc_util::{Marshal, Unmarshal};
 
 
 #[test]
@@ -61,8 +62,13 @@ pub fn rtp_encode() {
 pub fn rtp_decode() {
     let packet = include_bytes!("img.rtp");
     let mut rtp = RtpDecoder::new();
-    rtp.decode_to_vp9(packet.to_vec())
-        .expect("could not decode frame");
+    assert!(rtp.decode_to_vp9(packet.to_vec()).is_none());
+
+    let mut fake = Packet::unmarshal(&mut Bytes::from(packet.to_vec())).unwrap();
+    fake.payload = Bytes::from(vec![0x08]);
+    fake.header.sequence_number += 1;
+    rtp.decode_to_vp9(fake.marshal().expect("unable to marshall").to_vec())
+        .expect("rtp didn't produce frame");
 }
 
 #[test]
@@ -119,26 +125,31 @@ pub fn e2e() -> (u32, u32, Vec<u8>) {
     frames.extend(encoder.encode(&[]).unwrap());
     assert_eq!(frames.len(), 1);
 
-    let frame = frames.remove(0);
-
+    let mut frame = frames.remove(0);
     // Packetize to RTP
-    let mut rtp = RtpEncoder::new(1500, 1);
-    let packets = rtp.process_vp9(frame.data).expect("could not encode frame");
+    let mut rtp = RtpEncoder::new(25000, 1);
+    let mut packets = rtp
+        .process_vp9(frame.data.clone())
+        .expect("could not encode frame");
 
-    assert!(packets.len() > 1);
-
-    let packets_marshal = packets
-        .into_iter()
-        .map(|p| p.marshal().expect("could not marshall packet"))
-        .collect::<Vec<_>>();
+    assert!(!packets.is_empty());
 
     let mut rtp = RtpDecoder::new();
 
     let mut samples = Vec::new();
 
-    for bytes in packets_marshal {
+
+    // SampleBuilder won't give us a sample until it has the next packet, so lets pretend a new one came in
+    let mut fake = packets[1].clone();
+    fake.header.sequence_number += 1;
+    fake.payload = Bytes::from(vec![0x08]); // indicate the start of a new frame
+    packets.push(fake);
+
+
+    for mut packet in packets {
         // Depacketize to VP9
-        match rtp.decode_to_vp9(bytes.to_vec()) {
+        //  println!("{:?}", packet.marshal().unwrap().as_ref());
+        match rtp.decode_to_vp9(packet.marshal().expect("unable to marshal").to_vec()) {
             None => {}
             Some(sample) => samples.push(sample),
         };
@@ -147,6 +158,8 @@ pub fn e2e() -> (u32, u32, Vec<u8>) {
     assert_eq!(samples.len(), 1);
 
     let sample = samples.remove(0);
+
+    assert_eq!(&frame.data, &sample.data);
 
     // Decode to i420
     let mut decoder = Vp9Decoder::new().expect("could not construct encoder");
