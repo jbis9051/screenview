@@ -50,7 +50,7 @@ const ToggleSwitch: React.FunctionComponent<ToggleControlProps<any>> = ({
 
 const Controls: React.FunctionComponent = observer(() => (
     <div className={styles.controls}>
-        {UIStore.displayInformation.length > 1 && (
+        {UIStore.displayShares.length > 1 && (
             <Control label={'View Mode'}>
                 <ToggleSwitch
                     icons={[

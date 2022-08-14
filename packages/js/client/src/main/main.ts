@@ -7,7 +7,7 @@ let application: Application<FileBasedConfigurationService> | null = null;
 
 app.on('ready', async () => {
     application = await Application.new(configService);
-    application.start();
+    await application.init();
 });
 
 app.on('activate', async () => {

@@ -9,7 +9,6 @@ import {
     RendererToMainIPCEvents,
 } from '../common/IPCEvents';
 import IpcListenerService from './Services/IpcListenerService';
-import Main from '../render/Pages/Main';
 
 export default class Application<T extends ConfigurationService> {
     configurationService: T;
@@ -41,7 +40,7 @@ export default class Application<T extends ConfigurationService> {
         return new Application<T>(configService, config);
     }
 
-    start() {
+    async init() {
         /* // On macOS 10.15+ we must request permission to access the screen and accessibility API. Both are used for Hosting. Screen access changes requires the app to be restarted.
         if (
             process.platform === 'darwin' &&
@@ -60,7 +59,7 @@ export default class Application<T extends ConfigurationService> {
             }
         } */
         this.mainManager.focus();
-        this.startHosts();
+        await this.startHosts();
     }
 
     focus() {
@@ -101,26 +100,29 @@ export default class Application<T extends ConfigurationService> {
         this.startHosts();
     }
 
-    private startHosts() {
+    private async startHosts() {
         if (this.config.startAsSignalHost) {
             if (!this.hostSignalManger) {
                 this.hostSignalManger = new HostManager(
-                    InstanceConnectionType.Signal
+                    InstanceConnectionType.Signal,
+                    this.listenerService
                 );
             }
         } else if (this.hostSignalManger) {
-            this.hostSignalManger.cleanup();
+            this.hostSignalManger.onDestroy();
             this.hostSignalManger = null;
         }
         if (this.config.startAsDirectHost) {
             if (!this.hostDirectManger) {
                 this.hostDirectManger = new HostManager(
                     InstanceConnectionType.Direct,
+                    this.listenerService,
                     this.config.directHostPort
                 );
+                await this.hostDirectManger.init();
             }
         } else if (this.hostDirectManger) {
-            this.hostDirectManger.cleanup();
+            this.hostDirectManger.onDestroy();
             this.hostDirectManger = null;
         }
     }

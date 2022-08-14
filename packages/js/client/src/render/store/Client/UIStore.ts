@@ -1,5 +1,5 @@
 import { makeAutoObservable } from 'mobx';
-import { DisplayInformation } from '@screenview/node-interop';
+import { DisplayShare } from '@screenview/node-interop';
 
 export enum ConnectionStatus {
     Connecting,
@@ -25,7 +25,7 @@ class UIStore {
 
     viewMode = ViewMode.Grid;
 
-    displayInformation: DisplayInformation[] = [];
+    displayShares: DisplayShare[] = [];
 
     constructor() {
         makeAutoObservable(this);

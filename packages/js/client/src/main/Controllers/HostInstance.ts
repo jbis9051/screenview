@@ -1,4 +1,5 @@
 import {
+    Display,
     InstanceConnectionType,
     InstancePeerType,
     rust,
@@ -12,6 +13,8 @@ export default class HostInstance<T extends InstanceConnectionType> {
 
     vtable = new VTableEmitter();
 
+    private readonly hostPort?: string;
+
     constructor(type: T, hostPort?: string) {
         this.type = type;
         this.instance = rust.new_instance(
@@ -19,21 +22,29 @@ export default class HostInstance<T extends InstanceConnectionType> {
             type,
             this.vtable
         );
-        if (type === InstanceConnectionType.Direct) {
-            if (!hostPort) {
+        this.hostPort = hostPort;
+        // throw new Error('Not implemented');
+    }
+
+    init() {
+        if (this.type === InstanceConnectionType.Direct) {
+            if (!this.hostPort) {
                 throw new Error('Host port is required for direct connections');
             }
             rust.start_server(
                 this.instance as any,
-                `127.0.0.1:${hostPort}`,
-                `127.0.0.1:${hostPort}`
+                `127.0.0.1:${this.hostPort}`,
+                `127.0.0.1:${this.hostPort}`
             );
             rust.dangerously_set_no_auth(this.instance as any, true);
         }
-        // throw new Error('Not implemented');
     }
 
     onDestroy() {
         rust.close_instance(this.instance as any);
+    }
+
+    displayShare(displays: Display[]) {
+        rust.share_displays(this.instance as any, displays, false);
     }
 }

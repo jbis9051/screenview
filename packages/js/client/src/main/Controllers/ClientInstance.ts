@@ -6,7 +6,6 @@ import {
     rust,
     VTableEmitter,
 } from '@screenview/node-interop';
-import * as stream from 'stream';
 
 export default class ClientInstance<T extends InstanceConnectionType> {
     instance: rust.JSBox<rust.Instance<InstancePeerType.Client, T>>;
@@ -15,8 +14,11 @@ export default class ClientInstance<T extends InstanceConnectionType> {
 
     vtable = new VTableEmitter();
 
-    private constructor(type: T, id: string) {
+    id: string;
+
+    constructor(type: T, id: string) {
         this.type = type;
+        this.id = id;
         this.instance = rust.new_instance(
             InstancePeerType.Client,
             type,
@@ -24,23 +26,17 @@ export default class ClientInstance<T extends InstanceConnectionType> {
         );
     }
 
-    static async new(type: InstanceConnectionType, id: string) {
-        const instance = new ClientInstance(type, id);
-        await instance.connect(id);
-        return instance;
-    }
-
-    async connect(id: string) {
+    async connect() {
         if (this.type === InstanceConnectionType.Direct) {
             await rust.connect(
                 this.instance as any,
                 ConnectionType.Reliable,
-                id
+                this.id
             );
             await rust.connect(
                 this.instance as any,
                 ConnectionType.Unreliable,
-                id
+                this.id
             );
         }
     }

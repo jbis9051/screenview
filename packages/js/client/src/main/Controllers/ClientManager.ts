@@ -6,6 +6,7 @@ import {
     RendererToMainIPCEvents,
 } from '../../common/IPCEvents';
 import IpcListenerService from '../Services/IpcListenerService';
+import waitForReadySignal from '../helpers/waitForReadySignal';
 
 export default class ClientManager<T extends InstanceConnectionType> {
     window: ClientWindow;
@@ -16,6 +17,8 @@ export default class ClientManager<T extends InstanceConnectionType> {
 
     private cleanup: Array<() => void> = [];
 
+    ready: Promise<void>;
+
     private constructor(
         type: T,
         instance: ClientInstance<T>,
@@ -25,6 +28,7 @@ export default class ClientManager<T extends InstanceConnectionType> {
         this.type = type;
         this.instance = instance;
         this.window = new ClientWindow(onClose);
+        this.ready = waitForReadySignal(this.window.window);
         this.cleanup.push(() => {
             this.window.onDestroy();
             this.instance.onDestroy();
@@ -38,8 +42,16 @@ export default class ClientManager<T extends InstanceConnectionType> {
         onClose: () => void
     ): Promise<ClientManager<any>> {
         const type = InstanceConnectionType.Direct;
-        const instance = await ClientInstance.new(type, id);
-        return new ClientManager(type, instance, listenerService, onClose);
+        const instance = new ClientInstance(type, id);
+        const manager = new ClientManager(
+            type,
+            instance,
+            listenerService,
+            onClose
+        );
+        await manager.ready;
+        await instance.connect();
+        return manager;
     }
 
     private setupListeners() {
@@ -78,9 +90,13 @@ export default class ClientManager<T extends InstanceConnectionType> {
 
         const eventsToForward = [
             VTableEvent.WpsskaClientAuthenticationSuccessful,
+            VTableEvent.RvdClientHandshakeComplete,
+            VTableEvent.RvdDisplayShare,
+            VTableEvent.RvdDisplayUnshare,
+            VTableEvent.RvdClientFrameData,
         ];
         eventsToForward.forEach((event) => {
-            this.instance.vtable.on(event, (...args) => {
+            this.instance.vtable.on(event, async (...args) => {
                 this.window.window.webContents.send(
                     MainToRendererIPCEvents.Client_VTableEvent,
                     event,

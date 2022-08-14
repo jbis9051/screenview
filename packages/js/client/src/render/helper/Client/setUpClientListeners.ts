@@ -11,6 +11,7 @@ export default function setUpClientListeners() {
     });
 
     const handleWpsskaClientAuthenticationSuccess = action(() => {
+        console.log('Wpsska Client Authentication Success');
         UIStore.connectionStatus = ConnectionStatus.Handshaking;
     });
 
@@ -18,11 +19,15 @@ export default function setUpClientListeners() {
         MainToRendererIPCEvents.Client_VTableEvent,
         (_, event, ...args: any[]) => {
             switch (event) {
-                case VTableEvent.WpsskaClientAuthenticationFailed as const:
+                case VTableEvent.WpsskaClientAuthenticationFailed:
                     // @ts-ignore
                     handleWpsskaClientAuthenticationFailed(...args);
                     break;
+                case VTableEvent.WpsskaClientAuthenticationSuccessful:
+                    handleWpsskaClientAuthenticationSuccess();
+                    break;
                 default:
+                    console.log('Unknown VTable Event', event);
                     break;
             }
         }
