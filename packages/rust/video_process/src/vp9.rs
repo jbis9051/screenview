@@ -1,14 +1,14 @@
 #![allow(dead_code)]
 
-use crate::rtp::Vp9PacketWrapperBecauseTheRtpCrateIsIdiotic;
 use bytes::Bytes;
 use cfg_if::cfg_if;
 use num_cpus;
 use std::{
+    borrow::Cow,
     cmp::{max, min},
     mem::MaybeUninit,
     ops::{Deref, DerefMut},
-    os::raw::c_uint,
+    os::raw::{c_uchar, c_uint},
 };
 use vpx_sys::{
     vp8_dec_control_id::VP9D_SET_LOOP_FILTER_OPT,
@@ -38,16 +38,30 @@ use vpx_sys::{
     vpx_img_fmt::VPX_IMG_FMT_I420,
     vpx_img_free,
     vpx_img_wrap,
+    vpx_kf_mode,
     vpx_rc_mode::VPX_CBR,
     VPX_DECODER_ABI_VERSION,
     VPX_DL_BEST_QUALITY,
     VPX_DL_REALTIME,
     VPX_EFLAG_FORCE_KF,
     VPX_ENCODER_ABI_VERSION,
+    VPX_FRAME_IS_KEY,
     VPX_IMG_FMT_HIGHBITDEPTH,
 };
+use webrtc_media::Sample;
 
 // For the next soul that is looking for documentation, see: https://developer.liveswitch.io/reference/cocoa/api/group__encoder.html, https://docs.freeswitch.org/switch__image_8h.html
+
+pub struct Vp9FrameMeta {
+    pub keyframe: bool,
+    pub width: u32,
+    pub height: u32,
+}
+
+pub struct Vp9Frame {
+    pub data: Vec<u8>,
+    pub meta: Vp9FrameMeta,
+}
 
 pub struct VP9Encoder {
     encoder: vpx_codec_ctx_t,
@@ -58,6 +72,8 @@ pub struct VP9Encoder {
 
     raw: *mut vpx_image_t,
     pts: i64,
+
+    force_key_frame: bool,
 }
 
 macro_rules! vp9_call_unsafe {
@@ -106,11 +122,12 @@ impl VP9Encoder {
                                     // Set the maximum target size of any key-frame.
                                     // rc_max_intra_target_ = MaxIntraTarget(config_->rc_buf_optimal_sz);
                                     // Key-frame interval is enforced manually by this wrapper.
-                                    // config.kf_mode = VPX_KF_DISABLED;
-                                    // TODO(webm:1592): work-around for libvpx issue, as it can still
-                                    // put some key-frames at will even in VPX_KF_DISABLED kf_mode.
-                                    // config_->kf_max_dist = inst->VP9().keyFrameInterval;
-                                    // config_->kf_min_dist = config_->kf_max_dist;*/
+                                                                   */
+        //  config.kf_mode = vpx_kf_mode::VPX_KF_DISABLED; /*
+        // TODO(webm:1592): work-around for libvpx issue, as it can still
+        // put some key-frames at will even in VPX_KF_DISABLED kf_mode.
+        // config_->kf_max_dist = inst->VP9().keyFrameInterval;
+        // config_->kf_min_dist = config_->kf_max_dist;*/
         // Determine number of threads based on the image size and #cores.
         config.g_threads = number_of_threads(width, height, num_cpus::get() as u32);
 
@@ -157,6 +174,7 @@ impl VP9Encoder {
             height,
             raw,
             pts: 0,
+            force_key_frame: true, // first frame must be a keyframe
         })
     }
 
@@ -164,7 +182,7 @@ impl VP9Encoder {
         (self.width, self.height)
     }
 
-    pub fn encode(&mut self, i420_frame: &[u8]) -> Result<Vec<Vec<u8>>, Error> {
+    pub fn encode(&mut self, i420_frame: &[u8]) -> Result<Vec<Vp9Frame>, Error> {
         let img = {
             if i420_frame.is_empty() {
                 std::ptr::null_mut()
@@ -185,24 +203,30 @@ impl VP9Encoder {
         self.encode_internal(img)
     }
 
-    fn encode_internal(&mut self, raw: *mut vpx_image_t) -> Result<Vec<Vec<u8>>, Error> {
+    fn encode_internal(&mut self, raw: *mut vpx_image_t) -> Result<Vec<Vp9Frame>, Error> {
         let target_framerate_fps = 20;
         let duration = 90000 / target_framerate_fps;
 
-        let flags = 0;
+        let mut flags = 0;
+
+        if self.force_key_frame {
+            println!("forcing keyframe");
+            self.force_key_frame = false;
+            flags |= VPX_EFLAG_FORCE_KF;
+        }
 
         vp9_call_unsafe!(vpx_codec_encode(
             &mut self.encoder,
             raw,
             self.pts,
             1,
-            flags,
+            flags as _,
             VPX_DL_REALTIME as _,
         ));
 
         self.pts += duration;
 
-        let mut datas = Vec::new();
+        let mut packets = Vec::new();
 
         let mut iter = std::ptr::null();
         loop {
@@ -215,6 +239,7 @@ impl VP9Encoder {
                 break;
             }
             let mut data = Vec::<u8>::with_capacity(unsafe { pkt.data.frame.sz } as usize);
+
             unsafe {
                 std::ptr::copy_nonoverlapping(
                     pkt.data.frame.buf as _,
@@ -222,10 +247,20 @@ impl VP9Encoder {
                     pkt.data.frame.sz as usize,
                 );
             }
+
             unsafe { data.set_len(pkt.data.frame.sz as usize) };
-            datas.push(data);
+
+            packets.push(Vp9Frame {
+                data,
+                meta: Vp9FrameMeta {
+                    keyframe: unsafe { pkt.data.frame.flags } & VPX_FRAME_IS_KEY
+                        == VPX_FRAME_IS_KEY,
+                    width: unsafe { pkt.data.frame.width[0] },
+                    height: unsafe { pkt.data.frame.height[0] },
+                },
+            });
         }
-        Ok(datas)
+        Ok(packets)
     }
 }
 
@@ -350,7 +385,7 @@ pub struct Vp9Decoder {
     // which will allow us to set the resolution. Once the resolution is set, this will be Some(width, height)
     // Further calls to decode will check that the resolution is the same as the previous call
     // If the resolution is different the decoder will be reinitlized.
-    resolution: Option<(u16, u16)>,
+    resolution: (u16, u16),
     decoder: DecoderWrapper,
     number_of_cores: usize,
 }
@@ -361,7 +396,7 @@ impl Vp9Decoder {
         let decoder = Self::init_decoder(number_of_cores, None)?;
 
         Ok(Self {
-            resolution: None,
+            resolution: (0, 0),
             decoder,
             number_of_cores,
         })
@@ -413,12 +448,7 @@ impl Vp9Decoder {
         Ok(decoder)
     }
 
-    fn decode_inner(
-        &mut self,
-        data: &Bytes,
-        width: u16,
-        height: u16,
-    ) -> Result<Vec<Vec<u8>>, Error> {
+    pub fn decode(&mut self, data: &Bytes) -> Result<Vec<Vp9Frame>, Error> {
         let mut buffer = data.as_ptr();
         if data.is_empty() {
             buffer = std::ptr::null(); // Triggers full frame concealment.
@@ -441,11 +471,22 @@ impl Vp9Decoder {
             if img.is_null() {
                 break;
             }
+
             let img = unsafe { &*img };
+
+            let (width, height) = self.resolution;
+
+            // dimensions changed, reinit decoder
+            if img.d_w != width as c_uint || img.d_h != height as c_uint {
+                self.resolution = (img.d_w as u16, img.d_h as u16);
+                self.decoder = Self::init_decoder(self.number_of_cores, Some(self.resolution))?;
+            }
 
             if img.fmt != VPX_IMG_FMT_I420 {
                 return Err(Error::DecoderUnsupportedFormat);
             }
+
+            let (width, height) = self.resolution;
 
             let mut out = Vec::with_capacity((width as usize * height as usize * 3) as usize);
             let mut ptr = out.as_mut_ptr();
@@ -470,55 +511,17 @@ impl Vp9Decoder {
             }
 
             unsafe { out.set_len((width as usize * height as usize * 3) as usize) };
-            vec.push(out);
+
+            vec.push(Vp9Frame {
+                data: out,
+                meta: Vp9FrameMeta {
+                    keyframe: false,
+                    width: width as _,
+                    height: height as _,
+                },
+            });
         }
 
         Ok(vec)
-    }
-
-    pub fn decode(
-        &mut self,
-        pkt: Option<&Vp9PacketWrapperBecauseTheRtpCrateIsIdiotic>,
-    ) -> Result<(Vec<Vec<u8>>, u16, u16), Error> {
-        let pkt = match pkt {
-            None =>
-                return if let Some((width, height)) = self.resolution {
-                    Ok((
-                        self.decode_inner(&Bytes::new(), width, height)?,
-                        width,
-                        height,
-                    ))
-                } else {
-                    Ok((Vec::new(), 0, 0))
-                },
-            Some(pkt) => pkt,
-        };
-        let header = &pkt.1;
-
-        let (width, height) = {
-            if header.p {
-                // p indicates this is a key frame or kVideoFrameKey in libwebrtc
-                match self.resolution {
-                    Some((width, height))
-                        if width == header.width[0] && height == header.height[0] =>
-                        (width, height),
-                    _ => {
-                        // We don't have a resolution or the resolution has changed - reinitialize the decoder
-                        let resolution = (header.width[0], header.height[0]);
-                        self.resolution = Some(resolution);
-                        self.decoder = Self::init_decoder(self.number_of_cores, self.resolution)?;
-                        resolution
-                    }
-                }
-            } else if let Some(resolution) = self.resolution {
-                resolution
-            } else {
-                return Err(Error::KeyFrameNotSent);
-            }
-        };
-
-        let data = &pkt.0;
-        let vec = self.decode_inner(data, width, height)?;
-        Ok((vec, width, height))
     }
 }

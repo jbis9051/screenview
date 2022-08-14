@@ -1,3 +1,4 @@
+use crate::vp9::{Vp9Frame, Vp9FrameMeta};
 use bytes::Bytes;
 use rtp::{
     codecs::vp9::{Vp9Packet, Vp9Payloader},
@@ -5,6 +6,7 @@ use rtp::{
     packetizer::{new_packetizer, Depacketizer, Packetizer},
     sequence::WrappingSequencer,
 };
+use webrtc_media::{io::sample_builder::SampleBuilder, Sample};
 use webrtc_util::Unmarshal;
 
 const VP9_PAYLOAD_TYPE: u8 = 98;
@@ -30,7 +32,9 @@ impl RtpEncoder {
     }
 }
 
-pub struct RtpDecoder {}
+pub struct RtpDecoder {
+    builder: SampleBuilder<Vp9Packet>,
+}
 
 impl Default for RtpDecoder {
     fn default() -> Self {
@@ -38,29 +42,16 @@ impl Default for RtpDecoder {
     }
 }
 
-
-pub type Vp9PacketWrapperBecauseTheRtpCrateIsIdiotic = (Bytes, Vp9Packet);
-
 impl RtpDecoder {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            builder: SampleBuilder::new(50, Vp9Packet::default(), 1), // TODO
+        }
     }
 
-    pub fn decode_to_vp9(
-        &mut self,
-        rtp: Vec<u8>,
-    ) -> Result<Option<Vp9PacketWrapperBecauseTheRtpCrateIsIdiotic>, DecoderError> {
-        let pkt = Packet::unmarshal(&mut Bytes::from(rtp))?;
-        let mut vp9packet = Vp9Packet::default();
-        let bytes = vp9packet.depacketize(&pkt.payload)?;
-        Ok(Some((bytes, vp9packet)))
+    pub fn decode_to_vp9(&mut self, rtp: Vec<u8>) -> Option<Sample> {
+        let pkt = Packet::unmarshal(&mut Bytes::from(rtp)).ok()?;
+        self.builder.push(pkt);
+        self.builder.pop()
     }
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum DecoderError {
-    #[error("{0}")]
-    PacketUnmarshal(#[from] webrtc_util::Error),
-    #[error("{0}")]
-    Vp9Depacketize(#[from] rtp::Error),
 }

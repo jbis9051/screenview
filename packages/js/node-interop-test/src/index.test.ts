@@ -6,6 +6,7 @@ import {
     VTableEmitter,
     VTableEvent,
 } from '@screenview/node-interop';
+import * as console from 'console';
 
 function waitForEvent(
     emitter: VTableEmitter,
@@ -60,7 +61,6 @@ test('direct connection', async () => {
     );
 
     await rust.start_server(host, '127.0.0.1:9051', '127.0.0.1:9051');
-
     await rust.update_static_password(host, 'password');
 
     const client = rust.new_instance(
@@ -113,7 +113,7 @@ test('direct connection', async () => {
 
     const [id, data] = (await waitForEvent(
         vtableClient,
-        VTableEvent.RvdFrameData,
+        VTableEvent.RvdClientFrameData,
         5000
     )) as [number, ArrayBuffer];
 

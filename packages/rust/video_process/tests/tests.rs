@@ -10,12 +10,12 @@ use dcv_color_primitives::{
 };
 use image::{GenericImageView, RgbImage};
 use rtp::codecs::vp9::Vp9Packet;
-use std::io::Read;
 use video_process::{
-    convert::{bgra_to_rgb, convert_bgra_to_i420, i420_to_bgra, rgb_to_bgra},
-    rtp::{RtpDecoder, RtpEncoder, Vp9PacketWrapperBecauseTheRtpCrateIsIdiotic},
+    convert::{bgra_to_i420, bgra_to_rgb, i420_to_bgra, rgb_to_bgra},
+    rtp::{RtpDecoder, RtpEncoder},
     vp9::{VP9Encoder, Vp9Decoder},
 };
+use webrtc_media::audio::Sample;
 use webrtc_util::Marshal;
 
 
@@ -28,7 +28,7 @@ pub fn convert_test() {
     let (width, height) = image.dimensions();
     let data = image.into_raw();
     let mut bgra = rgb_to_bgra(width, height, &data).expect("unable to convert image");
-    let data = convert_bgra_to_i420(width, height, &mut bgra).expect("unable to convert image");
+    let data = bgra_to_i420(width, height, &mut bgra).expect("unable to convert image");
     assert!(!data.is_empty());
 }
 
@@ -42,9 +42,9 @@ pub fn encode_test() {
             .dimensions();
 
     let mut encoder = VP9Encoder::new(width, height).expect("could not construct encoder");
-    let mut bytes = encoder.encode(img).expect("could not encode frame");
-    bytes.append(&mut encoder.encode(&[]).unwrap());
-    assert!(!bytes.is_empty());
+    let mut frames = encoder.encode(img).expect("could not encode frame");
+    frames.append(&mut encoder.encode(&[]).unwrap());
+    assert!(!frames.is_empty());
 }
 
 #[test]
@@ -61,11 +61,8 @@ pub fn rtp_encode() {
 pub fn rtp_decode() {
     let packet = include_bytes!("img.rtp");
     let mut rtp = RtpDecoder::new();
-    let (data, _) = rtp
-        .decode_to_vp9(packet.to_vec())
-        .expect("could not decode frame")
-        .expect("empty packet");
-    assert!(!data.is_empty());
+    rtp.decode_to_vp9(packet.to_vec())
+        .expect("could not decode frame");
 }
 
 #[test]
@@ -75,35 +72,31 @@ pub fn decode_test() {
         image::load_from_memory_with_format(include_bytes!("img.png"), image::ImageFormat::Png)
             .expect("unable to open image")
             .dimensions();
-    let mut packet = Vp9Packet::default();
-    packet.p = true;
-    packet.width = vec![width as u16];
-    packet.height = vec![height as u16];
 
-    let pkt = (Bytes::from(&img[..]), packet);
+    let bytes = Bytes::from(&img[..]);
     let mut decoder = Vp9Decoder::new().expect("could not construct encoder");
-    let (mut bytes, width_out, height_out) =
-        decoder.decode(Some(&pkt)).expect("could not decode frame");
-    assert_eq!(width_out as u32, width);
-    assert_eq!(height_out as u32, height);
-    bytes.append(&mut (decoder.decode(None).unwrap()).0);
-    assert!(!bytes.is_empty());
+    let mut frames = decoder.decode(&bytes).expect("could not decode frame");
+    frames.extend(decoder.decode(&Bytes::new()).unwrap());
+    assert_eq!(frames.len(), 1);
+    let frame = frames.remove(0);
+    assert_eq!(width as u32, frame.meta.width);
+    assert_eq!(height as u32, frame.meta.height);
+    assert!(!frame.data.is_empty());
 }
 
 #[test]
 pub fn finalize() {
-    let img = &mut include_bytes!("img.i420.out").clone();
+    let i420 = &mut include_bytes!("img.i420.out").clone();
     let (width, height) =
         image::load_from_memory_with_format(include_bytes!("img.png"), image::ImageFormat::Png)
             .expect("unable to open image")
             .dimensions();
 
-    let img = i420_to_bgra(width, height, img).expect("unable to convert image");
-    let img = bgra_to_rgb(width, height, &img).expect("unable to convert image");
-    RgbImage::from_vec(width, height, img).expect("unable to load image");
+    let bgra = i420_to_bgra(width, height, i420).expect("unable to convert image");
+    let rgb = bgra_to_rgb(width, height, &bgra).expect("unable to convert image");
+    RgbImage::from_vec(width, height, rgb).expect("unable to load image");
 }
 
-// Below test is used if you want to view the encoding result. It should not be run on CI.
 pub fn e2e() -> (u32, u32, Vec<u8>) {
     // Start with a png
     let png =
@@ -117,44 +110,59 @@ pub fn e2e() -> (u32, u32, Vec<u8>) {
 
     // Convert to BGRA
     let mut bgra = rgb_to_bgra(width, height, &rgb_data).expect("unable to convert image");
-
     // Convert to I420
-    let i420 = convert_bgra_to_i420(width, height, &mut bgra).expect("unable to convert image");
+    let i420 = bgra_to_i420(width, height, &mut bgra).expect("unable to convert image");
 
     // Encode to VP9
     let mut encoder = VP9Encoder::new(width, height).expect("could not construct encoder");
-    let mut vp9 = encoder.encode(&i420).expect("could not encode frame");
-    vp9.append(&mut encoder.encode(&[]).unwrap());
+    let mut frames = encoder.encode(&i420).expect("could not encode frame");
+    frames.extend(encoder.encode(&[]).unwrap());
+    assert_eq!(frames.len(), 1);
 
-    let vp9_flat: Vec<u8> = vp9.into_iter().flatten().collect();
+    let frame = frames.remove(0);
+
     // Packetize to RTP
-    let mut rtp = RtpEncoder::new(100000, 1);
-    let packets = rtp.process_vp9(vp9_flat).expect("could not encode frame");
-    assert_eq!(packets.len(), 1);
-    let packet = packets[0]
-        .marshal()
-        .expect("could not marshal packet")
-        .to_vec();
+    let mut rtp = RtpEncoder::new(1500, 1);
+    let packets = rtp.process_vp9(frame.data).expect("could not encode frame");
 
-    // Depacketize to VP9
+    assert!(packets.len() > 1);
+
+    let packets_marshal = packets
+        .into_iter()
+        .map(|p| p.marshal().expect("could not marshall packet"))
+        .collect::<Vec<_>>();
+
     let mut rtp = RtpDecoder::new();
-    let vp9_out = rtp
-        .decode_to_vp9(packet)
-        .expect("could not decode frame")
-        .expect("empty packet");
+
+    let mut samples = Vec::new();
+
+    for bytes in packets_marshal {
+        // Depacketize to VP9
+        match rtp.decode_to_vp9(bytes.to_vec()) {
+            None => {}
+            Some(sample) => samples.push(sample),
+        };
+    }
+
+    assert_eq!(samples.len(), 1);
+
+    let sample = samples.remove(0);
 
     // Decode to i420
     let mut decoder = Vp9Decoder::new().expect("could not construct encoder");
-    let (mut i420_out, width_out, height_out) = decoder
-        .decode(Some(&vp9_out))
+    let mut frames = decoder
+        .decode(&sample.data)
         .expect("could not decode frame");
-    assert_eq!(width_out as u32, width);
-    assert_eq!(height_out as u32, height);
-    i420_out.append(&mut (decoder.decode(None).unwrap()).0);
-    let i420_out_flat: Vec<u8> = i420_out.into_iter().flatten().collect();
+    frames.extend(decoder.decode(&Bytes::new()).unwrap());
+    assert_eq!(frames.len(), 1);
+
+    let frame = frames.remove(0);
+    assert_eq!(width as u32, frame.meta.width);
+    assert_eq!(height as u32, frame.meta.height);
+    assert!(!frame.data.is_empty());
 
     // Convert to BGRA
-    let bgra_out = i420_to_bgra(width, height, &i420_out_flat).expect("unable to convert image");
+    let bgra_out = i420_to_bgra(width, height, &frame.data).expect("unable to convert image");
 
     // Convert to RGB
     let rgb_out = bgra_to_rgb(width, height, &bgra_out).expect("unable to convert image");
@@ -167,6 +175,7 @@ pub fn e2e_test() {
     e2e();
 }
 
+// Below test is used if you want to view the encoding result. It should not be run on CI.
 pub fn e2e_demo() {
     let (width, height, rgb) = e2e();
     RgbImage::from_vec(width, height, rgb)

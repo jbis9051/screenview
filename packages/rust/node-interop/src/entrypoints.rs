@@ -125,7 +125,6 @@ pub fn close_instance(mut cx: FunctionContext<'_>) -> JsResult<'_, JsUndefined> 
 }
 
 pub fn connect(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
-    println!("connect");
     let handle = cx.argument::<InstanceWrapper>(0)?;
     let connection_type = integer_arg::<u8>(&mut cx, 1)?;
 

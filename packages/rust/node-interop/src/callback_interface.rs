@@ -1,6 +1,9 @@
 // these are the callbacks available to node used for event handling, rust can emit events to node this way
 // i got a bit macro happy in this file
-use common::messages::svsc::EstablishSessionStatus;
+use common::messages::{
+    rvd::{AccessMask, DisplayShare},
+    svsc::EstablishSessionStatus,
+};
 use neon::{object::Object, prelude::*};
 use std::sync::Arc;
 
@@ -60,19 +63,16 @@ impl_try_into_js_type!(
     i32 => |cx, me| Ok(JsNumber::new(cx, me).upcast()),
     u8 => |cx, me| Ok(JsNumber::new(cx, me).upcast()),
     u16 => |cx, me| Ok(JsNumber::new(cx, me).upcast()),
+    usize => |cx, me| Ok(JsNumber::new(cx, me as u32).upcast()),
     String => |cx, me| Ok(JsString::new(cx, me).upcast()),
     EstablishSessionStatus => |cx, me| Ok(JsNumber::new(cx, me as u8).upcast()),
-    /*DisplayInformation => |cx, me| Ok(js_object!(cx,
-        {
-            "display_id" : me.display_id,
-            "width" : me.width,
-            "height" : me.height,
-            "controllable": me.access
-                    .contains(AccessMask::CONTROLLABLE)
-        }
-    )),*/
+    AccessMask => |cx, me| Ok(JsNumber::new(cx, me.bits()).upcast()),
+    DisplayShare => |cx, me| Ok(js_object!(cx, {
+        "display_id": me.display_id,
+        "access": me.access,
+        "name": me.name
+    })),
     Vec<u8> => |cx, me| Ok(JsArrayBuffer::external(cx, me).upcast())
-    //Vec<DisplayInformation> => |cx, me| Ok(js_array!(cx, me))
 );
 
 
@@ -137,8 +137,10 @@ vtable_methods!(
     /* wpskka - host */
     wpskka_host_authentication_successful(),
     /* rvd - client */
-    rvd_frame_data(display_id: u8, data: Vec<u8>),
+    rvd_client_frame_data(display_id: u8, width: usize, height: usize, data: Vec<u8>),
     rvd_client_handshake_complete(),
     /* rvd - host */
     rvd_host_handshake_complete(),
+    rvd_client_display_share(share: DisplayShare),
+    rvd_client_display_unshare(display_id: u8),
 );

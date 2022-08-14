@@ -7,7 +7,10 @@ use peer::{
     wpskka::{WpskkaClientInform, WpskkaHostInform},
     InformEvent,
 };
-use peer_util::rvd_native_helper::{rvd_client_native_helper, rvd_host_native_helper};
+use peer_util::{
+    decoder::Decoder,
+    rvd_native_helper::{rvd_client_native_helper, rvd_host_native_helper},
+};
 
 pub fn handle_event(instance: &mut Instance, event: InformEvent) -> Result<(), ()> {
     match event {
@@ -53,11 +56,32 @@ pub fn handle_event(instance: &mut Instance, event: InformEvent) -> Result<(), (
                         .callback_interface
                         .rvd_client_handshake_complete(&instance.channel);
                 }
-                RvdClientInform::FrameData(data) => instance.callback_interface.rvd_frame_data(
-                    &instance.channel,
-                    data.display_id,
-                    data.data.0.into_owned(),
-                ),
+                RvdClientInform::FrameData(data) => {
+                    let decoder = instance.decoders.get_mut(&data.display_id).unwrap();
+                    let jpegs = decoder.process(data.data.0.to_vec()).unwrap();
+                    for jpeg in jpegs {
+                        instance.callback_interface.rvd_client_frame_data(
+                            &instance.channel,
+                            data.display_id,
+                            jpeg.width as _,
+                            jpeg.height as _,
+                            jpeg.data,
+                        );
+                    }
+                }
+                RvdClientInform::DisplayShare(share) => {
+                    instance
+                        .decoders
+                        .insert(share.display_id, Decoder::new().unwrap());
+                    instance
+                        .callback_interface
+                        .rvd_client_display_share(&instance.channel, share);
+                }
+                RvdClientInform::DisplayUnshare(unshare) => {
+                    instance
+                        .callback_interface
+                        .rvd_client_display_unshare(&instance.channel, unshare);
+                }
                 _ => {}
             }
         }
@@ -105,7 +129,6 @@ pub fn handle_event(instance: &mut Instance, event: InformEvent) -> Result<(), (
                 .callback_interface
                 .wpskka_client_authentication_failed(&instance.channel),
             WpskkaClientInform::AuthSuccessful => {
-                println!("wpskka_client_authentication_successful");
                 forward!(instance.sv_handler, [ClientSignal, ClientDirect], |stack| {
                     stack.protocol_version()
                 });

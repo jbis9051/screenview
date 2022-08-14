@@ -53,9 +53,8 @@ export interface NativeThumbnail {
     display_type: DisplayType;
 }
 
-export interface DisplayInformation {
-    native_id: number;
+export interface DisplayShare {
+    display_id: number;
+    access: number;
     name: string;
-    width: number;
-    height: number;
 }

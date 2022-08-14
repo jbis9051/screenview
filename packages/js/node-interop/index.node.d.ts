@@ -6,7 +6,7 @@ import type {
     EstablishSessionStatus,
     InstanceConnectionType,
     NativeThumbnail,
-    DisplayInformation,
+    DisplayShare,
 } from './index';
 
 export declare type ClientDirectInstance = JSBox<
@@ -175,14 +175,18 @@ export interface VTable {
     wpskka_host_authentication_successful(): void;
 
     /* rvd - client */
-    rvd_display_update(
-        clipboard_readable: boolean,
-        displays: DisplayInformation[]
-    ): void;
+    rvd_client_display_share(share: DisplayShare): void;
+
+    rvd_client_display_unshare(display_id: number): void;
 
     rvd_client_handshake_complete(): void;
 
-    rvd_frame_data(display_id: number, data: ArrayBuffer);
+    rvd_client_frame_data(
+        display_id: number,
+        width: number,
+        height: number,
+        data: ArrayBuffer
+    );
 
     /* rvd - host */
     rvd_host_handshake_complete(): void;

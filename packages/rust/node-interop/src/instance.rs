@@ -39,6 +39,7 @@ use peer::{
     InformEvent,
 };
 use peer_util::{
+    decoder::Decoder,
     frame_data_mtu::frame_data_mtu,
     frame_processor::FrameProcessor,
     rvd_native_helper::{rvd_client_native_helper, rvd_host_native_helper},
@@ -56,6 +57,7 @@ pub struct Instance {
     pub(crate) capture_pool: CapturePool<FrameProcessor>,
     pub(crate) channel: Channel,
     pub(crate) shared_displays: HashMap<DisplayId, NativeId>,
+    pub(crate) decoders: HashMap<DisplayId, Decoder>,
     pub(crate) auth_schemes: Vec<AuthSchemeType>,
     pub(crate) password: Option<String>,
 }

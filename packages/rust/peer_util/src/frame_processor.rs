@@ -4,9 +4,9 @@ use native::api::BGRAFrame;
 use rtp::packet::Packet;
 use std::vec::Drain;
 use video_process::{
-    convert::convert_bgra_to_i420,
+    convert::bgra_to_i420,
     rtp::RtpEncoder,
-    vp9::{self, VP9Encoder},
+    vp9::{self, VP9Encoder, Vp9Decoder},
 };
 
 pub struct FrameProcessor {
@@ -56,7 +56,7 @@ impl ProcessFrame for FrameProcessor {
             return FrameProcessResult::Failure;
         }
 
-        let i420_frame = match convert_bgra_to_i420(frame.width, frame.height, &mut frame.data) {
+        let i420_frame = match bgra_to_i420(frame.width, frame.height, &mut frame.data) {
             Ok(data) => data,
             Err(_) => return FrameProcessResult::Failure,
         };
@@ -65,7 +65,7 @@ impl ProcessFrame for FrameProcessor {
         // branch should be optimized out by the compiler
         let vp9_encoder = self.vp9_encoder.as_mut().unwrap();
 
-        let packets = match vp9_encoder.encode(&i420_frame) {
+        let mut vp9_frames = match vp9_encoder.encode(&i420_frame) {
             Ok(packets) => packets,
             // TODO: log more detailed information about the error
             Err(_) => return FrameProcessResult::Failure,
@@ -73,15 +73,17 @@ impl ProcessFrame for FrameProcessor {
 
         // We don't need to clear the resources because that's done when they're viewed
 
-        for packet in packets {
-            let rtp_packets = match self.rtp_encoder.process_vp9(packet) {
-                Ok(rtp_packets) => rtp_packets,
-                // TODO: log more detailed information about the error
-                Err(_) => return FrameProcessResult::Failure,
-            };
+        let mut rtp_packets = Vec::new();
 
-            resources.extend(rtp_packets);
+        for vp9_frame in vp9_frames {
+            match self.rtp_encoder.process_vp9(vp9_frame.data) {
+                Ok(packets) => rtp_packets.extend(packets),
+                // TODO: log more detailed information about the error
+                Err(_) => continue,
+            };
         }
+
+        resources.extend(rtp_packets);
 
         FrameProcessResult::Success
     }

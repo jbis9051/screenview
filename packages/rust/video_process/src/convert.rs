@@ -45,11 +45,7 @@ fn convert_bgra_to_i420_efficient(
 }
 
 /// If width or height is odd, this function is much less efficient
-pub fn convert_bgra_to_i420(
-    width: u32,
-    height: u32,
-    data: &mut [u8],
-) -> Result<Vec<u8>, ErrorKind> {
+pub fn bgra_to_i420(width: u32, height: u32, data: &mut [u8]) -> Result<Vec<u8>, ErrorKind> {
     if width & 1 == 0 && height & 1 == 0 {
         // if it's even just do the efficient one
         return convert_bgra_to_i420_efficient(width, height, data);

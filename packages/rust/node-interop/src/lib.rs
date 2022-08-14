@@ -36,6 +36,7 @@ fn main(mut cx: ModuleContext<'_>) -> NeonResult<()> {
         keyboard_input,
         lease_request,
         dangerously_set_no_auth,
+        update_static_password,
         set_controllable,
         set_clipboard_readable,
         share_displays,

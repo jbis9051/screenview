@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { DisplayInformation, EstablishSessionStatus } from './index';
+import { DisplayShare, EstablishSessionStatus } from './index';
 import { VTable } from './index.node';
 
 export enum VTableEvent {
@@ -15,8 +15,9 @@ export enum VTableEvent {
     WpsskaClientAuthenticationFailed = 'wpsska_client_authentication_failed',
     WpsskaHostAuthenticationSuccessful = 'wpsska_host_authentication_successful',
     RvdClientHandshakeComplete = 'rvd_client_handshake_complete',
-    RvdDisplayUpdate = 'rvd_display_update',
-    RvdFrameData = 'rvd_frame_data',
+    RvdDisplayShare = 'rvd_display_share',
+    RvdDisplayUnshare = 'rvd_display_unshare',
+    RvdClientFrameData = 'rvd_client_frame_data',
     RvdHostHandshakeComplete = 'rvd_host_handshake_complete',
 }
 
@@ -32,11 +33,13 @@ export declare interface VTableEmitter extends EventEmitter {
     ): this;
 
     on(
-        event: VTableEvent.RvdDisplayUpdate,
-        listener: (
-            clipboardReadable: boolean,
-            displays: DisplayInformation[]
-        ) => void
+        event: VTableEvent.RvdDisplayShare,
+        listener: (display: DisplayShare) => void
+    ): this;
+
+    on(
+        event: VTableEvent.RvdDisplayUnshare,
+        listener: (display_id: number) => void
     ): this;
 
     on(event: VTableEvent, listener: () => void): this;
@@ -102,19 +105,31 @@ export class VTableEmitter extends EventEmitter implements VTable {
         this.emit(VTableEvent.RvdClientHandshakeComplete);
     }
 
-    rvd_frame_data(displayId: number, data: ArrayBuffer) {
-        this.emit(VTableEvent.RvdFrameData, displayId, data);
-    }
-
-    rvd_display_update(
-        clipboardReadable: boolean,
-        displays: DisplayInformation[]
-    ): void {
-        this.emit(VTableEvent.RvdDisplayUpdate, clipboardReadable, displays);
+    rvd_client_frame_data(
+        displayId: number,
+        width: number,
+        height: number,
+        data: ArrayBuffer
+    ) {
+        this.emit(
+            VTableEvent.RvdClientFrameData,
+            displayId,
+            width,
+            height,
+            data
+        );
     }
 
     rvd_host_handshake_complete() {
         this.emit(VTableEvent.RvdHostHandshakeComplete);
+    }
+
+    rvd_client_display_share(share: DisplayShare): void {
+        this.emit(VTableEvent.RvdDisplayShare, share);
+    }
+
+    rvd_client_display_unshare(displayId: number): void {
+        this.emit(VTableEvent.RvdDisplayUnshare, displayId);
     }
 }
 

@@ -54,6 +54,7 @@ impl InstanceHandle {
                     ),
                     channel,
                     shared_displays: Default::default(),
+                    decoders: Default::default(),
                     auth_schemes: Default::default(),
                     password: None,
                 };
