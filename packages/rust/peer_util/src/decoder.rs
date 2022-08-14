@@ -30,13 +30,15 @@ impl Decoder {
     pub fn process(&mut self, rtp_data: Vec<u8>) -> Result<Vec<Frame>, Error> {
         let mut out = Vec::new();
 
-
+        println!("starting processing");
         let sample = match self.rtp.decode_to_vp9(rtp_data) {
             None => return Ok(out),
             Some(s) => s,
         };
+        println!("rtp proccesed");
 
         let frames = self.vp9.decode(&sample.data)?;
+        println!("vp9 proccesed");
 
         for frame in frames {
             let bgra = i420_to_bgra(frame.meta.width, frame.meta.height, &frame.data)?;
@@ -54,6 +56,7 @@ impl Decoder {
                 height: frame.meta.height,
                 data: frame.data,
             });
+            println!("convert proccesed");
         }
 
         Ok(out)
