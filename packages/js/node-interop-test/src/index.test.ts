@@ -20,7 +20,8 @@ function waitForEvent(
                 clearTimeout(expireTimeout);
             }
             if (e !== event) {
-                throw new Error(`Expected event ${event}, got ${e}`);
+                reject(new Error(`Expected event ${event}, got ${e}`));
+                return;
             }
             resolve(arg);
         };
@@ -111,17 +112,19 @@ test('direct connection', async () => {
 
     await rust.share_displays(host, [firstMonitor!], false);
 
-    const [id, data] = (await waitForEvent(
+    await waitForEvent(vtableClient, VTableEvent.RvdDisplayShare, 5000);
+
+    const [id, width, height, data] = (await waitForEvent(
         vtableClient,
         VTableEvent.RvdClientFrameData,
         5000
-    )) as [number, ArrayBuffer];
+    )) as [number, number, number, ArrayBuffer];
 
     expect(id).toBe(0);
+    expect(width).toBeGreaterThan(0);
+    expect(height).toBeGreaterThan(0);
     expect(data.byteLength).toBeGreaterThan(0);
-
     await rust.share_displays(host, [], false);
-
     rust.close_instance(client);
     rust.close_instance(host);
 });
