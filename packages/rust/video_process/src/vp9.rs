@@ -6,12 +6,15 @@ use num_cpus;
 use std::{
     borrow::Cow,
     cmp::{max, min},
+    ffi::CStr,
     mem::MaybeUninit,
     ops::{Deref, DerefMut},
     os::raw::{c_uchar, c_uint},
+    ptr,
 };
 use vpx_sys::{
     vp8_dec_control_id::VP9D_SET_LOOP_FILTER_OPT,
+    vp8e_enc_control_id::VP9E_SET_SVC_INTER_LAYER_PRED,
     vpx_codec_control_,
     vpx_codec_ctx_t,
     vpx_codec_cx_pkt_kind::VPX_CODEC_CX_FRAME_PKT,
@@ -25,6 +28,8 @@ use vpx_sys::{
     vpx_codec_enc_init_ver,
     vpx_codec_encode,
     vpx_codec_err_t,
+    vpx_codec_error,
+    vpx_codec_error_detail,
     vpx_codec_flags_t,
     vpx_codec_get_cx_data,
     vpx_codec_get_frame,
@@ -40,6 +45,7 @@ use vpx_sys::{
     vpx_img_wrap,
     vpx_kf_mode,
     vpx_rc_mode::VPX_CBR,
+    VPX_CODEC_OK,
     VPX_DECODER_ABI_VERSION,
     VPX_DL_BEST_QUALITY,
     VPX_DL_REALTIME,
@@ -48,7 +54,7 @@ use vpx_sys::{
     VPX_FRAME_IS_KEY,
     VPX_IMG_FMT_HIGHBITDEPTH,
 };
-use webrtc_media::Sample;
+
 
 // For the next soul that is looking for documentation, see: https://developer.liveswitch.io/reference/cocoa/api/group__encoder.html, https://docs.freeswitch.org/switch__image_8h.html
 
@@ -149,6 +155,11 @@ impl VP9Encoder {
             vpx_sys::vp8e_enc_control_id::VP9E_SET_ROW_MT as _,
             1
         ));
+        vp9_call_unsafe!(vpx_codec_control_(
+            &mut encoder,
+            vpx_sys::vp8e_enc_control_id::VP9E_SET_SVC_INTER_LAYER_PRED as _,
+            0 // TODO
+        ));
 
         vp9_call_unsafe!(vpx_codec_enc_config_set(&mut encoder, &config));
 
@@ -185,7 +196,7 @@ impl VP9Encoder {
     pub fn encode(&mut self, i420_frame: &[u8]) -> Result<Vec<Vp9Frame>, Error> {
         let img = {
             if i420_frame.is_empty() {
-                std::ptr::null_mut()
+                ptr::null_mut()
             } else {
                 unsafe {
                     vpx_img_wrap(
@@ -210,7 +221,6 @@ impl VP9Encoder {
         let mut flags = 0;
 
         if self.force_key_frame {
-            println!("forcing keyframe");
             self.force_key_frame = false;
             flags |= VPX_EFLAG_FORCE_KF;
         }
@@ -241,7 +251,7 @@ impl VP9Encoder {
             let mut data = Vec::<u8>::with_capacity(unsafe { pkt.data.frame.sz } as usize);
 
             unsafe {
-                std::ptr::copy_nonoverlapping(
+                ptr::copy_nonoverlapping(
                     pkt.data.frame.buf as _,
                     data.as_mut_ptr(),
                     pkt.data.frame.sz as usize,
@@ -348,11 +358,30 @@ fn vpx_img_plane_height(img: &vpx_image_t, plane: usize) -> u32 {
     }
 }
 
-struct DecoderWrapper(vpx_codec_ctx_t);
+enum DecoderState {
+    Uninit(MaybeUninit<vpx_codec_ctx_t>),
+    Init(vpx_codec_ctx_t),
+}
+
+struct DecoderWrapper(DecoderState);
 
 impl DecoderWrapper {
     fn new() -> Self {
-        Self(unsafe { std::mem::zeroed() })
+        Self(unsafe { DecoderState::Uninit(MaybeUninit::uninit()) })
+    }
+
+    fn as_mut_ptr(&mut self) -> *mut vpx_codec_ctx_t {
+        match &mut self.0 {
+            DecoderState::Uninit(ref mut ctx) => ctx.as_mut_ptr(),
+            DecoderState::Init(ctx) => ctx,
+        }
+    }
+
+    unsafe fn assume_init(&mut self) {
+        if let DecoderState::Uninit(ctx) = &mut self.0 {
+            let ctx = ctx.assume_init();
+            self.0 = DecoderState::Init(ctx);
+        }
     }
 }
 
@@ -360,31 +389,34 @@ impl Deref for DecoderWrapper {
     type Target = vpx_codec_ctx_t;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        match &self.0 {
+            DecoderState::Init(ctx) => ctx,
+            DecoderState::Uninit(_) => panic!("Decoder not initialized"),
+        }
     }
 }
 
 impl DerefMut for DecoderWrapper {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+        match &mut self.0 {
+            DecoderState::Init(ctx) => ctx,
+            DecoderState::Uninit(_) => panic!("Decoder not initialized"),
+        }
     }
 }
 
 impl Drop for DecoderWrapper {
     fn drop(&mut self) {
-        unsafe {
-            vpx_codec_destroy(&mut self.0);
-        }
+        match &mut self.0 {
+            DecoderState::Init(ctx) => {
+                unsafe { vpx_codec_destroy(ctx) };
+            }
+            DecoderState::Uninit(_) => {}
+        };
     }
 }
 
 pub struct Vp9Decoder {
-    // None indicates the decoder is semi-uninitialized.
-    // This is the case when the decoder is first created.
-    // You can still call decode() but the first frame must be a keyframe
-    // which will allow us to set the resolution. Once the resolution is set, this will be Some(width, height)
-    // Further calls to decode will check that the resolution is the same as the previous call
-    // If the resolution is different the decoder will be reinitlized.
     resolution: (u16, u16),
     decoder: DecoderWrapper,
     number_of_cores: usize,
@@ -432,12 +464,14 @@ impl Vp9Decoder {
         let mut decoder = DecoderWrapper::new();
 
         vp9_call_unsafe!(vpx_codec_dec_init_ver(
-            &mut *decoder,
+            decoder.as_mut_ptr(),
             vpx_codec_vp9_dx(),
             &cfg,
             flags,
             VPX_DECODER_ABI_VERSION as _,
         ));
+
+        unsafe { decoder.assume_init() };
 
         vp9_call_unsafe!(vpx_codec_control_(
             &mut *decoder,
@@ -448,10 +482,10 @@ impl Vp9Decoder {
         Ok(decoder)
     }
 
-    pub fn decode(&mut self, data: &Bytes) -> Result<Vec<Vp9Frame>, Error> {
+    pub fn decode(&mut self, data: &[u8]) -> Result<Vec<Vp9Frame>, Error> {
         let mut buffer = data.as_ptr();
         if data.is_empty() {
-            buffer = std::ptr::null(); // Triggers full frame concealment.
+            buffer = ptr::null(); // Triggers full frame concealment.
         }
 
         // During decode libvpx may get and release buffers from |frame_buffer_pool_|.
@@ -465,7 +499,8 @@ impl Vp9Decoder {
         ));
 
         let mut vec = Vec::new();
-        let mut iter: vpx_codec_iter_t = std::ptr::null();
+
+        let mut iter: vpx_codec_iter_t = ptr::null();
         loop {
             let img = unsafe { vpx_codec_get_frame(&mut *self.decoder, &mut iter) };
             if img.is_null() {
@@ -479,7 +514,8 @@ impl Vp9Decoder {
             // dimensions changed, reinit decoder
             if img.d_w != width as c_uint || img.d_h != height as c_uint {
                 self.resolution = (img.d_w as u16, img.d_h as u16);
-                self.decoder = Self::init_decoder(self.number_of_cores, Some(self.resolution))?;
+                // TODO actually reinit decoder
+                // self.decoder = Self::init_decoder(self.number_of_cores, Some(self.resolution))?;
             }
 
             if img.fmt != VPX_IMG_FMT_I420 {
@@ -503,7 +539,7 @@ impl Vp9Decoder {
                 let h = vpx_img_plane_height(img, plane);
                 let mut y = 0;
                 while y < h {
-                    unsafe { std::ptr::copy_nonoverlapping(buf, ptr, w as usize) };
+                    unsafe { ptr::copy_nonoverlapping(buf, ptr, w as usize) };
                     buf = unsafe { buf.add(stride as usize) };
                     ptr = unsafe { ptr.add(w as usize) };
                     y += 1;

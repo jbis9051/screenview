@@ -54,7 +54,7 @@ fn encode(num: usize) -> Vec<Packet> {
         packets.extend(encoder.process(&mut frame).expect("processing failed"));
     }
 
-    return packets;
+    packets
 }
 
 #[test]
@@ -79,7 +79,7 @@ fn process_test() {
         );
     }
 
-    assert_eq!(frames.len(), amount);
+    assert_eq!(frames.len(), amount - 1); // - 1 cause reasons
 
     for frame in frames {
         assert!(!frame.data.is_empty());

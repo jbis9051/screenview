@@ -1,3 +1,4 @@
+use bytes::Bytes;
 use capture::FrameProcessResult;
 use native::api::BGRAFrame;
 use rtp::packet::Packet;
@@ -6,7 +7,7 @@ use video_process::{
     convert::bgra_to_i420,
     rtp::RtpEncoder,
     vp9,
-    vp9::{VP9Encoder, Vp9Frame},
+    vp9::{VP9Encoder, Vp9Decoder, Vp9Frame},
 };
 
 pub struct Encoder {

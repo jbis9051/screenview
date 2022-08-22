@@ -1,23 +1,38 @@
 use bytes::Bytes;
-use dcv_color_primitives as dcp;
-use dcv_color_primitives::{
-    convert_image,
-    get_buffers_size,
-    ColorSpace,
-    ErrorKind,
-    ImageFormat,
-    PixelFormat,
-};
 use image::{GenericImageView, RgbImage};
-use rtp::{codecs::vp9::Vp9Packet, packet::Packet};
-use std::borrow::Borrow;
+use rtp::packet::Packet;
+
 use video_process::{
     convert::{bgra_to_i420, bgra_to_rgb, i420_to_bgra, rgb_to_bgra},
     rtp::{RtpDecoder, RtpEncoder},
     vp9::{VP9Encoder, Vp9Decoder},
 };
-use webrtc_media::audio::Sample;
+
 use webrtc_util::{Marshal, Unmarshal};
+
+
+#[test]
+pub fn vp9_test() {
+    let amount = 2;
+
+    let image =
+        image::load_from_memory_with_format(include_bytes!("img.png"), image::ImageFormat::Png)
+            .expect("unable to open image");
+    let image = image.to_rgb8();
+    let (width, height) = image.dimensions();
+    let data = image.into_raw();
+    let mut bgra = rgb_to_bgra(width, height, &data).expect("unable to convert image");
+    let i420_frame = bgra_to_i420(width, height, &mut bgra).expect("unable to convert image");
+
+    let mut encoder = VP9Encoder::new(width, height).expect("unable to create encoder");
+    let mut decoder = Vp9Decoder::new().expect("unable to create decoder");
+    for _ in 0 .. amount {
+        let frames = encoder.encode(&i420_frame).expect("encoder failed");
+        for frame in frames {
+            decoder.decode(&frame.data).expect("decoder failed");
+        }
+    }
+}
 
 
 #[test]
