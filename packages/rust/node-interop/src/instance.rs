@@ -6,7 +6,10 @@ use crate::{
     forward,
     instance_main::Events,
     protocol::{ConnectionType, Message, RequestContent},
-    screenview_handler::ScreenViewHandler,
+    screenview_handler::{
+        ScreenViewHandler,
+        ScreenViewHandler::{HostDirect, HostSignal},
+    },
     throw,
 };
 use capture::CapturePool;
@@ -350,6 +353,7 @@ impl Instance {
         // Unshare them
         for display_id in to_unshare {
             self.shared_displays.remove(&display_id);
+            self.capture_pool.deactivate(display_id);
             forward!(self.sv_handler, [HostSignal, HostDirect], |stack| stack
                 .unshare_display(display_id));
         }

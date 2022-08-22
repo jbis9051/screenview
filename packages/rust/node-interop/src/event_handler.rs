@@ -78,6 +78,7 @@ pub fn handle_event(instance: &mut Instance, event: InformEvent) -> Result<(), (
                         .rvd_client_display_share(&instance.channel, share);
                 }
                 RvdClientInform::DisplayUnshare(unshare) => {
+                    instance.decoders.remove(&unshare);
                     instance
                         .callback_interface
                         .rvd_client_display_unshare(&instance.channel, unshare);

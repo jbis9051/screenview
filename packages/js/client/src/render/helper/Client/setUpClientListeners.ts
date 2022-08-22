@@ -15,6 +15,14 @@ export default function setUpClientListeners() {
         UIStore.connectionStatus = ConnectionStatus.Handshaking;
     });
 
+    const img = new Image();
+    img.style.position = 'fixed';
+    img.style.top = '0';
+    img.style.left = '0';
+    img.style.width = '100%';
+    img.style.height = '100%';
+    document.body.appendChild(img);
+
     ipcRenderer.on(
         MainToRendererIPCEvents.Client_VTableEvent,
         (_, event, ...args: any[]) => {
@@ -26,6 +34,12 @@ export default function setUpClientListeners() {
                 case VTableEvent.WpsskaClientAuthenticationSuccessful:
                     handleWpsskaClientAuthenticationSuccess();
                     break;
+                case VTableEvent.RvdClientFrameData: {
+                    const [id, width, height, data] = args;
+                    const blob = new Blob([data], { type: 'image/jpeg' });
+                    img.src = URL.createObjectURL(blob);
+                    break;
+                }
                 default:
                     console.log('Unknown VTable Event', event);
                     break;

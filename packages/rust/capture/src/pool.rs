@@ -18,10 +18,12 @@ impl<P: ProcessFrame> CapturePool<P> {
         }
     }
 
-    pub fn is_capturing(&self, display_id: DisplayId) -> bool {
-        self.captures
-            .iter()
-            .any(|capture| capture.is_capturing(display_id))
+    pub fn deactivate(&mut self, display_id: DisplayId) {
+        for capture in &mut self.captures {
+            if capture.is_capturing(display_id) {
+                capture.deactivate();
+            }
+        }
     }
 
     pub fn get_or_create_inactive(&mut self) -> Result<&mut FrameCapture<P>, NativeApiError> {

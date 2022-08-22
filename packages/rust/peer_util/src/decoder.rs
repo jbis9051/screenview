@@ -51,7 +51,7 @@ impl Decoder {
             out.push(Frame {
                 width: frame.meta.width,
                 height: frame.meta.height,
-                data: frame.data,
+                data: image,
             });
         }
 
