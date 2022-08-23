@@ -1615,6 +1615,11 @@
   dependencies:
     "@types/node" "*"
 
+"@types/dom-webcodecs@^0.1.4":
+  version "0.1.4"
+  resolved "https://registry.yarnpkg.com/@types/dom-webcodecs/-/dom-webcodecs-0.1.4.tgz#90a3dd80e5baf72baa79a74cf410e63863992516"
+  integrity sha512-dc+xSUnCaCdi/hExZArnLhiavS3E1Rdpp2+zCI6TcmJvz4qgDPBbpvCM7DsQhwRXIIpVMHO6c3s+t+JyCSqYBA==
+
 "@types/eslint-scope@^3.7.3":
   version "3.7.3"
   resolved "https://registry.yarnpkg.com/@types/eslint-scope/-/eslint-scope-3.7.3.tgz#125b88504b61e3c8bc6f870882003253005c3224"

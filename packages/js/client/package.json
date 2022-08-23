@@ -15,6 +15,7 @@
         "dev": "yarn run dev:build && (yarn run dev:webpack:main & yarn run dev:webpack:render & (sleep 1 && yarn run dev:electron))"
     },
     "devDependencies": {
+        "@types/dom-webcodecs": "^0.1.4",
         "@types/react": "^17.0.38",
         "@types/react-dom": "^17.0.11",
         "css-loader": "^6.5.1",

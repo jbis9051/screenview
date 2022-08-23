@@ -63,6 +63,7 @@ impl_try_into_js_type!(
     i32 => |cx, me| Ok(JsNumber::new(cx, me).upcast()),
     u8 => |cx, me| Ok(JsNumber::new(cx, me).upcast()),
     u16 => |cx, me| Ok(JsNumber::new(cx, me).upcast()),
+    u32 => |cx, me| Ok(JsNumber::new(cx, me).upcast()),
     usize => |cx, me| Ok(JsNumber::new(cx, me as u32).upcast()),
     String => |cx, me| Ok(JsString::new(cx, me).upcast()),
     EstablishSessionStatus => |cx, me| Ok(JsNumber::new(cx, me as u8).upcast()),
@@ -137,7 +138,7 @@ vtable_methods!(
     /* wpskka - host */
     wpskka_host_authentication_successful(),
     /* rvd - client */
-    rvd_client_frame_data(display_id: u8, width: usize, height: usize, data: Vec<u8>),
+    rvd_client_frame_data(display_id: u8, data: Vec<u8>, timestamp: u32, key: bool),
     rvd_client_handshake_complete(),
     /* rvd - host */
     rvd_host_handshake_complete(),

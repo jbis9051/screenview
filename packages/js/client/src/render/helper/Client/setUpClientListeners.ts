@@ -1,43 +1,67 @@
 import { ipcRenderer } from 'electron';
 import { action } from 'mobx';
-import { VTableEvent } from '@screenview/node-interop';
+import { DisplayShare, VTableEvent } from '@screenview/node-interop';
 import { MainToRendererIPCEvents } from '../../../common/IPCEvents';
 import UIStore, { ConnectionStatus } from '../../store/Client/UIStore';
+import { handleFrame, handleFrameError } from './handleFrame';
+
+function handleRvdFrame(
+    displayId: number,
+    vp9: ArrayBuffer,
+    timestamp: number,
+    key: boolean
+) {
+    const decoder = UIStore.decoder.get(displayId);
+    if (!decoder) {
+        throw new Error(`Decoder not found for displayId: ${displayId}`);
+    }
+    const chunk = new EncodedVideoChunk({
+        timestamp,
+        type: key ? 'key' : 'delta',
+        data: new Uint8Array(vp9),
+    });
+    decoder.decode(chunk);
+}
 
 export default function setUpClientListeners() {
-    const handleWpsskaClientAuthenticationFailed = action((error: string) => {
-        UIStore.connectionStatus = ConnectionStatus.Error;
-        UIStore.error = `An Error Occurred While connecting: ${error}`;
-    });
-
-    const handleWpsskaClientAuthenticationSuccess = action(() => {
-        console.log('Wpsska Client Authentication Success');
-        UIStore.connectionStatus = ConnectionStatus.Handshaking;
-    });
-
-    const img = new Image();
-    img.style.position = 'fixed';
-    img.style.top = '0';
-    img.style.left = '0';
-    img.style.width = '100%';
-    img.style.height = '100%';
-    document.body.appendChild(img);
-
     ipcRenderer.on(
         MainToRendererIPCEvents.Client_VTableEvent,
         (_, event, ...args: any[]) => {
             switch (event) {
                 case VTableEvent.WpsskaClientAuthenticationFailed:
-                    // @ts-ignore
-                    handleWpsskaClientAuthenticationFailed(...args);
+                    UIStore.connectionStatus = ConnectionStatus.Error;
+                    UIStore.error = `An Error Occurred While connecting: ${args[0]}`;
                     break;
                 case VTableEvent.WpsskaClientAuthenticationSuccessful:
-                    handleWpsskaClientAuthenticationSuccess();
+                    UIStore.connectionStatus = ConnectionStatus.Handshaking;
                     break;
+                case VTableEvent.RvdClientHandshakeComplete:
+                    UIStore.connectionStatus = ConnectionStatus.Connected;
+                    break;
+                case VTableEvent.RvdDisplayShare: {
+                    console.log('GOT A DISPLAY SHARE');
+                    const share = args[0] as DisplayShare;
+                    UIStore.displayShares.push(share);
+                    const decoder = new VideoDecoder({
+                        output: (frame) => handleFrame(share.display_id, frame),
+                        error: (error) =>
+                            handleFrameError(share.display_id, error),
+                    });
+                    decoder.configure({ codec: 'vp09.00.41.08' });
+                    UIStore.decoder.set(share.display_id, decoder);
+                    break;
+                }
+                case VTableEvent.RvdDisplayUnshare: {
+                    const displayId = args[0] as number;
+                    UIStore.decoder.delete(displayId);
+                    UIStore.displayShares = UIStore.displayShares.filter(
+                        (share) => share.display_id !== displayId
+                    );
+                    break;
+                }
                 case VTableEvent.RvdClientFrameData: {
-                    const [id, width, height, data] = args;
-                    const blob = new Blob([data], { type: 'image/jpeg' });
-                    img.src = URL.createObjectURL(blob);
+                    const [id, data, timestamp, key] = args;
+                    handleRvdFrame(id, data, timestamp, key);
                     break;
                 }
                 default:

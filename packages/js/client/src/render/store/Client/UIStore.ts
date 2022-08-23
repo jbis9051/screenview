@@ -27,6 +27,10 @@ class UIStore {
 
     displayShares: DisplayShare[] = [];
 
+    decoder: Map<number, VideoDecoder> = new Map();
+
+    canvases: Map<number, HTMLCanvasElement> = new Map();
+
     constructor() {
         makeAutoObservable(this);
     }
