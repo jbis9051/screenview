@@ -15,7 +15,6 @@ event_loop = { path= "../event_loop" }
 peer = { path = "../peer" }
 capture ={path = "../capture"}
 peer_util = {path ="../peer_util"}
-video_process = {path ="../video_process"}
 io = {path = "../io"}
 num-traits = "0.2.15"
 crossbeam-channel = "0.5.2"

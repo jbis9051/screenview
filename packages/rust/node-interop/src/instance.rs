@@ -52,7 +52,6 @@ use std::{
     net::TcpStream,
     thread::{self, JoinHandle},
 };
-use video_process::rtp::RtpDecoder;
 
 pub struct Instance {
     pub(crate) native: NativeApi,
@@ -61,7 +60,7 @@ pub struct Instance {
     pub(crate) capture_pool: CapturePool<FrameProcessor>,
     pub(crate) channel: Channel,
     pub(crate) shared_displays: HashMap<DisplayId, NativeId>,
-    pub(crate) decoders: HashMap<DisplayId, RtpDecoder>,
+    pub(crate) decoders: HashMap<DisplayId, Decoder>,
     pub(crate) auth_schemes: Vec<AuthSchemeType>,
     pub(crate) password: Option<String>,
 }

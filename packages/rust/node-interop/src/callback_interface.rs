@@ -138,7 +138,7 @@ vtable_methods!(
     /* wpskka - host */
     wpskka_host_authentication_successful(),
     /* rvd - client */
-    rvd_client_frame_data(display_id: u8, data: Vec<u8>, timestamp: u32, key: bool),
+    rvd_client_frame_data(display_id: u8, width: u32, height: u32, data: Vec<u8>),
     rvd_client_handshake_complete(),
     /* rvd - host */
     rvd_host_handshake_complete(),

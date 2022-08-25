@@ -51,6 +51,7 @@ use vpx_sys::{
     VPX_DL_REALTIME,
     VPX_EFLAG_FORCE_KF,
     VPX_ENCODER_ABI_VERSION,
+    VPX_ERROR_RESILIENT_DEFAULT,
     VPX_FRAME_IS_KEY,
     VPX_IMG_FMT_HIGHBITDEPTH,
 };
@@ -89,6 +90,30 @@ macro_rules! vp9_call_unsafe {
             return Err(res.into());
         }
     }};
+    ($coder: expr, $expr: expr) => {{
+        unsafe {
+            let res = $expr;
+            if res != vpx_codec_err_t::VPX_CODEC_OK {
+                let err = {
+                    let err = vpx_codec_error(&mut $coder);
+                    if err.is_null() {
+                        "null".to_string()
+                    } else {
+                        CStr::from_ptr(err).to_string_lossy().into_owned()
+                    }
+                };
+                let detail = {
+                    let detail = vpx_codec_error_detail(&mut $coder);
+                    if detail.is_null() {
+                        "null".to_string()
+                    } else {
+                        CStr::from_ptr(detail).to_string_lossy().into_owned()
+                    }
+                };
+                return Err(Error::VpxCodecExtended(res, err, detail));
+            }
+        }
+    }};
 }
 
 impl VP9Encoder {
@@ -102,33 +127,32 @@ impl VP9Encoder {
             0
         ));
 
+
         let mut config = unsafe { config.assume_init() };
 
         config.g_w = width;
-        config.g_h = height; /*
-                              config.rc_target_bitrate = 0; // in kbit/s
-                             // config_->g_error_resilient = is_svc_ ? VPX_ERROR_RESILIENT_DEFAULT : 0;
-                             // Setting the time base of the codec.
-                             config.g_timebase.num = 1;
-                             config.g_timebase.den = 90000;
-                             */
+        config.g_h = height;
+        config.rc_target_bitrate = 0; // in kbit/s
+        config.g_error_resilient = VPX_ERROR_RESILIENT_DEFAULT;
+        // Setting the time base of the codec.
+        config.g_timebase.num = 1;
+        config.g_timebase.den = 90000;
         config.g_lag_in_frames = 0; // 0- no frame lagging
-                                    /*
-                                    // Rate control settings.
-                                    // config_->rc_dropframe_thresh = inst->VP9().frameDroppingOn ? 30 : 0;
-                                    config.rc_end_usage = VPX_CBR;
-                                    config.g_pass = VPX_RC_ONE_PASS;
-                                    config.rc_min_quantizer = 8;
-                                    config.rc_max_quantizer = 52;
-                                    config.rc_undershoot_pct = 50;
-                                    config.rc_overshoot_pct = 50;
-                                    config.rc_buf_initial_sz = 500;
-                                    config.rc_buf_optimal_sz = 600;
-                                    config.rc_buf_sz = 1000;
-                                    // Set the maximum target size of any key-frame.
-                                    // rc_max_intra_target_ = MaxIntraTarget(config_->rc_buf_optimal_sz);
-                                    // Key-frame interval is enforced manually by this wrapper.
-                                                                   */
+
+        // Rate control settings.
+        // config_->rc_dropframe_thresh = inst->VP9().frameDroppingOn ? 30 : 0;
+        config.rc_end_usage = VPX_CBR;
+        config.g_pass = VPX_RC_ONE_PASS;
+        config.rc_min_quantizer = 8;
+        config.rc_max_quantizer = 52;
+        config.rc_undershoot_pct = 50;
+        config.rc_overshoot_pct = 50;
+        config.rc_buf_initial_sz = 500;
+        config.rc_buf_optimal_sz = 600;
+        config.rc_buf_sz = 1000;
+        // Set the maximum target size of any key-frame.
+        // rc_max_intra_target_ = MaxIntraTarget(config_->rc_buf_optimal_sz);
+        // Key-frame interval is enforced manually by this wrapper.
         //  config.kf_mode = vpx_kf_mode::VPX_KF_DISABLED; /*
         // TODO(webm:1592): work-around for libvpx issue, as it can still
         // put some key-frames at will even in VPX_KF_DISABLED kf_mode.
@@ -260,11 +284,12 @@ impl VP9Encoder {
 
             unsafe { data.set_len(pkt.data.frame.sz as usize) };
 
+            let keyframe = unsafe { pkt.data.frame.flags } & VPX_FRAME_IS_KEY == VPX_FRAME_IS_KEY;
+
             packets.push(Vp9Frame {
                 data,
                 meta: Vp9FrameMeta {
-                    keyframe: unsafe { pkt.data.frame.flags } & VPX_FRAME_IS_KEY
-                        == VPX_FRAME_IS_KEY,
+                    keyframe,
                     width: unsafe { pkt.data.frame.width[0] },
                     height: unsafe { pkt.data.frame.height[0] },
                 },
@@ -327,6 +352,8 @@ fn number_of_threads(width: u32, height: u32, number_of_cores: u32) -> u32 {
 pub enum Error {
     #[error("VPX Codec error: {0:?}")]
     VpxCodec(vpx_codec_err_t),
+    #[error("VPX Codec extended error: {0:?}: {1}: {2}")]
+    VpxCodecExtended(vpx_codec_err_t, String, String),
     #[error("vpx_img_alloc failed")]
     VpxAlloc,
     #[error("unsupported image format")]
@@ -473,11 +500,10 @@ impl Vp9Decoder {
 
         unsafe { decoder.assume_init() };
 
-        vp9_call_unsafe!(vpx_codec_control_(
-            &mut *decoder,
-            VP9D_SET_LOOP_FILTER_OPT as _,
-            1
-        ));
+        vp9_call_unsafe!(
+            *decoder,
+            vpx_codec_control_(&mut *decoder, VP9D_SET_LOOP_FILTER_OPT as _, 1)
+        );
 
         Ok(decoder)
     }
@@ -488,15 +514,20 @@ impl Vp9Decoder {
             buffer = ptr::null(); // Triggers full frame concealment.
         }
 
+        // println!("Decoding {:?}", &data[0 .. 10]);
+
         // During decode libvpx may get and release buffers from |frame_buffer_pool_|.
         // In practice libvpx keeps a few (~3-4) buffers alive at a time.
-        vp9_call_unsafe!(vpx_codec_decode(
-            &mut *self.decoder,
-            buffer,
-            data.len() as _,
-            std::ptr::null_mut(),
-            VPX_DL_REALTIME as i64
-        ));
+        vp9_call_unsafe!(
+            *self.decoder,
+            vpx_codec_decode(
+                &mut *self.decoder,
+                buffer,
+                data.len() as _,
+                std::ptr::null_mut(),
+                VPX_DL_REALTIME as i64
+            )
+        );
 
         let mut vec = Vec::new();
 

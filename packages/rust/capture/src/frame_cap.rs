@@ -14,7 +14,7 @@ use std::{mem, thread, time::Duration};
 use super::{processing::ProcessFrame, CaptureResources, ViewResources};
 
 const BROKEN_PIPE_MSG: &str = "broken pipe in frame capture";
-const FPS: Duration = Duration::from_millis(500);
+const FPS: Duration = Duration::from_millis(0);
 
 type CaptureReply<P> = (Box<CaptureResources<P>>, Result<(), NativeApiError>);
 

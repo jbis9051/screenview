@@ -11,13 +11,14 @@ function handleRvdFrame(
     timestamp: number,
     key: boolean
 ) {
+    console.log('handleRvdFrame', displayId, vp9.byteLength, timestamp, key);
     const decoder = UIStore.decoder.get(displayId);
     if (!decoder) {
         throw new Error(`Decoder not found for displayId: ${displayId}`);
     }
     const chunk = new EncodedVideoChunk({
         timestamp,
-        type: key ? 'key' : 'delta',
+        type: Math.random() > 0.5 ? 'key' : 'delta',
         data: new Uint8Array(vp9),
     });
     decoder.decode(chunk);
@@ -60,8 +61,14 @@ export default function setUpClientListeners() {
                     break;
                 }
                 case VTableEvent.RvdClientFrameData: {
-                    const [id, data, timestamp, key] = args;
-                    handleRvdFrame(id, data, timestamp, key);
+                    const [id, width, height, data] = args;
+                    const frame = new VideoFrame(data, {
+                        format: 'I420',
+                        codedWidth: width,
+                        codedHeight: height,
+                        timestamp: 0,
+                    });
+                    handleFrame(id, frame);
                     break;
                 }
                 default:

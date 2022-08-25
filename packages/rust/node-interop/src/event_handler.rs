@@ -12,7 +12,6 @@ use peer_util::{
     rvd_native_helper::{rvd_client_native_helper, rvd_host_native_helper},
 };
 use std::time::UNIX_EPOCH;
-use video_process::rtp::RtpDecoder;
 
 pub fn handle_event(instance: &mut Instance, event: InformEvent) -> Result<(), ()> {
     match event {
@@ -60,26 +59,21 @@ pub fn handle_event(instance: &mut Instance, event: InformEvent) -> Result<(), (
                 }
                 RvdClientInform::FrameData(data) => {
                     let decoder = instance.decoders.get_mut(&data.display_id).unwrap();
-                    let sample = decoder.decode_to_vp9(data.data.0.to_vec());
-                    if let Some(sample) = sample {
-                        let timestamp = sample
-                            .timestamp
-                            .duration_since(UNIX_EPOCH)
-                            .unwrap()
-                            .as_millis();
+                    let frames = decoder.process(data.data.0.to_vec()).unwrap();
+                    for frame in frames {
                         instance.callback_interface.rvd_client_frame_data(
                             &instance.channel,
                             data.display_id,
-                            sample.data.to_vec(),
-                            timestamp as _,
-                            false,
+                            frame.width,
+                            frame.height,
+                            frame.data,
                         );
                     }
                 }
                 RvdClientInform::DisplayShare(share) => {
                     instance
                         .decoders
-                        .insert(share.display_id, RtpDecoder::new());
+                        .insert(share.display_id, Decoder::new().unwrap());
                     instance
                         .callback_interface
                         .rvd_client_display_share(&instance.channel, share);

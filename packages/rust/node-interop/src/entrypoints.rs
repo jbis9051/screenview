@@ -141,7 +141,6 @@ pub fn connect(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
 }
 
 pub fn start_server(mut cx: FunctionContext<'_>) -> JsResult<'_, JsPromise> {
-    println!("start_server");
     let handle = cx.argument::<InstanceWrapper>(0)?;
     let reliable_addr = cx.argument::<JsString>(1)?.value(&mut cx);
     let unreliable_addr = cx.argument::<JsString>(1)?.value(&mut cx);

@@ -45,14 +45,21 @@ impl Default for RtpDecoder {
 impl RtpDecoder {
     pub fn new() -> Self {
         Self {
-            builder: SampleBuilder::new(50, Vp9Packet::default(), 1), // TODO
+            builder: SampleBuilder::new(100, Vp9Packet::default(), 1), // TODO
         }
     }
 
-    pub fn decode_to_vp9(&mut self, rtp: Vec<u8>) -> Option<Sample> {
+    pub fn decode_to_vp9(&mut self, rtp: Vec<u8>) -> Vec<Sample> {
         // TODO accept Packet
-        let pkt = Packet::unmarshal(&mut Bytes::from(rtp)).ok()?;
+        let mut out = Vec::new();
+        let pkt = match Packet::unmarshal(&mut Bytes::from(rtp)).ok() {
+            None => return out,
+            Some(pkt) => pkt,
+        };
         self.builder.push(pkt);
-        self.builder.pop()
+        while let Some(sample) = self.builder.pop() {
+            out.push(sample);
+        }
+        out
     }
 }

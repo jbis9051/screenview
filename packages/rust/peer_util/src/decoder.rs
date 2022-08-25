@@ -30,29 +30,18 @@ impl Decoder {
     pub fn process(&mut self, rtp_data: Vec<u8>) -> Result<Vec<Frame>, Error> {
         let mut out = Vec::new();
 
-        let sample = match self.rtp.decode_to_vp9(rtp_data) {
-            None => return Ok(out),
-            Some(s) => s,
-        };
+        let samples = self.rtp.decode_to_vp9(rtp_data);
 
-        let frames = self.vp9.decode(&sample.data)?;
+        for sample in samples {
+            let frames = self.vp9.decode(&sample.data)?;
 
-        for frame in frames {
-            let bgra = i420_to_bgra(frame.meta.width, frame.meta.height, &frame.data)?;
-            let rgb = bgra_to_rgb(frame.meta.width, frame.meta.height, &bgra)?;
-            let rgb = match RgbImage::from_raw(frame.meta.width, frame.meta.height, rgb) {
-                None => continue,
-                Some(r) => r,
-            };
-            let mut image = Vec::new();
-            DynamicImage::ImageRgb8(rgb)
-                .write_to(&mut Cursor::new(&mut image), ImageFormat::Jpeg)?;
-
-            out.push(Frame {
-                width: frame.meta.width,
-                height: frame.meta.height,
-                data: image,
-            });
+            for frame in frames {
+                out.push(Frame {
+                    width: frame.meta.width,
+                    height: frame.meta.height,
+                    data: frame.data,
+                });
+            }
         }
 
         Ok(out)

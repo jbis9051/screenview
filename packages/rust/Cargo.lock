@@ -1067,7 +1067,6 @@ dependencies = [
  "num-traits",
  "peer",
  "peer_util",
- "video_process",
 ]
 
 [[package]]

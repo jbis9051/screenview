@@ -77,13 +77,14 @@ pub fn rtp_encode() {
 pub fn rtp_decode() {
     let packet = include_bytes!("img.rtp");
     let mut rtp = RtpDecoder::new();
-    assert!(rtp.decode_to_vp9(packet.to_vec()).is_none());
+    assert!(rtp.decode_to_vp9(packet.to_vec()).is_empty());
 
     let mut fake = Packet::unmarshal(&mut Bytes::from(packet.to_vec())).unwrap();
     fake.payload = Bytes::from(vec![0x08]);
     fake.header.sequence_number += 1;
-    rtp.decode_to_vp9(fake.marshal().expect("unable to marshall").to_vec())
-        .expect("rtp didn't produce frame");
+    assert!(!rtp
+        .decode_to_vp9(fake.marshal().expect("unable to marshall").to_vec())
+        .is_empty());
 }
 
 #[test]
@@ -155,19 +156,16 @@ pub fn e2e() -> (u32, u32, Vec<u8>) {
 
 
     // SampleBuilder won't give us a sample until it has the next packet, so lets pretend a new one came in
-    let mut fake = packets[1].clone();
+    let mut fake = packets[0].clone();
     fake.header.sequence_number += 1;
     fake.payload = Bytes::from(vec![0x08]); // indicate the start of a new frame
     packets.push(fake);
 
 
-    for mut packet in packets {
+    for packet in packets {
         // Depacketize to VP9
         //  println!("{:?}", packet.marshal().unwrap().as_ref());
-        match rtp.decode_to_vp9(packet.marshal().expect("unable to marshal").to_vec()) {
-            None => {}
-            Some(sample) => samples.push(sample),
-        };
+        samples.extend(rtp.decode_to_vp9(packet.marshal().expect("unable to marshal").to_vec()));
     }
 
     assert_eq!(samples.len(), 1);
